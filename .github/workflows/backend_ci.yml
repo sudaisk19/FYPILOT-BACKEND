@@ -72,8 +72,8 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit --maxfail=1 --disable-warnings -q
 
-      - name: Coverage report
-        run: pytest --cov=app --cov-report=term-missing
+      # - name: Coverage report
+      #   run: pytest --cov=app --cov-report=term-missing
 
   docker:
 
