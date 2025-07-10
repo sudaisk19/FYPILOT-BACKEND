@@ -15,7 +15,7 @@ on:
 
 jobs:
   build-and-test:
-    name: 🛠 Lint · Type-check · Migrate · Test
+    name:  Lint · Type-check · Migrate · Test
     runs-on: ubuntu-latest
 
     # ─── Point at your remote Supabase DB ───
