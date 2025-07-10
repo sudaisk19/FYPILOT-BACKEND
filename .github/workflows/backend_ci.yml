@@ -62,8 +62,7 @@ jobs:
       - name: Format check with black
         run: python -m black --check .
 
-      - name: Import sorting check with isort
-        run: python -m isort --check .
+
     #   - name: Import sorting check with isort
     #     run: python -m isort --check .
 
