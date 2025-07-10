@@ -1,8 +1,12 @@
 # app/db.py
 
 from sqlalchemy import create_engine  # SQLAlchemy ka engine bananay ke liye import
-from sqlalchemy.orm import sessionmaker, declarative_base  # Session factory aur Base class ke liye import
+from sqlalchemy.orm import (  # Session factory aur Base class ke liye import
+    declarative_base,
+    sessionmaker,
+)
 from supabase import create_client  # Supabase client bananay ke liye import
+
 from app.core.config import settings  # .env se settings load karne ke liye import
 
 # --- SQLAlchemy Setup ---

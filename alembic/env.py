@@ -3,11 +3,11 @@
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
+
 from alembic import context
 
 # Import your Pydantic settings so we can grab the real DATABASE_URL
 from app.core.config import settings
-
 
 # this is the Alembic Config object, which provides
 # access to values within alembic.ini
