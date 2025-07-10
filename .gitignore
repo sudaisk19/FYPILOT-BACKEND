@@ -1,0 +1,63 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+.ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# === Pytest & Coverage ===
+.pytest_cache/
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.coverage
+htmlcov/
+
+# === Alembic migrations cache ===
+alembic/versions/__pycache__/
+
+# === Environment files ===
+.env
+.env.*.local
+.env.local
+
+# === IDEs and Editors ===
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+
+# === System Files ===
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+logs/
+*.log
+
+# === Profiler ===
+profiler-out.*
+
+# === Jupyter ===
+.ipynb_checkpoints/

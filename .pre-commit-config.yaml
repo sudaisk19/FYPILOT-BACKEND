@@ -1,0 +1,23 @@
+repos:
+- repo: https://github.com/PyCQA/autoflake
+  rev: v2.3.1
+  hooks:
+  - id: autoflake
+    args:
+    - --remove-unused-variables
+    - --remove-all-unused-imports
+    - --in-place
+    - --recursive
+    - app/
+
+- repo: https://github.com/psf/black
+  rev: 25.1.0
+  hooks:
+  - id: black
+    language_version: python3
+
+- repo: https://github.com/PyCQA/isort
+  rev: 6.0.1
+  hooks:
+  - id: isort
+    args: [ "--profile", "black" ]

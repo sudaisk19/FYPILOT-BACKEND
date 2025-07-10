@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    # If you start a local DB or Supabase emulator, uncomment these:
+    # depends_on:
+    #   - db
+    #   - supabase-emulator
+
+# Local Postgres (commented out for now)
+# db:
+#   image: postgres:15
+#   env_file:
+#     - .env.localdb      # e.g. DATABASE_URL=postgresql://user:pass@db:5432/dbname
+#   ports:
+#     - "5432:5432"
+#   volumes:
+#     - db_data:/var/lib/postgresql/data
+
+# Supabase emulator (commented out for now)
+# supabase-emulator:
+#   image: supabase/cli:latest
+#   command: start        # requires supabase CLI config in project root
+#   ports:
+#     - "54321:54321"
+#   env_file:
+#     - .env.supabase     # e.g. SUPABASE_URL=http://localhost:54321 ...
+
+volumes:
+  db_data:
+    # Uncomment if using local Postgres
+    # driver: local
+    # driver_opts:
+    #   type: none
+    #   device: ./db_data
+    #   o: bind
