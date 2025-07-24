@@ -1,10 +1,13 @@
 # app/main.py
+
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Load .env (override any existing OS env vars)
 env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(env_path, override=True)  # ← this will replace any existing DATABASE_URL
+load_dotenv(env_path, override=True)
+
 import logging
 
 import uvicorn
@@ -13,15 +16,18 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api.health import router as health_router
-from app.db import SessionLocal  # SQLAlchemy session factory
+from app.api.http.health import router as health_router
+from app.api.http.router import router as api_router  # includes users, groups, etc.
+from app.auth.routes import router as auth_router  # your signup/login endpoints
+from app.core.exceptions import register_exception_handlers
+from app.db import AsyncSessionLocal, Base, engine  # async engine & session
 
-# Configure Python’s built-in logger (uvicorn uses this under the hood)
+# Configure logger
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="FYPilot Backend")
 
-# CORS settings: allow your local Next.js dev & deployed frontend
+# CORS origins
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -30,40 +36,36 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # permitted origins
-    allow_credentials=True,  # allow cookies, Authorization headers
-    allow_methods=["*"],  # GET, POST, PUT, DELETE, etc.
-    allow_headers=["*"],  # allow all headers
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Mount your HTTP routers
+# Mount routers
 app.include_router(health_router, prefix="")  # GET /health
+app.include_router(auth_router, prefix="/auth")  # POST /auth/signup, /auth/login
+app.include_router(api_router, prefix="/api")  # e.g. /api/groups, /api/users, etc.
 
-
-# Mount your WebSocket router (if you have one)
-# app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
+# Global exception handlers
+register_exception_handlers(app)
 
 
 @app.on_event("startup")
-def check_db_connection():
-    """
-    Fired once, at application startup.
-    Attempts a dummy SELECT 1; logs success or failure.
-    """
+async def on_startup():
+    # 1) Create all tables if they don’t exist (async)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 2) Quick connectivity check
     try:
-        db = SessionLocal()
-        # This executes a no-op query just to verify connectivity
-        db.execute(text("SELECT 1"))
-        logger.info("✅ Database connected successfully.")
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        logger.info("Database connected successfully.")
     except SQLAlchemyError as e:
-        logger.error(f"❌ Database connection failed: {e}")
-    finally:
-        db.close()
+        logger.error(f"Database connection failed: {e}")
 
 
 if __name__ == "__main__":
-    # For local development:
+    # Local dev
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
-
-# For production, you can run:
-# uvicorn app.main:app --host 0.0.0.0 --port 8000
