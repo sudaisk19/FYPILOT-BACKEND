@@ -1,36 +1,90 @@
-# app/models/student.py
+# Import required libraries
 import uuid
 
-from sqlalchemy import ARRAY, Column, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, ForeignKey, Numeric, Text  # SQLAlchemy column types
+from sqlalchemy.dialects.postgresql import (
+    ARRAY,
+    JSONB,
+)
+from sqlalchemy.dialects.postgresql import UUID as PGUUID  # Postgres-specific types
+from sqlalchemy.orm import relationship  # For ORM relationships
 
-from app.db import Base
+from app.db import Base  # Base class for declarative models
 
 
 class Student(Base):
-    __tablename__ = "students"
+    """
+    Student model representing the 'students' table in the database.
+    Extends the Base class for SQLAlchemy ORM functionality.
+    """
 
+    __tablename__ = "students"  # Explicitly set table name in database
+
+    # Primary key that links to User model
     user_id = Column(
-        PGUUID(as_uuid=True),
-        ForeignKey("users.user_id", ondelete="CASCADE"),
-        primary_key=True,
-        default=uuid.uuid4,
+        PGUUID(as_uuid=True),  # PostgreSQL UUID type
+        ForeignKey(  # Foreign key constraint
+            "users.user_id",  # References users table's user_id
+            ondelete="CASCADE",  # Delete student when user is deleted
+        ),
+        primary_key=True,  # This is the primary key
+        default=uuid.uuid4,  # Auto-generate UUIDs for new records
     )
-    roll_number = Column(Text, unique=True, nullable=False)
-    department = Column(Text)
-    group_id = Column(
-        PGUUID(as_uuid=True),
-        ForeignKey("groups.group_id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    skills = Column(ARRAY(Text))
 
-    # relationships
-    user = relationship("User", back_populates="student_profile")
-    group = relationship("Group", back_populates="students")
-    group_membership = relationship(
-        "GroupMember",
-        back_populates="student",
-        cascade="all, delete-orphan",
+    # Student's academic information
+    roll_number = Column(
+        Text,  # Text type for flexibility
+        unique=True,  # No duplicate roll numbers
+        nullable=False,  # Required field as per database schema
+    )
+
+    department = Column(
+        Text, nullable=True  # Text type for department names  # Optional field
+    )
+
+    cgpa = Column(
+        Numeric(3, 2),  # Precise decimal for GPA (e.g., 3.75)
+        nullable=True,  # Optional field
+    )
+
+    # Student's professional information
+    interests = Column(
+        ARRAY(Text),  # Array of text for multiple interests
+        nullable=True,  # Optional field
+        default=list,  # Initialize as empty list
+    )
+
+    experience = Column(
+        Text, nullable=True  # Text type for experience description  # Optional field
+    )
+
+    portfolio_projects = Column(
+        JSONB,  # JSON type for structured project data
+        nullable=True,  # Optional field
+        default=dict,  # Initialize as empty dict
+    )
+
+    skills = Column(
+        ARRAY(Text),  # Array of text for multiple skills
+        nullable=True,  # Optional field
+        default=list,  # Initialize as empty list
+    )
+
+    # Relationship to User model (bidirectional)
+    user = relationship(
+        "User",  # References User model
+        back_populates="student_profile",  # Name of relationship in User model
+    )
+
+    # Relationship to groups through group_members
+    group_membership = relationship("GroupMember", back_populates="student")
+
+    # Relationship with groups through group_members
+    groups = relationship(
+        "Group",
+        secondary="group_members",
+        back_populates="students",
+        primaryjoin="Student.user_id == GroupMember.student_id",
+        secondaryjoin="Group.group_id == GroupMember.group_id",
+        overlaps="group_membership",
     )

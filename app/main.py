@@ -15,10 +15,13 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware  # ← NEW
 
-from app.api.http.health import router as health_router
-from app.api.http.router import router as api_router  # includes users, groups, etc.
+from app.api.http.router import (
+    router as api_router,  # includes users, groups, health, etc.
+)
 from app.auth.routes import router as auth_router  # your signup/login endpoints
+from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
 
@@ -42,10 +45,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 3) Sessions (required for OAuth state and any server-side session usage)
+#    NOTE: requires `itsdangerous` to be installed.
+is_production = str(
+    getattr(settings, "ENV", getattr(settings, "environment", "development"))
+).lower() in {"prod", "production"}
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,  # from .env -> SESSION_SECRET
+    same_site="lax",
+    https_only=is_production,  # True when you serve over HTTPS in prod
+    max_age=60 * 60 * 24 * 30,  # 30 days
+    session_cookie="fyp_session",
+)
+
 # Mount routers
-app.include_router(health_router, prefix="")  # GET /health
-app.include_router(auth_router, prefix="/auth")  # POST /auth/signup, /auth/login
-app.include_router(api_router, prefix="/api")  # e.g. /api/groups, /api/users, etc.
+app.include_router(
+    auth_router, prefix="/auth"
+)  # /auth/login, /auth/signup, /auth/oauth/...
+app.include_router(
+    api_router, prefix="/api"
+)  # /api/groups, /api/users, /api/students, /api/supervisors, /api/admins, /health
 
 # Global exception handlers
 register_exception_handlers(app)

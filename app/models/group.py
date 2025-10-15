@@ -2,7 +2,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -27,12 +35,52 @@ class Group(Base):
         nullable=False,
         default="ideation",
     )
+    fyp_cycle = Column(
+        Enum(
+            "fyp1",
+            "fyp2",
+            name="fyp_cycle_enum",
+        ),
+        nullable=False,
+        default="fyp1",
+    )
+    cohort_year = Column(Integer, nullable=True)
+    max_members = Column(
+        Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
+    )
+    milestone_template_id = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("milestone_templates.template_id"),
+        nullable=True,
+    )
+    supervisor_id = Column(
+        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+    )
+    cosupervisor_id = Column(
+        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Table constraints
+    __table_args__ = (
+        CheckConstraint(
+            "max_members >= 1 AND max_members <= 3", name="check_max_members_range"
+        ),
+    )
 
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
-    students = relationship("Student", back_populates="group")
+    # Direct relationship with students through group_members
+    students = relationship(
+        "Student",
+        secondary="group_members",
+        back_populates="groups",
+        primaryjoin="Group.group_id == GroupMember.group_id",
+        secondaryjoin="Student.user_id == GroupMember.student_id",
+        overlaps="members,group_membership",
+    )
 
 
 class GroupMember(Base):
@@ -53,8 +101,10 @@ class GroupMember(Base):
     joined_at = Column(DateTime, default=datetime.utcnow)
 
     # now SQLAlchemy can wire this relationship:
-    group = relationship("Group", back_populates="members")
-    student = relationship("Student", back_populates="group_membership")
+    group = relationship("Group", back_populates="members", overlaps="groups,students")
+    student = relationship(
+        "Student", back_populates="group_membership", overlaps="groups,students"
+    )
 
 
 class GroupInvite(Base):
