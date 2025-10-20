@@ -1,7 +1,7 @@
 # app/api/http/supervisor_profile.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +10,7 @@ from app.db import get_db
 from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.profile_schema import (
+    SupervisorProfilePatchUpdate,
     SupervisorProfileResponse,
     SupervisorProfileUpdate,
     SupervisorProfileUpdateResponse,
@@ -90,17 +91,17 @@ async def get_supervisor_profile(
     )
 
 
-@router.patch("/profile", response_model=SupervisorProfileUpdateResponse)
-async def update_supervisor_profile(
+@router.post("/wizard-profile", response_model=SupervisorProfileUpdateResponse)
+async def complete_supervisor_wizard_profile(
     profile_data: SupervisorProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Update supervisor profile information.
+    Complete supervisor profile through wizard form.
 
-    Updates both user and supervisor data in a single atomic transaction.
-    Only supervisors can access this endpoint.
+    Creates or updates both user and supervisor data in a single atomic transaction.
+    Only supervisors can access this endpoint. Required fields must be provided.
     """
     # Verify user is a supervisor
     if current_user.role != "supervisor":
@@ -115,12 +116,6 @@ async def update_supervisor_profile(
     )
     supervisor_profile = result.scalar_one_or_none()
 
-    # If no supervisor profile exists, create one
-    if not supervisor_profile:
-        supervisor_profile = Supervisor(user_id=current_user.user_id)
-        db.add(supervisor_profile)
-        await db.flush()  # Get the ID
-
     # Start transaction
     try:
         # Prepare user updates
@@ -134,7 +129,7 @@ async def update_supervisor_profile(
 
         # Update user table if there are changes
         if user_updates:
-            user_updates["updated_at"] = db.func.now()
+            user_updates["updated_at"] = func.now()
             await db.execute(
                 update(User)
                 .where(User.user_id == current_user.user_id)
@@ -155,6 +150,149 @@ async def update_supervisor_profile(
             supervisor_updates["project_types"] = profile_data.project_types
         if profile_data.capacity_max is not None:
             supervisor_updates["capacity_max"] = profile_data.capacity_max
+
+        # If no supervisor profile exists, create one with the provided data
+        if not supervisor_profile:
+            # Create new supervisor profile with all provided data
+            supervisor_profile = Supervisor(
+                user_id=current_user.user_id, **supervisor_updates
+            )
+            db.add(supervisor_profile)
+        else:
+            # Update existing supervisor profile if there are changes
+            if supervisor_updates:
+                await db.execute(
+                    update(Supervisor)
+                    .where(Supervisor.user_id == current_user.user_id)
+                    .values(**supervisor_updates)
+                )
+
+        # Commit transaction
+        await db.commit()
+
+        # Refresh the supervisor_profile object to get the committed data
+        if not supervisor_profile:
+            # Fetch the newly created profile
+            result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+            )
+            supervisor_profile = result.scalar_one_or_none()
+
+        if not supervisor_profile:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Supervisor profile was not created properly. Please try again.",
+            )
+
+        # Refresh to get latest user data
+        await db.refresh(current_user)
+
+        # Use current_user and supervisor_profile to build response
+        updated_user = current_user
+
+        # Return updated profile with success message
+        profile_data = SupervisorProfileResponse(
+            # User fields
+            user_id=updated_user.user_id,
+            full_name=updated_user.full_name,
+            email=updated_user.email,
+            role=updated_user.role,
+            profile_avatar=updated_user.profile_avatar,
+            created_at=updated_user.created_at,
+            updated_at=updated_user.updated_at,
+            # Supervisor fields (use the supervisor_profile object directly)
+            department=supervisor_profile.department,
+            designation=supervisor_profile.designation,
+            office=supervisor_profile.office,
+            requirements=supervisor_profile.requirements or [],
+            project_types=supervisor_profile.project_types or [],
+            capacity_max=supervisor_profile.capacity_max,
+            capacity_filled=supervisor_profile.capacity_filled,
+        )
+
+        return SupervisorProfileUpdateResponse(
+            message="Supervisor profile completed successfully", profile=profile_data
+        )
+
+    except Exception as e:
+        await db.rollback()
+        import traceback
+
+        error_detail = f"Failed to complete profile: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log to console for debugging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete profile: {str(e)}",
+        )
+
+
+@router.patch("/profile", response_model=SupervisorProfileUpdateResponse)
+async def update_supervisor_profile(
+    profile_data: SupervisorProfilePatchUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update existing supervisor profile information.
+
+    Updates both user and supervisor data in a single atomic transaction.
+    Only supervisors can access this endpoint. Only updates provided fields.
+
+    Note: project_types, capacity_max, and capacity_filled cannot be updated via this endpoint as they are immutable.
+    """
+    # Verify user is a supervisor
+    if current_user.role != "supervisor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. This endpoint is only for supervisors.",
+        )
+
+    # Check if supervisor profile exists
+    result = await db.execute(
+        select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+    )
+    supervisor_profile = result.scalar_one_or_none()
+
+    if not supervisor_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supervisor profile not found. Please complete the wizard profile first.",
+        )
+
+    # Start transaction
+    try:
+        # Prepare user updates - only include non-empty values
+        user_updates = {}
+        if profile_data.full_name is not None and profile_data.full_name.strip():
+            user_updates["full_name"] = profile_data.full_name.strip()
+        if profile_data.email is not None and profile_data.email.strip():
+            user_updates["email"] = profile_data.email.strip()
+        if (
+            profile_data.profile_avatar is not None
+            and profile_data.profile_avatar.strip()
+        ):
+            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+
+        # Update user table if there are changes
+        if user_updates:
+            user_updates["updated_at"] = func.now()
+            await db.execute(
+                update(User)
+                .where(User.user_id == current_user.user_id)
+                .values(**user_updates)
+            )
+
+        # Prepare supervisor updates - only include non-empty values (excluding required fields)
+        supervisor_updates = {}
+        # Note: project_types, capacity_max, capacity_filled are required and should not be updated via PATCH
+        if profile_data.department is not None and profile_data.department.strip():
+            supervisor_updates["department"] = profile_data.department.strip()
+        if profile_data.designation is not None and profile_data.designation.strip():
+            supervisor_updates["designation"] = profile_data.designation.strip()
+        if profile_data.office is not None and profile_data.office.strip():
+            supervisor_updates["office"] = profile_data.office.strip()
+        if profile_data.requirements is not None and profile_data.requirements:
+            supervisor_updates["requirements"] = profile_data.requirements
 
         # Update supervisor table if there are changes
         if supervisor_updates:

@@ -79,12 +79,12 @@ class Student(Base):
     # Relationship to groups through group_members
     group_membership = relationship("GroupMember", back_populates="student")
 
-    # Relationship with groups through group_members
+    # Convenience relationship to access groups directly
     groups = relationship(
         "Group",
         secondary="group_members",
         back_populates="students",
-        primaryjoin="Student.user_id == GroupMember.student_id",
-        secondaryjoin="Group.group_id == GroupMember.group_id",
-        overlaps="group_membership",
+        viewonly=True,
+        primaryjoin="Student.user_id == group_members.c.student_id",
+        secondaryjoin="group_members.c.group_id == Group.group_id",
     )

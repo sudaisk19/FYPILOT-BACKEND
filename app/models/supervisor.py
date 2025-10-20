@@ -18,9 +18,8 @@ class ProjectTypeEnum(str, enum.Enum):
     Using str.Enum ensures values are stored as strings in the database.
     """
 
-    capstone = "capstone"
     research = "research"
-    industry = "industry"
+    product = "product"
 
 
 class Supervisor(Base):
@@ -64,9 +63,7 @@ class Supervisor(Base):
     )
 
     project_types = Column(
-        ARRAY(
-            SQLEnum(ProjectTypeEnum, name="project_type_enum", create_constraint=True)
-        ),
+        ARRAY(SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False)),
         nullable=False,  # Must have at least empty array
         default=list,  # Initialize as empty list
     )
@@ -95,4 +92,12 @@ class Supervisor(Base):
     user = relationship(
         "User",  # References User model
         back_populates="supervisor_profile",  # Name of relationship in User model
+    )
+
+    # Relationships to domains and industries
+    domains = relationship(
+        "Domain", secondary="supervisor_domains", back_populates="supervisors"
+    )
+    industries = relationship(
+        "Industry", secondary="supervisor_industries", back_populates="supervisors"
     )

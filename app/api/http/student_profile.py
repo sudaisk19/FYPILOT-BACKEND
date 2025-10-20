@@ -1,15 +1,19 @@
 # app/api/http/student_profile.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
+from app.models.group import GroupMember
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.profile_schema import (
+    GroupInfo,
+    GroupMemberInfo,
+    StudentProfilePatchUpdate,
     StudentProfileResponse,
     StudentProfileUpdate,
     StudentProfileUpdateResponse,
@@ -35,10 +39,10 @@ async def get_student_profile(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Fetch user with student profile
+    # Fetch user with student profile and group information
     result = await db.execute(
         select(User)
-        .options(selectinload(User.student_profile))
+        .options(selectinload(User.student_profile).selectinload(Student.groups))
         .where(User.user_id == current_user.user_id)
     )
     user = result.scalar_one_or_none()
@@ -67,6 +71,77 @@ async def get_student_profile(
             experience=None,
             portfolio_projects=None,
             skills=[],
+            # Group information (None since no student profile)
+            group=None,
+        )
+
+    # Get group information if student is in a group
+    group_info = None
+    if user.student_profile.groups:
+        # Get the first group (assuming student can only be in one group)
+        group = user.student_profile.groups[0]
+
+        # Get group members with their details
+        members_result = await db.execute(
+            select(User, Student)
+            .join(Student, User.user_id == Student.user_id)
+            .join(GroupMember, Student.user_id == GroupMember.student_id)
+            .where(GroupMember.group_id == group.group_id)
+        )
+        members_data = members_result.all()
+
+        # Build member info list
+        members = []
+        for member_user, member_student in members_data:
+            members.append(
+                GroupMemberInfo(
+                    user_id=member_user.user_id,
+                    full_name=member_user.full_name,
+                    email=member_user.email,
+                    roll_number=member_student.roll_number,
+                )
+            )
+
+        # Get supervisor information
+        supervisor_name = None
+        cosupervisor_name = None
+
+        if group.supervisor_id:
+            supervisor_result = await db.execute(
+                select(User).where(User.user_id == group.supervisor_id)
+            )
+            supervisor_user = supervisor_result.scalar_one_or_none()
+            if supervisor_user:
+                supervisor_name = supervisor_user.full_name
+
+        if group.cosupervisor_id:
+            cosupervisor_result = await db.execute(
+                select(User).where(User.user_id == group.cosupervisor_id)
+            )
+            cosupervisor_user = cosupervisor_result.scalar_one_or_none()
+            if cosupervisor_user:
+                cosupervisor_name = cosupervisor_user.full_name
+
+        # Build group info
+        group_info = GroupInfo(
+            group_id=group.group_id,
+            name=group.name,
+            fyp_stage=(
+                group.fyp_stage.value
+                if hasattr(group.fyp_stage, "value")
+                else str(group.fyp_stage)
+            ),
+            fyp_cycle=(
+                group.fyp_cycle.value
+                if hasattr(group.fyp_cycle, "value")
+                else str(group.fyp_cycle)
+            ),
+            cohort_year=group.cohort_year,
+            max_members=group.max_members,
+            supervisor_name=supervisor_name,
+            cosupervisor_name=cosupervisor_name,
+            project_name=None,  # TODO: Add project information when Project model is available
+            members=members,
         )
 
     # Build response with combined user and student data
@@ -87,20 +162,22 @@ async def get_student_profile(
         experience=user.student_profile.experience,
         portfolio_projects=user.student_profile.portfolio_projects,
         skills=user.student_profile.skills or [],
+        # Group information
+        group=group_info,
     )
 
 
-@router.patch("/profile", response_model=StudentProfileUpdateResponse)
-async def update_student_profile(
+@router.post("/wizard-profile", response_model=StudentProfileUpdateResponse)
+async def complete_student_wizard_profile(
     profile_data: StudentProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Update student profile information.
+    Complete student profile through wizard form.
 
-    Updates both user and student data in a single atomic transaction.
-    Only students can access this endpoint.
+    Creates or updates both user and student data in a single atomic transaction.
+    Only students can access this endpoint. Required fields must be provided.
     """
     # Verify user is a student
     if current_user.role != "student":
@@ -115,47 +192,204 @@ async def update_student_profile(
     )
     student_profile = result.scalar_one_or_none()
 
-    # If no student profile exists, create one
-    if not student_profile:
-        student_profile = Student(user_id=current_user.user_id)
-        db.add(student_profile)
-        await db.flush()  # Get the ID
-
     # Start transaction
     try:
-        # Prepare user updates
+        # Prepare user updates - only include non-empty values
         user_updates = {}
-        if profile_data.full_name is not None:
-            user_updates["full_name"] = profile_data.full_name
-        if profile_data.email is not None:
-            user_updates["email"] = profile_data.email
-        if profile_data.profile_avatar is not None:
-            user_updates["profile_avatar"] = profile_data.profile_avatar
+        if profile_data.full_name is not None and profile_data.full_name.strip():
+            user_updates["full_name"] = profile_data.full_name.strip()
+        if profile_data.email is not None and profile_data.email.strip():
+            user_updates["email"] = profile_data.email.strip()
+        if (
+            profile_data.profile_avatar is not None
+            and profile_data.profile_avatar.strip()
+        ):
+            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
 
         # Update user table if there are changes
         if user_updates:
-            user_updates["updated_at"] = db.func.now()
+            user_updates["updated_at"] = func.now()
             await db.execute(
                 update(User)
                 .where(User.user_id == current_user.user_id)
                 .values(**user_updates)
             )
 
-        # Prepare student updates
+        # Prepare student updates - only include non-empty values
         student_updates = {}
-        if profile_data.roll_number is not None:
-            student_updates["roll_number"] = profile_data.roll_number
-        if profile_data.department is not None:
-            student_updates["department"] = profile_data.department
+        if profile_data.roll_number is not None and profile_data.roll_number.strip():
+            student_updates["roll_number"] = profile_data.roll_number.strip()
+        if profile_data.department is not None and profile_data.department.strip():
+            student_updates["department"] = profile_data.department.strip()
         if profile_data.cgpa is not None:
             student_updates["cgpa"] = profile_data.cgpa
-        if profile_data.interests is not None:
+        if profile_data.interests is not None and profile_data.interests:
             student_updates["interests"] = profile_data.interests
-        if profile_data.experience is not None:
-            student_updates["experience"] = profile_data.experience
-        if profile_data.portfolio_projects is not None:
+        if profile_data.experience is not None and profile_data.experience.strip():
+            student_updates["experience"] = profile_data.experience.strip()
+        if (
+            profile_data.portfolio_projects is not None
+            and profile_data.portfolio_projects
+        ):
             student_updates["portfolio_projects"] = profile_data.portfolio_projects
-        if profile_data.skills is not None:
+        if profile_data.skills is not None and profile_data.skills:
+            student_updates["skills"] = profile_data.skills
+
+        # If no student profile exists, create one with the required data
+        if not student_profile:
+            # Validate that roll_number is provided for new profiles
+            if not profile_data.roll_number or not profile_data.roll_number.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Roll number is required for creating a student profile.",
+                )
+
+            # Create new student profile with all provided data
+            student_profile = Student(user_id=current_user.user_id, **student_updates)
+            db.add(student_profile)
+        else:
+            # Update existing student profile if there are changes
+            if student_updates:
+                await db.execute(
+                    update(Student)
+                    .where(Student.user_id == current_user.user_id)
+                    .values(**student_updates)
+                )
+
+        # Commit transaction
+        await db.commit()
+
+        # Refresh the student_profile object to get the committed data
+        if not student_profile:
+            # Fetch the newly created profile
+            result = await db.execute(
+                select(Student).where(Student.user_id == current_user.user_id)
+            )
+            student_profile = result.scalar_one_or_none()
+
+        if not student_profile:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Student profile was not created properly. Please try again.",
+            )
+
+        # Refresh to get latest user data
+        await db.refresh(current_user)
+
+        # Use current_user and student_profile to build response
+        updated_user = current_user
+
+        # Return updated profile with success message
+        profile_data = StudentProfileResponse(
+            # User fields
+            user_id=updated_user.user_id,
+            full_name=updated_user.full_name,
+            email=updated_user.email,
+            role=updated_user.role,
+            profile_avatar=updated_user.profile_avatar,
+            created_at=updated_user.created_at,
+            updated_at=updated_user.updated_at,
+            # Student fields (use the student_profile object directly)
+            roll_number=student_profile.roll_number,
+            department=student_profile.department,
+            cgpa=student_profile.cgpa,
+            interests=student_profile.interests or [],
+            experience=student_profile.experience,
+            portfolio_projects=student_profile.portfolio_projects,
+            skills=student_profile.skills or [],
+            # Group information (will be None for new profiles)
+            group=None,
+        )
+
+        return StudentProfileUpdateResponse(
+            message="Student profile completed successfully", profile=profile_data
+        )
+
+    except Exception as e:
+        await db.rollback()
+        import traceback
+
+        error_detail = f"Failed to complete profile: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log to console for debugging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete profile: {str(e)}",
+        )
+
+
+@router.patch("/profile", response_model=StudentProfileUpdateResponse)
+async def update_student_profile(
+    profile_data: StudentProfilePatchUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update existing student profile information.
+
+    Updates both user and student data in a single atomic transaction.
+    Only students can access this endpoint. Only updates provided fields.
+
+    Note: roll_number cannot be updated via this endpoint as it's immutable.
+    """
+    # Verify user is a student
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. This endpoint is only for students.",
+        )
+
+    # Check if student profile exists
+    result = await db.execute(
+        select(Student).where(Student.user_id == current_user.user_id)
+    )
+    student_profile = result.scalar_one_or_none()
+
+    if not student_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found. Please complete the wizard profile first.",
+        )
+
+    # Start transaction
+    try:
+        # Prepare user updates - only include non-empty values
+        user_updates = {}
+        if profile_data.full_name is not None and profile_data.full_name.strip():
+            user_updates["full_name"] = profile_data.full_name.strip()
+        if profile_data.email is not None and profile_data.email.strip():
+            user_updates["email"] = profile_data.email.strip()
+        if (
+            profile_data.profile_avatar is not None
+            and profile_data.profile_avatar.strip()
+        ):
+            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+
+        # Update user table if there are changes
+        if user_updates:
+            user_updates["updated_at"] = func.now()
+            await db.execute(
+                update(User)
+                .where(User.user_id == current_user.user_id)
+                .values(**user_updates)
+            )
+
+        # Prepare student updates - only include non-empty values (excluding required fields)
+        student_updates = {}
+        # Note: roll_number is required and should not be updated via PATCH
+        if profile_data.department is not None and profile_data.department.strip():
+            student_updates["department"] = profile_data.department.strip()
+        if profile_data.cgpa is not None:
+            student_updates["cgpa"] = profile_data.cgpa
+        if profile_data.interests is not None and profile_data.interests:
+            student_updates["interests"] = profile_data.interests
+        if profile_data.experience is not None and profile_data.experience.strip():
+            student_updates["experience"] = profile_data.experience.strip()
+        if (
+            profile_data.portfolio_projects is not None
+            and profile_data.portfolio_projects
+        ):
+            student_updates["portfolio_projects"] = profile_data.portfolio_projects
+        if profile_data.skills is not None and profile_data.skills:
             student_updates["skills"] = profile_data.skills
 
         # Update student table if there are changes
@@ -195,6 +429,8 @@ async def update_student_profile(
             experience=updated_user.student_profile.experience,
             portfolio_projects=updated_user.student_profile.portfolio_projects,
             skills=updated_user.student_profile.skills or [],
+            # Group information (will be None if not in a group)
+            group=None,
         )
 
         return StudentProfileUpdateResponse(

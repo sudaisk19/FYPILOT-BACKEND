@@ -12,8 +12,6 @@ import logging
 
 import uvicorn
 from fastapi import FastAPI
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware  # ← NEW
 
@@ -73,17 +71,18 @@ register_exception_handlers(app)
 
 @app.on_event("startup")
 async def on_startup():
-    # 1) Create all tables if they don’t exist (async)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # 2) Quick connectivity check
+    # 1) Create all tables if they don't exist (async)
     try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-        logger.info("Database connected successfully.")
-    except SQLAlchemyError as e:
-        logger.error(f"Database connection failed: {e}")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created/verified successfully.")
+        logger.info("Database connection verified through table creation.")
+    except Exception as e:
+        logger.error(f"Database table creation failed: {e}")
+        # Don't fail startup for table creation issues
+
+    # Note: Skipping additional connection test to avoid prepared statement issues
+    # The table creation above already proves the database connection works
 
 
 if __name__ == "__main__":

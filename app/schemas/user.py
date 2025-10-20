@@ -30,9 +30,6 @@ class UserCreate(BaseModel):
         example="SecureP@ss123",
     )
     role: Role
-    remember_me: bool = Field(
-        default=False, description="Whether to remember the user for extended period"
-    )
 
     @field_validator("password")
     def validate_password(cls, v: str) -> str:

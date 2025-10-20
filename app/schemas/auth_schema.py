@@ -1,6 +1,8 @@
 # app/schemas/auth_schema.py
 
-from typing import ClassVar
+from datetime import datetime
+from typing import ClassVar, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -26,8 +28,24 @@ class LoginResponse(BaseModel):
     user: dict  # Full user object with profile flags
 
 
+class SignupResponse(BaseModel):
+    message: str = "Account created successfully"
+    access_token: str
+    token_type: str
+    role: str
+    user: dict  # Full user object with profile flags
+
+
 class RoleUpdateRequest(BaseModel):
-    role: str  # "student", "supervisor", or "admin"
+    role: str  # "student" or "supervisor" only
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        """Validate that role is either student or supervisor"""
+        if v not in ["student", "supervisor"]:
+            raise ValueError("Role must be 'student' or 'supervisor'")
+        return v
 
 
 class RoleUpdateResponse(BaseModel):
@@ -96,3 +114,74 @@ class ResetPasswordRequest(BaseModel):
 
 class ResetPasswordResponse(BaseModel):
     message: str
+
+
+# Role-specific schemas for /auth/me endpoint
+class GroupInfo(BaseModel):
+    group_id: Optional[UUID] = None
+    group_name: Optional[str] = None
+    fyp_stage: Optional[str] = None
+    fyp_cycle: Optional[str] = None
+    cohort_year: Optional[int] = None
+    supervisor_id: Optional[UUID] = None
+    cosupervisor_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+
+
+class SupervisedGroup(BaseModel):
+    group_id: UUID
+    group_name: str
+    fyp_stage: str
+    fyp_cycle: str
+    member_count: int
+    project_id: Optional[UUID] = None
+
+
+class DomainInfo(BaseModel):
+    domain_id: UUID
+    name: str
+
+
+class IndustryInfo(BaseModel):
+    industry_id: UUID
+    name: str
+
+
+class SupervisorInfo(BaseModel):
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    office: Optional[str] = None
+    capacity_max: int
+    capacity_filled: int
+    project_types: List[str] = []
+    requirements: List[str] = []
+    supervised_groups: List[SupervisedGroup] = []
+    domains: List[DomainInfo] = []
+    industries: List[IndustryInfo] = []
+
+
+class SystemStats(BaseModel):
+    total_students: int
+    total_supervisors: int
+    total_groups: int
+    total_projects: int
+    pending_invites: int
+
+
+class AdminInfo(BaseModel):
+    phone: Optional[str] = None
+    profile_pic: Optional[str] = None
+    system_stats: SystemStats
+
+
+class UserProfileResponse(BaseModel):
+    user_id: UUID
+    full_name: str
+    email: str
+    role: str
+    profile_avatar: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    group_info: Optional[GroupInfo] = None  # For students
+    supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
+    admin_info: Optional[AdminInfo] = None  # For admins

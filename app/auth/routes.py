@@ -26,12 +26,13 @@ Security Features:
 import logging
 import secrets
 from datetime import datetime, timedelta
+from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,17 +48,35 @@ from app.core.config import settings
 
 # Application imports
 from app.db import get_db
+from app.models.admin import Admin
+from app.models.domain import Domain
+from app.models.group import Group, GroupMember
+from app.models.industry import Industry
 from app.models.password_reset import PasswordResetToken
+from app.models.project import Project
+from app.models.student import Student
+from app.models.supervisor import Supervisor
+from app.models.supervisor_domain import SupervisorDomain
+from app.models.supervisor_industry import SupervisorIndustry
 from app.models.user import RoleEnum, User
 from app.schemas.auth_schema import (
+    AdminInfo,
+    DomainInfo,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    GroupInfo,
+    IndustryInfo,
     LoginRequest,
     LoginResponse,
     ResetPasswordRequest,
     ResetPasswordResponse,
     RoleUpdateRequest,
     RoleUpdateResponse,
+    SignupResponse,
+    SupervisedGroup,
+    SupervisorInfo,
+    SystemStats,
+    UserProfileResponse,
 )
 
 # Schema imports
@@ -68,15 +87,17 @@ from app.services.mailer import send_password_reset_email
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Initialize router with authentication tag for OpenAPI docs
-router = APIRouter(tags=["auth"])
+# Initialize router
+router = APIRouter(tags=["authentication"])
 
-# Import the shared Bearer token scheme
-from app.auth.supabase_auth import oauth2_scheme
+# Simple Bearer token scheme for JWT extraction
+from fastapi.security import HTTPBearer
+
+oauth2_scheme = HTTPBearer()
 
 
 @router.post(
-    "/signup", status_code=status.HTTP_201_CREATED, response_model=LoginResponse
+    "/signup", status_code=status.HTTP_201_CREATED, response_model=SignupResponse
 )
 async def signup(user_in: UserCreateSchema, db: AsyncSession = Depends(get_db)):
     """
@@ -100,7 +121,7 @@ async def signup(user_in: UserCreateSchema, db: AsyncSession = Depends(get_db)):
         db (AsyncSession): Database session
 
     Returns:
-        TokenResponse: JWT token and user role
+        SignupResponse: Success message, JWT token and user data
 
     Raises:
         HTTPException(400):
@@ -131,22 +152,8 @@ async def signup(user_in: UserCreateSchema, db: AsyncSession = Depends(get_db)):
 
         logger.info(f"New user registered: {user.email} with role {user.role}")
 
-        # Determine token expiration based on remember_me
-        if user_in.remember_me:
-            # Remember me: 30 days for production, 7 days for development
-            expires_delta = (
-                timedelta(days=30)
-                if settings.ENV.lower() == "production"
-                else timedelta(days=7)
-            )
-        else:
-            # Normal signup: 6 hours for dev, 1 hour for production (handled by create_access_token default)
-            expires_delta = None
-
         # Generate and return JWT token with role
-        token = create_access_token(
-            sub=str(user.user_id), role=user.role.value, expires_delta=expires_delta
-        )
+        token = create_access_token(sub=str(user.user_id), role=user.role.value)
 
         # Return enhanced response with full user data
         return {
@@ -194,7 +201,7 @@ async def login_for_access_token(
         db (AsyncSession): Database session
 
     Returns:
-        LoginResponse: JWT token, role, and full user data
+        LoginResponse: JWT token and user data
 
     Raises:
         HTTPException(401): Invalid credentials
@@ -211,7 +218,7 @@ async def login_for_access_token(
             )
             .where(User.email == login_data.email)
         )
-        user = result.scalar_one_or_none()
+        user = result.scalars().first()
 
         # Verify user exists and password is correct
         if not user or not verify_password(login_data.password, user.password_hash):
@@ -225,28 +232,13 @@ async def login_for_access_token(
         # Handle role value for both enum and string types
         role_val = user.role.value if hasattr(user.role, "value") else user.role
 
-        # Determine token expiration based on remember_me
-        if login_data.remember_me:
-            # Remember me: 30 days for production, 7 days for development
-            expires_delta = (
-                timedelta(days=30)
-                if settings.ENV.lower() == "production"
-                else timedelta(days=7)
-            )
-        else:
-            # Normal login: 6 hours for dev, 1 hour for production (handled by create_access_token default)
-            expires_delta = None
-
         # Generate and return JWT token with role
-        token = create_access_token(
-            sub=str(user.user_id), role=role_val, expires_delta=expires_delta
-        )
+        token = create_access_token(sub=str(user.user_id), role=role_val)
 
         logger.info(f"Successful login for user: {user.email}")
 
         # Return enhanced response with full user data
         return {
-            "message": "Login successful",
             "access_token": token,
             "token_type": "bearer",
             "role": role_val,
@@ -273,7 +265,9 @@ async def login_for_access_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(request: Request, response: Response, token=Depends(oauth2_scheme)):
+async def logout(
+    request: Request, response: Response, token: str = Depends(oauth2_scheme)
+):
     """
     Enhanced logout endpoint with cookie clearing.
 
@@ -285,7 +279,9 @@ async def logout(request: Request, response: Response, token=Depends(oauth2_sche
     Args:
         request (Request): FastAPI request object
         response (Response): FastAPI response object
-        token (str): Current JWT token
+           token_str = token.credentials  # HTTPBearer returns an object with .credentials
+        decode_access_token(token_str)
+
 
     Returns:
         Response: 204 No Content on successful logout
@@ -294,7 +290,7 @@ async def logout(request: Request, response: Response, token=Depends(oauth2_sche
         HTTPException(401): Invalid token
     """
     try:
-        # Verify token is valid before allowing logout
+        # Extract token from HTTPBearer object
         token_str = token.credentials  # HTTPBearer returns an object with .credentials
         decode_access_token(token_str)
 
@@ -317,27 +313,33 @@ async def logout(request: Request, response: Response, token=Depends(oauth2_sche
         )
 
 
-@router.get("/me", response_model=MeResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+@router.get("/me", response_model=UserProfileResponse)
+async def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Get current authenticated user's profile information.
+    Get current authenticated user's profile information with role-specific data.
 
     This endpoint returns:
-    - Basic user information (id, name, email)
-    - User role
-    - Profile completion status flags
+    - Basic user information (id, name, email, role, avatar)
+    - Role-specific information:
+      * Students: Group information (group_id, project_id, supervisor_ids, etc.)
+      * Supervisors: Supervised groups, domains, industries, capacity info
+      * Admins: System statistics and admin profile info
 
     Args:
         current_user (User): Current authenticated user (from dependency)
+        db (AsyncSession): Database session
 
     Returns:
-        MeResponse: User profile data with role and profile flags
+        UserProfileResponse: User profile data with role-specific information
 
     Note:
         This endpoint is useful for:
-        - Initial app load to determine user state
-        - UI customization based on user role
-        - Profile completion workflows
+        - Initial app load to determine user state and get all necessary IDs
+        - UI customization based on user role and relationships
+        - Client-side state management with all required IDs
     """
     # Handle role value for both enum and string types
     role = (
@@ -346,20 +348,252 @@ async def get_me(current_user: User = Depends(get_current_user)):
         else current_user.role
     )
 
-    # Build response with profile completion flags
-    response = MeResponse(
+    # Initialize role-specific information
+    group_info = None
+    supervisor_info = None
+    admin_info = None
+
+    try:
+        if role == "student":
+            group_info = await get_student_group_info(current_user.user_id, db)
+        elif role == "supervisor":
+            supervisor_info = await get_supervisor_info(current_user.user_id, db)
+        elif role == "admin":
+            admin_info = await get_admin_info(current_user.user_id, db)
+    except Exception as e:
+        logger.error(
+            f"Error fetching role-specific info for user {current_user.user_id}: {e}"
+        )
+        # Continue with basic info even if role-specific info fails
+
+    response = UserProfileResponse(
         user_id=current_user.user_id,
         full_name=current_user.full_name,
         email=current_user.email,
         role=role,
-        # Profile flags for conditional UI rendering
-        has_student_profile=current_user.student_profile is not None,
-        has_supervisor_profile=current_user.supervisor_profile is not None,
-        has_admin_profile=current_user.admin_profile is not None,
+        profile_avatar=current_user.profile_avatar,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+        group_info=group_info,
+        supervisor_info=supervisor_info,
+        admin_info=admin_info,
     )
 
-    logger.debug(f"Profile data retrieved for user: {current_user.email}")
+    logger.debug(
+        f"Profile data retrieved for user: {current_user.email} (role: {role})"
+    )
     return response
+
+
+# Helper functions for role-specific data fetching
+async def get_student_group_info(
+    user_id: UUID, db: AsyncSession
+) -> Optional[GroupInfo]:
+    """Get group information for a student"""
+    try:
+        # Get group membership
+        group_membership = await db.execute(
+            select(GroupMember).where(GroupMember.student_id == user_id)
+        )
+        membership = group_membership.scalar_one_or_none()
+
+        if not membership:
+            return None
+
+        # Get group details
+        group_result = await db.execute(
+            select(Group).where(Group.group_id == membership.group_id)
+        )
+        group = group_result.scalar_one_or_none()
+
+        if not group:
+            return None
+
+        # Get project ID if exists
+        project_result = await db.execute(
+            select(Project).where(Project.group_id == group.group_id)
+        )
+        project = project_result.scalar_one_or_none()
+
+        return GroupInfo(
+            group_id=group.group_id,
+            group_name=group.name,
+            fyp_stage=group.fyp_stage,
+            fyp_cycle=group.fyp_cycle,
+            cohort_year=group.cohort_year,
+            supervisor_id=group.supervisor_id,
+            cosupervisor_id=group.cosupervisor_id,
+            project_id=project.project_id if project else None,
+        )
+    except Exception as e:
+        logger.error(f"Error fetching student group info for user {user_id}: {e}")
+        return None
+
+
+async def get_supervisor_info(
+    user_id: UUID, db: AsyncSession
+) -> Optional[SupervisorInfo]:
+    """Get supervisor information"""
+    try:
+        # Get supervisor profile
+        supervisor_result = await db.execute(
+            select(Supervisor).where(Supervisor.user_id == user_id)
+        )
+        supervisor = supervisor_result.scalar_one_or_none()
+
+        if not supervisor:
+            return None
+
+        # Get supervised groups
+        groups_result = await db.execute(
+            select(Group).where(
+                or_(Group.supervisor_id == user_id, Group.cosupervisor_id == user_id)
+            )
+        )
+        groups = groups_result.scalars().all()
+
+        supervised_groups = []
+        for group in groups:
+            # Get member count
+            member_count_result = await db.execute(
+                select(func.count())
+                .select_from(GroupMember)
+                .where(GroupMember.group_id == group.group_id)
+            )
+            member_count = member_count_result.scalar_one()
+
+            # Get project ID
+            project_result = await db.execute(
+                select(Project).where(Project.group_id == group.group_id)
+            )
+            project = project_result.scalar_one_or_none()
+
+            supervised_groups.append(
+                SupervisedGroup(
+                    group_id=group.group_id,
+                    group_name=group.name,
+                    fyp_stage=group.fyp_stage,
+                    fyp_cycle=group.fyp_cycle,
+                    member_count=member_count,
+                    project_id=project.project_id if project else None,
+                )
+            )
+
+        # Get domains
+        domains_result = await db.execute(
+            select(Domain)
+            .join(SupervisorDomain, SupervisorDomain.domain_id == Domain.domain_id)
+            .where(SupervisorDomain.supervisor_id == user_id)
+        )
+        domains = [
+            DomainInfo(domain_id=d.domain_id, name=d.name)
+            for d in domains_result.scalars().all()
+        ]
+
+        # Get industries
+        industries_result = await db.execute(
+            select(Industry)
+            .join(
+                SupervisorIndustry,
+                SupervisorIndustry.industry_id == Industry.industry_id,
+            )
+            .where(SupervisorIndustry.supervisor_id == user_id)
+        )
+        industries = [
+            IndustryInfo(industry_id=i.industry_id, name=i.name)
+            for i in industries_result.scalars().all()
+        ]
+
+        return SupervisorInfo(
+            department=supervisor.department,
+            designation=supervisor.designation,
+            office=supervisor.office,
+            capacity_max=supervisor.capacity_max,
+            capacity_filled=supervisor.capacity_filled,
+            project_types=supervisor.project_types or [],
+            requirements=supervisor.requirements or [],
+            supervised_groups=supervised_groups,
+            domains=domains,
+            industries=industries,
+        )
+    except Exception as e:
+        logger.error(f"Error fetching supervisor info for user {user_id}: {e}")
+        return None
+
+
+async def get_admin_info(user_id: UUID, db: AsyncSession) -> Optional[AdminInfo]:
+    """Get admin information with system stats"""
+    try:
+        # Get admin profile
+        admin_result = await db.execute(select(Admin).where(Admin.user_id == user_id))
+        admin = admin_result.scalar_one_or_none()
+
+        if not admin:
+            return None
+
+        # Get system stats
+        stats = await get_system_stats(db)
+
+        return AdminInfo(
+            phone=admin.phone, profile_pic=admin.profile_pic, system_stats=stats
+        )
+    except Exception as e:
+        logger.error(f"Error fetching admin info for user {user_id}: {e}")
+        return None
+
+
+async def get_system_stats(db: AsyncSession) -> SystemStats:
+    """Get system statistics for admin"""
+    try:
+        # Count students
+        students_count = await db.execute(select(func.count()).select_from(Student))
+        total_students = students_count.scalar_one()
+
+        # Count supervisors
+        supervisors_count = await db.execute(
+            select(func.count()).select_from(Supervisor)
+        )
+        total_supervisors = supervisors_count.scalar_one()
+
+        # Count groups
+        groups_count = await db.execute(select(func.count()).select_from(Group))
+        total_groups = groups_count.scalar_one()
+
+        # Count projects
+        projects_count = await db.execute(select(func.count()).select_from(Project))
+        total_projects = projects_count.scalar_one()
+
+        # Count pending invites using raw SQL to avoid enum constraint issues
+        from sqlalchemy import text
+
+        invites_count = await db.execute(
+            text(
+                """
+                SELECT COUNT(*) 
+                FROM group_invites 
+                WHERE status = 'pending'::invite_status_enum
+            """
+            )
+        )
+        pending_invites = invites_count.scalar_one()
+
+        return SystemStats(
+            total_students=total_students,
+            total_supervisors=total_supervisors,
+            total_groups=total_groups,
+            total_projects=total_projects,
+            pending_invites=pending_invites,
+        )
+    except Exception as e:
+        logger.error(f"Error fetching system stats: {e}")
+        # Return default stats if there's an error
+        return SystemStats(
+            total_students=0,
+            total_supervisors=0,
+            total_groups=0,
+            total_projects=0,
+            pending_invites=0,
+        )
 
 
 # ---- OAuth (Google / GitHub) Authentication Routes ----
@@ -504,7 +738,15 @@ async def oauth_callback(
             )
 
         # Find or create user
-        result = await db.execute(select(User).where(User.email == email))
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.student_profile),
+                selectinload(User.supervisor_profile),
+                selectinload(User.admin_profile),
+            )
+            .where(User.email == email)
+        )
         user = result.scalars().first()
 
         # Track if this is a new user
@@ -716,7 +958,14 @@ async def verify_cookie_auth(request: Request):
         # Get database session
         async with get_db() as db:
             result = await db.execute(
-                select(User).where(User.user_id == user_id).where(User.role == role)
+                select(User)
+                .options(
+                    selectinload(User.student_profile),
+                    selectinload(User.supervisor_profile),
+                    selectinload(User.admin_profile),
+                )
+                .where(User.user_id == user_id)
+                .where(User.role == role)
             )
             user = result.scalars().first()
 
@@ -761,7 +1010,7 @@ async def update_user_role(
     typically used on the role selection page.
 
     Args:
-        role_data (RoleUpdateRequest): New role selection
+        role_data (RoleUpdateRequest): New role selection (student or supervisor only)
         current_user (User): Current authenticated user
         db (AsyncSession): Database session
 
@@ -769,17 +1018,17 @@ async def update_user_role(
         RoleUpdateResponse: Updated user data with new role
 
     Raises:
-        HTTPException(400): Invalid role
+        HTTPException(400): Invalid role (must be student or supervisor)
         HTTPException(500): Database error
     """
     try:
         new_role = role_data.role
 
-        # Validate role
-        if new_role not in ["student", "supervisor", "admin"]:
+        # Validate role - only allow student or supervisor
+        if new_role not in ["student", "supervisor"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid role. Must be 'student', 'supervisor', or 'admin'",
+                detail="Invalid role. Must be 'student' or 'supervisor'",
             )
 
         # Update user role
@@ -810,7 +1059,7 @@ async def update_user_role(
         logger.info(f"User {current_user.email} updated role to {new_role}")
 
         return RoleUpdateResponse(
-            message="User role updated successfully", role=role_val, user=updated_user
+            message="Role updated successfully", role=role_val, user=updated_user
         )
 
     except HTTPException:

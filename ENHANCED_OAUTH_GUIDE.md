@@ -55,7 +55,7 @@ GET /auth/oauth/github?return_to=/dashboard&source=signup
 **Request Body:**
 ```json
 {
-  "role": "student"  // "student", "supervisor", or "admin"
+  "role": "student"  // "student" or "supervisor" only
 }
 ```
 
@@ -185,8 +185,6 @@ const RoleSelectionPage = () => {
           navigate('/student/dashboard');
         } else if (selectedRole === 'supervisor') {
           navigate('/supervisor/dashboard');
-        } else if (selectedRole === 'admin') {
-          navigate('/admin/dashboard');
         }
       } else {
         const error = await response.json();
@@ -368,6 +366,9 @@ export const useRoleUpdate = () => {
 ```
 
 This enhanced OAuth flow provides a much better user experience while maintaining security and flexibility!
+
+
+
 
 
 

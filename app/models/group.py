@@ -2,15 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    CheckConstraint,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    Text,
-)
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -22,28 +14,8 @@ class Group(Base):
     __tablename__ = "groups"
     group_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
-    fyp_stage = Column(
-        Enum(
-            "ideation",
-            "proposal",
-            "approval",
-            "implementation",
-            "evaluation",
-            "completed",
-            name="fyp_stage_enum",
-        ),
-        nullable=False,
-        default="ideation",
-    )
-    fyp_cycle = Column(
-        Enum(
-            "fyp1",
-            "fyp2",
-            name="fyp_cycle_enum",
-        ),
-        nullable=False,
-        default="fyp1",
-    )
+    fyp_stage = Column(Text, nullable=False, default="ideation")
+    fyp_cycle = Column(Text, nullable=False, default="fyp1")
     cohort_year = Column(Integer, nullable=True)
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
@@ -72,14 +44,14 @@ class Group(Base):
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
-    # Direct relationship with students through group_members
+    # Access students through members relationship instead of direct relationship
     students = relationship(
         "Student",
         secondary="group_members",
         back_populates="groups",
-        primaryjoin="Group.group_id == GroupMember.group_id",
-        secondaryjoin="Student.user_id == GroupMember.student_id",
-        overlaps="members,group_membership",
+        viewonly=True,
+        primaryjoin="Group.group_id == group_members.c.group_id",
+        secondaryjoin="group_members.c.student_id == Student.user_id",
     )
 
 
@@ -114,10 +86,6 @@ class GroupInvite(Base):
     inviter_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     invitee_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     token = Column(Text, nullable=False, unique=True)
-    status = Column(
-        Enum("pending", "accepted", "expired", "revoked", name="invite_status"),
-        nullable=False,
-        default="pending",
-    )
+    status = Column(Text, nullable=False, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
