@@ -129,3 +129,4 @@ All changes have been tested and verified:
 The role update endpoint now properly restricts role selection to only "student" and "supervisor" options, with comprehensive validation at both the schema and backend levels. This ensures that users cannot select the "admin" role through the OAuth flow.
 
 
+
