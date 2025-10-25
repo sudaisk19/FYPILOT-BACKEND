@@ -1,5 +1,7 @@
 # app/db.py
 
+import logging
+
 from sqlalchemy.ext.asyncio import (  # Async engine & session
     AsyncSession,
     create_async_engine,
@@ -12,13 +14,82 @@ from supabase import create_client  # Supabase client
 
 from app.core.config import settings  # loads DATABASE_URL, etc.
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 # — SQLAlchemy Async Setup —
-# Uses asyncpg under the hood; your DATABASE_URL must start with "postgresql+asyncpg://"
+# For Supabase/pgbouncer compatibility, we need to use asyncpg with proper configuration
+
+# Get the original database URL
+original_url = settings.database_url
+logger.info(f"Original database URL: {original_url[:50]}...")
+
+# Convert to asyncpg format and add statement cache size parameter
+if original_url.startswith("postgresql://"):
+    # Replace with asyncpg driver and add statement_cache_size parameter
+    database_url = original_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif original_url.startswith("postgresql+asyncpg://"):
+    database_url = original_url
+else:
+    raise ValueError(
+        "DATABASE_URL must start with postgresql:// or postgresql+asyncpg://"
+    )
+
+# Configure for Supabase session pooler
+if "pooler.supabase.com" in database_url:
+    # Session pooler configuration - use port 5432 and disable prepared statements
+    logger.info("Using Supabase session pooler configuration")
+    if "?" in database_url:
+        database_url += "&statement_cache_size=0"
+    else:
+        database_url += "?statement_cache_size=0"
+elif "db." in database_url and ".supabase.co:5432" in database_url:
+    # Direct connection - add statement_cache_size parameter
+    if "?" in database_url:
+        database_url += "&statement_cache_size=0"
+    else:
+        database_url += "?statement_cache_size=0"
+else:
+    # Add statement_cache_size parameter to the URL to disable prepared statements
+    if "?" in database_url:
+        database_url += "&statement_cache_size=0"
+    else:
+        database_url += "?statement_cache_size=0"
+
+logger.info(f"Using database URL: {database_url[:50]}...")
+
+# Create engine with asyncpg and session pooler-compatible settings
 engine = create_async_engine(
-    settings.database_url,
-    future=True,  # SQLAlchemy 2.0 style
+    database_url,
+    future=True,  # SQLAlchemy 2.0 style
     echo=True,  # log SQL to console
+    connect_args={
+        "statement_cache_size": 0,  # Disable prepared statements for session pooler
+        "server_settings": {
+            "jit": "off",  # Disable JIT compilation
+            "application_name": "fypilot_backend",
+        },
+    },
+    # Session pooler handles connection pooling, so use minimal SQLAlchemy pooling
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=300,  # Recycle connections every 5 minutes
+    pool_size=3,  # Smaller pool size since session pooler handles pooling
+    max_overflow=5,  # Reduced overflow for session pooler
 )
+
+
+# Test the connection to ensure it works with session pooler
+async def test_connection():
+    """Test the database connection to ensure it works with session pooler"""
+    try:
+        async with engine.begin() as conn:
+            await conn.execute("SELECT 1")
+        logger.info("Database connection test successful")
+        return True
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
+        return False
+
 
 AsyncSessionLocal = sessionmaker(
     bind=engine,
