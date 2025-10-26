@@ -27,7 +27,6 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
-from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -348,6 +347,19 @@ async def get_user_profile(
         else current_user.role
     )
 
+    # Check if user needs profile completion
+    needs_profile_completion = False
+    if role == "student":
+        student_result = await db.execute(
+            select(Student).where(Student.user_id == current_user.user_id)
+        )
+        needs_profile_completion = student_result.scalars().first() is None
+    elif role == "supervisor":
+        supervisor_result = await db.execute(
+            select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+        )
+        needs_profile_completion = supervisor_result.scalars().first() is None
+
     # Initialize role-specific information
     group_info = None
     supervisor_info = None
@@ -374,6 +386,7 @@ async def get_user_profile(
         profile_avatar=current_user.profile_avatar,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
+        needs_profile_completion=needs_profile_completion,
         group_info=group_info,
         supervisor_info=supervisor_info,
         admin_info=admin_info,
@@ -754,16 +767,8 @@ async def oauth_callback(
                 detail="Email not available from provider",
             )
 
-        # Find or create user
-        result = await db.execute(
-            select(User)
-            .options(
-                selectinload(User.student_profile),
-                selectinload(User.supervisor_profile),
-                selectinload(User.admin_profile),
-            )
-            .where(User.email == email)
-        )
+        # Find or create user (without loading profiles initially)
+        result = await db.execute(select(User).where(User.email == email))
         user = result.scalars().first()
 
         # Track if this is a new user
@@ -789,70 +794,54 @@ async def oauth_callback(
         role_val = user.role.value if hasattr(user.role, "value") else user.role
         jwt_token = create_access_token(sub=str(user.user_id), role=role_val)
 
-        # Get return_to URL and source from session
-        return_to = request.session.pop("oauth_return_to", "/dashboard")
+        # Get source from session for tracking
         source = request.session.pop("oauth_source", None)
+        return_to = request.session.pop("oauth_return_to", "/dashboard")
 
-        # Build frontend redirect URL based on user status and source
-        frontend_url = str(settings.frontend_app_url)
-
-        # Determine redirect behavior
-        if is_new_user:  # This is a new user (just created)
-            if source == "signup":
-                # New user from signup page → redirect to role selection
-                redirect_url = f"{frontend_url}/auth/role-selection"
-                logger.info(f"New user from signup page, redirecting to role selection")
-            else:
-                # New user from login page → redirect to default dashboard
-                redirect_url = f"{frontend_url}{return_to}"
-                logger.info(f"New user from login page, redirecting to: {return_to}")
-        else:  # Existing user
-            if source == "login":
-                # Existing user from login page → redirect to dashboard
-                redirect_url = f"{frontend_url}{return_to}"
-                logger.info(
-                    f"Existing user from login page, redirecting to: {return_to}"
-                )
-            else:
-                # Existing user from signup page → redirect to dashboard (they're already signed up)
-                redirect_url = f"{frontend_url}{return_to}"
-                logger.info(
-                    f"Existing user from signup page, redirecting to: {return_to}"
-                )
-
-        if use_cookie:
-            # Option A: Set secure HttpOnly cookie and redirect
-            response = RedirectResponse(
-                url=redirect_url, status_code=status.HTTP_302_FOUND
+        # Check if user needs profile completion
+        needs_profile_completion = False
+        if user.role == RoleEnum.student:
+            # Check if student has profile
+            student_result = await db.execute(
+                select(Student).where(Student.user_id == user.user_id)
             )
+            needs_profile_completion = student_result.scalars().first() is None
+        elif user.role == RoleEnum.supervisor:
+            # Check if supervisor has profile
+            supervisor_result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == user.user_id)
+            )
+            needs_profile_completion = supervisor_result.scalars().first() is None
 
-            # Set secure cookie with JWT token
-            is_production = settings.ENV.lower() in {"prod", "production"}
-            response.set_cookie(
-                key="auth_token",
-                value=jwt_token,
-                httponly=True,  # Prevent XSS attacks
-                secure=is_production,  # HTTPS only in production
-                samesite="lax",  # CSRF protection
-                max_age=60 * 60 * 24 * 7,  # 7 days
-                domain=None,  # Will be set automatically based on request
-            )
+        # Return JSON response instead of redirecting
+        response_data = {
+            "success": True,
+            "message": "OAuth authentication successful",
+            "user": {
+                "user_id": str(user.user_id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": role_val,
+                "is_new_user": is_new_user,
+                "needs_profile_completion": needs_profile_completion,
+            },
+            "token": jwt_token,
+            "redirect_info": {
+                "source": source,
+                "return_to": return_to,
+                "needs_role_selection": is_new_user and source == "signup",
+                "needs_profile_completion": needs_profile_completion,
+            },
+        }
 
-            logger.info(
-                f"OAuth success: Redirecting to {redirect_url} with secure cookie"
-            )
-            return response
-        else:
-            # Option B: Redirect with token in URL (less secure, for development)
-            params = {"token": jwt_token, "role": role_val}
-            redirect_url_with_token = f"{redirect_url}?{urlencode(params)}"
+        logger.info(
+            f"OAuth success for {email}: is_new_user={is_new_user}, needs_profile_completion={needs_profile_completion}"
+        )
 
-            logger.info(
-                f"OAuth success: Redirecting to {redirect_url_with_token} with URL token"
-            )
-            return RedirectResponse(
-                url=redirect_url_with_token, status_code=status.HTTP_302_FOUND
-            )
+        # Return JSON response
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(content=response_data, status_code=200)
 
     except HTTPException:
         raise
