@@ -649,9 +649,10 @@ async def oauth_login(
         logger.info(f"Stored OAuth source: {source}")
 
     # Generate callback URL for OAuth flow
-    redirect_uri = f"{settings.oauth_redirect_origin}/auth/oauth/{provider}/callback"
+    # Strip trailing slash to prevent double slashes in the redirect URI
+    redirect_uri = f"{str(settings.oauth_redirect_origin).rstrip('/')}/auth/oauth/{provider}/callback"
 
-    logger.info(f"Initiating {provider} OAuth flow")
+    logger.info(f"Initiating {provider} OAuth flow with redirect_uri: {redirect_uri}")
     return await oauth.create_client(provider).authorize_redirect(request, redirect_uri)
 
 
