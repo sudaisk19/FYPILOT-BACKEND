@@ -702,15 +702,31 @@ async def oauth_callback(
         client = oauth.create_client(provider)
         token_data = await client.authorize_access_token(request)
 
+        logger.info(
+            f"OAuth token data received: {list(token_data.keys()) if token_data else 'None'}"
+        )
+
         # Extract user information based on provider
         email = None
         full_name = None
 
         if provider == "google":
             # Google provides user info in ID token
-            userinfo = await client.parse_id_token(request, token_data)
-            email = userinfo.get("email")
-            full_name = userinfo.get("name")
+            try:
+                userinfo = await client.parse_id_token(request, token_data)
+                email = userinfo.get("email")
+                full_name = userinfo.get("name")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to parse ID token: {e}, trying userinfo endpoint"
+                )
+                # Fallback to userinfo endpoint if ID token parsing fails
+                resp = await client.get(
+                    "https://www.googleapis.com/oauth2/v2/userinfo", token=token_data
+                )
+                userinfo = resp.json()
+                email = userinfo.get("email")
+                full_name = userinfo.get("name")
 
         elif provider == "github":
             # GitHub requires additional API calls
