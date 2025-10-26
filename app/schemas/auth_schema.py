@@ -182,7 +182,6 @@ class UserProfileResponse(BaseModel):
     profile_avatar: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    needs_profile_completion: bool = False  # Whether user needs to complete profile
     group_info: Optional[GroupInfo] = None  # For students
     supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
     admin_info: Optional[AdminInfo] = None  # For admins
