@@ -16,6 +16,7 @@ from app.api.http.student_profile import router as student_profile_router
 # Import explore routers
 from app.api.http.supervisor_explore import router as supervisor_explore_router
 from app.api.http.supervisor_profile import router as supervisor_profile_router
+from app.api.http.supervisor_recommendation import router as supervisor_recommendation_router
 from app.api.http.users import router as user_router
 
 # Create a "master" router that mounts all HTTP routers
@@ -40,6 +41,9 @@ router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profi
 router.include_router(
     supervisor_explore_router, prefix="/explore", tags=["supervisor-explore"]
 )
+
+# Mount recommendation router
+router.include_router(supervisor_recommendation_router)
 
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
