@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     # ─── Mailer Settings ────────────────────────────────────
     mailer_provider: str = "mailtrap"
 
-    # Ethereal settings (optional - for backward compatibility)
-    ethereal_smtp_host: str | None = None  # ETHEREAL_SMTP_HOST
-    ethereal_smtp_port: int | None = None  # ETHEREAL_SMTP_PORT
-    ethereal_smtp_user: str | None = None  # ETHEREAL_SMTP_USER
-    ethereal_smtp_pass: str | None = None  # ETHEREAL_SMTP_PASS
+    # # Ethereal settings (optional - for backward compatibility)
+    # ethereal_smtp_host: str | None = None  # ETHEREAL_SMTP_HOST
+    # ethereal_smtp_port: int | None = None  # ETHEREAL_SMTP_PORT
+    # ethereal_smtp_user: str | None = None  # ETHEREAL_SMTP_USER
+    # ethereal_smtp_pass: str | None = None  # ETHEREAL_SMTP_PASS
 
     # Mailtrap settings
     mailtrap_smtp_host: str = "sandbox.smtp.mailtrap.io"  # MAILTRAP_SMTP_HOST
