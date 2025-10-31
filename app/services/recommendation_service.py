@@ -137,9 +137,7 @@ class RecommendationService:
         idea_description: Optional[str] = None,
         idea_industry: Optional[str] = None,
         project_type: Optional[str] = None,
-        page: int = 1,
-        per_page: int = 10,
-    ) -> tuple[List[Dict[str, Any]], int]:
+    ) -> List[Dict[str, Any]]:
         """
         Generate AI-powered supervisor recommendations for a student group.
 
@@ -243,24 +241,19 @@ class RecommendationService:
         for c in candidates:
             c['score'] = round((c['raw_score'] / max_score) * 100, 2)
 
-        # Sort and deduplicate all candidates
+        # Sort and get top 5 unique candidates
         candidates.sort(key=lambda x: x['score'], reverse=True)
-        unique_candidates = self._deduplicate(candidates)
+        unique_candidates = self._deduplicate(candidates)[:5]  # Only take top 5
         
-        # Apply pagination
-        total_count = len(unique_candidates)
-        offset = (page - 1) * per_page
-        paginated_candidates = unique_candidates[offset:offset + per_page]
-        
-        # Generate AI reasons only for current page (max 10 for LLM efficiency)
+        # Generate AI reasons for all 5 candidates
         try:
             reasons = await self._generate_reasons(
-                group, paginated_candidates[:10], idea_domain, idea_description, idea_industry, project_type
+                group, unique_candidates, idea_domain, idea_description, idea_industry, project_type
             )
 
             # Merge reasons with candidates
             result = []
-            for sup, reason in zip(paginated_candidates, reasons):
+            for sup, reason in zip(unique_candidates, reasons):
                 result.append({
                     'name': sup['name'],
                     'department': sup['department'],
@@ -273,7 +266,7 @@ class RecommendationService:
                 })
             
             # Add generic reasons for any remaining candidates
-            for sup in paginated_candidates[len(reasons):]:
+            for sup in unique_candidates[len(reasons):]:
                 result.append({
                     'name': sup['name'],
                     'department': sup['department'],
@@ -285,7 +278,7 @@ class RecommendationService:
                     'reason': "Based on matching domains and requirements."
                 })
 
-            return result, total_count
+            return result
         except Exception as e:
             logger.error(f"Error generating AI reasons: {e}")
             # Return without reasons if LLM fails
@@ -298,9 +291,9 @@ class RecommendationService:
                 'user_id': sup['user_id'],
                 'score': sup['score'],
                 'reason': "Based on matching domains and requirements."
-            } for sup in paginated_candidates]
+            } for sup in unique_candidates]
             
-            return result, total_count
+            return result
 
     async def _generate_reasons(
         self, group, candidates, domain, description, industry, project_type

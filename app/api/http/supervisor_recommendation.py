@@ -21,20 +21,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
-@router.post("/supervisors", response_model=PaginatedRecommendationResponse)
+@router.post("/supervisors")
 async def get_supervisor_recommendations(
     request: RecommendationRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
-    Get AI-powered supervisor recommendations for a student group with pagination.
+    Get top 5 AI-powered supervisor recommendations for a student group.
 
     This endpoint:
     - Analyzes group skills, interests, and project requirements
     - Uses semantic search to find matching supervisors
     - Generates AI explanations for each recommendation
-    - Returns paginated results
+    - Returns exactly 5 best matching supervisors
 
     Only students can access this endpoint.
     """
@@ -58,31 +58,18 @@ async def get_supervisor_recommendations(
         )
 
     try:
-        recommendations, total_count = await recommendation_service.recommend_supervisors(
+        recommendations = await recommendation_service.recommend_supervisors(
             db=db,
             group_id=request.group_id,
             idea_domain=request.idea_domain,
             idea_description=request.idea_description,
             idea_industry=request.idea_industry,
             project_type=request.project_type,
-            page=request.page,
-            per_page=request.per_page,
         )
 
-        # Calculate pagination metadata
-        total_pages = (total_count + request.per_page - 1) // request.per_page if total_count > 0 else 0
+        logger.info(f"Generated {len(recommendations)} recommendations for group {request.group_id}")
 
-        logger.info(f"Generated {len(recommendations)} recommendations (page {request.page}/{total_pages}) for group {request.group_id}")
-
-        return PaginatedRecommendationResponse(
-            recommendations=recommendations,
-            total=total_count,
-            page=request.page,
-            per_page=request.per_page,
-            total_pages=total_pages,
-            has_next=request.page < total_pages,
-            has_prev=request.page > 1,
-        )
+        return {"recommendations": recommendations}
 
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
