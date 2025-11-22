@@ -18,7 +18,7 @@ Key Components:
 import logging  # For error and security logging
 
 # Standard library imports
-from typing import Annotated, Optional  # For type hints and annotations
+from typing import Annotated  # For type hints and annotations
 from uuid import UUID  # For user ID validation
 
 # FastAPI imports
@@ -26,7 +26,6 @@ from fastapi import Depends  # For dependency injection
 from fastapi import HTTPException  # For HTTP error responses
 from fastapi import Request  # For request context
 from fastapi import status  # HTTP status codes
-from fastapi.security import OAuth2PasswordBearer  # JWT token extraction
 
 # Database imports
 from sqlalchemy import select
@@ -36,7 +35,6 @@ from sqlalchemy.orm import selectinload  # For database queries
 
 # Application imports
 from app.auth.utils import decode_access_token  # JWT validation
-from app.core.config import settings  # Application settings
 from app.db import get_db  # Database session
 from app.models.user import User  # User model
 
@@ -52,8 +50,7 @@ logger = logging.getLogger(__name__)
 from fastapi.security import HTTPBearer
 
 oauth2_scheme = HTTPBearer(
-    scheme_name="Bearer", 
-    description="Bearer token authentication using JWT"
+    scheme_name="Bearer", description="Bearer token authentication using JWT"
 )
 
 

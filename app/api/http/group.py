@@ -2,7 +2,6 @@
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import delete, func, select, update
@@ -13,8 +12,8 @@ from app.core.config import settings
 from app.db import get_db
 from app.models.domain import Domain
 from app.models.group import (
-    FYPStageEnum,
     FYPCycleEnum,
+    FYPStageEnum,
     Group,
     GroupInvite,
     GroupMember,
@@ -200,10 +199,10 @@ async def send_invite(
 
     # Send the email
     from app.services.mailer import get_email_template
-    
+
     frontend_base = getattr(settings, "frontend_url", settings.frontend_app_url)
     link = f"{frontend_base}/groups/{group_id}/invites/{token}/accept"
-    
+
     content = f"""
     <p style="margin: 0 0 16px;">Hi <strong>{invitee.full_name}</strong>,</p>
     
@@ -220,7 +219,7 @@ async def send_invite(
         <a href="{link}" style="color: #2563eb; word-break: break-all;">{link}</a>
     </p>
     """
-    
+
     html = get_email_template(
         title="Group Invitation",
         content=content,
@@ -228,9 +227,12 @@ async def send_invite(
         button_link=link,
         footer_text=f"You're receiving this because {current_user.full_name} invited you to join their group.",
     )
-    
+
     background_tasks.add_task(
-        get_mailer().send, invitee.email, f"Group Invitation - {settings.email_company_name}", html
+        get_mailer().send,
+        invitee.email,
+        f"Group Invitation - {settings.email_company_name}",
+        html,
     )
 
     return {"message": "Invitation sent; check Ethereal preview URL"}
@@ -335,13 +337,13 @@ async def leave_group(
     # Check if group exists
     group_result = await db.execute(select(Group).where(Group.group_id == group_id))
     group = group_result.scalars().first()
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-    
+
     # Check if user is a member
     is_member = await db.execute(
         select(GroupMember).where(
@@ -709,7 +711,9 @@ async def get_group_profile(
         from sqlalchemy import text
 
         invites_count_result = await db.execute(
-            text("SELECT COUNT(*) FROM group_invites WHERE group_id = :group_id AND status = :status"),
+            text(
+                "SELECT COUNT(*) FROM group_invites WHERE group_id = :group_id AND status = :status"
+            ),
             {"group_id": group_id, "status": "pending"},
         )
         pending_count = invites_count_result.scalar_one()

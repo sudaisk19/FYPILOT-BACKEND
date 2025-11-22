@@ -23,10 +23,3 @@ class ShortlistItem(BaseModel):
 class ShortlistListResponse(BaseModel):
     group_id: UUID
     supervisors: List[ShortlistItem] = Field(default_factory=list)
-
-
-
-
-
-
-

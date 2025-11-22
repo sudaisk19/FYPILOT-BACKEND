@@ -13,7 +13,11 @@ class InviteRole(str):
 
 class SendSupervisorInviteRequest(BaseModel):
     supervisor_id: UUID = Field(..., description="Supervisor user_id")
-    role: str = Field(..., pattern="^(supervisor|cosupervisor)$", description="Requested role (must match db enum)")
+    role: str = Field(
+        ...,
+        pattern="^(supervisor|cosupervisor)$",
+        description="Requested role (must match db enum)",
+    )
     message: str | None = Field(None, description="Optional message to supervisor")
 
 
@@ -31,6 +35,7 @@ class PendingInvitesResponse(BaseModel):
 
 class SentRequestItem(BaseModel):
     """Request sent by a group to a supervisor."""
+
     request_id: UUID
     supervisor_id: UUID
     supervisor_name: str = Field(..., description="Supervisor's full name")
@@ -43,10 +48,6 @@ class SentRequestItem(BaseModel):
 
 class SentRequestsResponse(BaseModel):
     """All requests sent by a group."""
+
     group_id: UUID
     requests: List[SentRequestItem] = Field(default_factory=list)
-
-
-
-
-

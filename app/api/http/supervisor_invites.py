@@ -21,7 +21,7 @@ from app.schemas.invite_schema import (
     SentRequestsResponse,
 )
 
-router = APIRouter(prefix="/invites", tags=["supervisor-invites"]) 
+router = APIRouter(prefix="/invites", tags=["supervisor-invites"])
 
 
 @router.post("/groups/{group_id}/supervisor", status_code=status.HTTP_201_CREATED)
@@ -34,7 +34,8 @@ async def send_supervisor_invite(
     # Only students can send, and must be member of the group
     if current_user.role != "student":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only students can send invites"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can send invites",
         )
 
     membership = await db.execute(
@@ -51,8 +52,10 @@ async def send_supervisor_invite(
 
     # Validate requested role constraints
     grp = (
-        await db.execute(select(Group).where(Group.group_id == group_id))
-    ).scalars().first()
+        (await db.execute(select(Group).where(Group.group_id == group_id)))
+        .scalars()
+        .first()
+    )
     if not grp:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
@@ -97,8 +100,14 @@ async def send_supervisor_invite(
 
     # Create request in requests table
     if body.role not in ("supervisor", "cosupervisor"):
-        raise HTTPException(status_code=400, detail="role must be 'supervisor' or 'cosupervisor'")
-    request_type = RequestTypeEnum.supervisor if body.role == "supervisor" else RequestTypeEnum.cosupervisor
+        raise HTTPException(
+            status_code=400, detail="role must be 'supervisor' or 'cosupervisor'"
+        )
+    request_type = (
+        RequestTypeEnum.supervisor
+        if body.role == "supervisor"
+        else RequestTypeEnum.cosupervisor
+    )
     request = Request(
         group_id=group_id,
         supervisor_id=body.supervisor_id,
@@ -109,10 +118,16 @@ async def send_supervisor_invite(
     db.add(request)
     await db.commit()
 
-    return {"message": "Request sent", "role": body.role, "request_id": str(request.request_id)}
+    return {
+        "message": "Request sent",
+        "role": body.role,
+        "request_id": str(request.request_id),
+    }
 
 
-@router.get("/groups/{group_id}/supervisor/requests", response_model=SentRequestsResponse)
+@router.get(
+    "/groups/{group_id}/supervisor/requests", response_model=SentRequestsResponse
+)
 async def list_sent_requests(
     group_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -120,7 +135,7 @@ async def list_sent_requests(
 ):
     """
     List all supervisor requests sent by a group.
-    
+
     This endpoint allows students (group members) to see all requests their group
     has sent to supervisors, including their status. This is useful for:
     - Checking if a request already exists for a supervisor
@@ -156,7 +171,8 @@ async def list_sent_requests(
         .join(User, User.user_id == Supervisor.user_id)
         .where(
             Request.group_id == group_id,
-            Request.status != InviteStatusEnum.cancelled  # Exclude cancelled (though they should be deleted)
+            Request.status
+            != InviteStatusEnum.cancelled,  # Exclude cancelled (though they should be deleted)
         )
         .order_by(Request.created_at.desc())
     )
@@ -247,18 +263,26 @@ async def accept_invite(
         )
     # Check if supervisor is already assigned to the other role (aligns with DB constraint)
     grp = (
-        await db.execute(select(Group).where(Group.group_id == req.group_id))
-    ).scalars().first()
+        (await db.execute(select(Group).where(Group.group_id == req.group_id)))
+        .scalars()
+        .first()
+    )
     if not grp:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
         )
-    if req.request_type == RequestTypeEnum.supervisor and grp.cosupervisor_id == current_user.user_id:
+    if (
+        req.request_type == RequestTypeEnum.supervisor
+        and grp.cosupervisor_id == current_user.user_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="You are already assigned as cosupervisor. Cannot be both supervisor and cosupervisor.",
         )
-    if req.request_type == RequestTypeEnum.cosupervisor and grp.supervisor_id == current_user.user_id:
+    if (
+        req.request_type == RequestTypeEnum.cosupervisor
+        and grp.supervisor_id == current_user.user_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="You are already assigned as supervisor. Cannot be both supervisor and cosupervisor.",
@@ -272,6 +296,7 @@ async def accept_invite(
         )
         # Increment supervisor capacity_filled
         from app.models.supervisor import Supervisor
+
         await db.execute(
             update(Supervisor)
             .where(Supervisor.user_id == current_user.user_id)
@@ -347,36 +372,40 @@ async def cancel_invite(
 ):
     """
     Cancel (delete) a pending supervisor request.
-    
+
     This endpoint completely removes the request from the requests table.
     After cancellation, the request will no longer appear in any lists,
     and the student can send a new request to the same supervisor.
     """
     # Fetch request
     req = (
-        await db.execute(
-            select(Request).where(Request.request_id == request_id)
-        )
-    ).scalars().first()
+        (await db.execute(select(Request).where(Request.request_id == request_id)))
+        .scalars()
+        .first()
+    )
     if not req or req.status != InviteStatusEnum.pending:
         raise HTTPException(404, detail="Request not found or already processed")
     # Confirm student is a member of that group
     from app.models.group import GroupMember
+
     is_member = (
-        await db.execute(
-            select(GroupMember).where(
-                GroupMember.group_id == req.group_id,
-                GroupMember.student_id == current_user.user_id,
+        (
+            await db.execute(
+                select(GroupMember).where(
+                    GroupMember.group_id == req.group_id,
+                    GroupMember.student_id == current_user.user_id,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if not is_member:
         raise HTTPException(403, detail="You are not a member of this group")
-    
+
     # Delete the request completely (not just update status)
     from sqlalchemy import delete
-    await db.execute(
-        delete(Request).where(Request.request_id == request_id)
-    )
+
+    await db.execute(delete(Request).where(Request.request_id == request_id))
     await db.commit()
     return {"message": "Request cancelled"}

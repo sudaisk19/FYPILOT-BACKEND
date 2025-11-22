@@ -3,8 +3,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -14,6 +15,7 @@ from app.db import Base
 
 class FYPStageEnum(str, enum.Enum):
     """Enum for FYP stage values."""
+
     ideation = "ideation"
     proposal = "proposal"
     approval = "approval"
@@ -24,6 +26,7 @@ class FYPStageEnum(str, enum.Enum):
 
 class FYPCycleEnum(str, enum.Enum):
     """Enum for FYP cycle values."""
+
     fyp1 = "fyp1"
     fyp2 = "fyp2"
 
@@ -118,7 +121,9 @@ class GroupInvite(Base):
     __tablename__ = "group_invites"
     invite_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     group_id = Column(
-        UUID(as_uuid=True), ForeignKey("groups.group_id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("groups.group_id", ondelete="CASCADE"),
+        nullable=False,
     )
     inviter_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     invitee_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)

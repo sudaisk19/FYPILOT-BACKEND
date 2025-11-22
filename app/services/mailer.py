@@ -7,7 +7,10 @@ import aiosmtplib
 
 from app.core.config import settings
 
-# from sendgrid import SendGridAPIClient
+try:
+    from sendgrid import SendGridAPIClient
+except ImportError:
+    SendGridAPIClient = None  # type: ignore
 
 
 def get_email_template(
@@ -20,7 +23,7 @@ def get_email_template(
 ) -> str:
     """
     Generate a professional HTML email template.
-    
+
     Args:
         title: Email title/heading
         content: Main email content (HTML)
@@ -28,20 +31,20 @@ def get_email_template(
         button_link: Optional button link URL
         footer_text: Optional custom footer text
         logo_url: Optional logo image URL (defaults to settings.email_logo_url)
-    
+
     Returns:
         Complete HTML email template
     """
     logo = logo_url or settings.email_logo_url
     company_name = settings.email_company_name
-    
+
     # Logo HTML (either image or text fallback)
     logo_html = ""
     if logo:
         logo_html = f'<img src="{logo}" alt="{company_name}" style="max-width: 200px; height: auto; margin-bottom: 20px;" />'
     else:
         logo_html = f'<div style="font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 20px;">{company_name}</div>'
-    
+
     button_html = ""
     if button_text and button_link:
         button_html = f"""
@@ -51,9 +54,9 @@ def get_email_template(
             </a>
         </div>
         """
-    
+
     footer = footer_text or f"© 2024 {company_name}. All rights reserved."
-    
+
     return f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -195,6 +198,8 @@ class ProdMailer:
     """
 
     def __init__(self):
+        if SendGridAPIClient is None:
+            raise ImportError("sendgrid package is not installed")
         if not settings.sendgrid_api_key or not settings.from_email:
             raise ValueError(
                 "SendGrid API key and from_email must be set in production"

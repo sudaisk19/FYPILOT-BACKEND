@@ -8,6 +8,7 @@ from typing import Any, Optional
 try:
     from redis.asyncio import Redis  # type: ignore
     from redis.exceptions import ConnectionError as RedisConnectionError  # type: ignore
+
     _HAS_REDIS = True
 except Exception:  # pragma: no cover
     Redis = None  # type: ignore
@@ -73,9 +74,7 @@ class Cache:
             return False
         except Exception as e:
             self._is_connected = False
-            logger.warning(
-                f"⚠️ Redis connection error: {e}. Caching will be disabled."
-            )
+            logger.warning(f"⚠️ Redis connection error: {e}. Caching will be disabled.")
             return False
 
     async def disconnect(self) -> None:

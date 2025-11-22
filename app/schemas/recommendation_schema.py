@@ -2,6 +2,7 @@
 """Schemas for supervisor recommendation requests and responses."""
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 

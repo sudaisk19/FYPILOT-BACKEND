@@ -12,15 +12,15 @@ from .domain import Domain
 from .group import Group, GroupInvite, GroupMember
 from .industry import Industry
 
-# Request and Shortlist models
-from .request import Request, RequestTypeEnum
-from .shortlisted_supervisor import ShortlistedSupervisor
-
 # Other models
 from .password_reset import PasswordResetToken
 
 # Project models (depend on Group, Domain, Industry)
 from .project import Project, ProjectDomain
+
+# Request and Shortlist models
+from .request import Request, RequestTypeEnum
+from .shortlisted_supervisor import ShortlistedSupervisor
 
 # Profile models (depend on User)
 from .student import Student

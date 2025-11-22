@@ -19,7 +19,7 @@ from app.schemas.shortlist_schema import (
 )
 from app.services.cache import cache
 
-router = APIRouter(prefix="/shortlist", tags=["shortlist"]) 
+router = APIRouter(prefix="/shortlist", tags=["shortlist"])
 
 
 @router.post("/supervisors", status_code=status.HTTP_201_CREATED)
@@ -30,7 +30,10 @@ async def add_to_shortlist(
 ):
     # Only students, must be a member of the group
     if current_user.role != "student":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students can shortlist supervisors")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can shortlist supervisors",
+        )
 
     # Check membership
     membership = await db.execute(
@@ -40,7 +43,10 @@ async def add_to_shortlist(
         )
     )
     if membership.scalars().first() is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group",
+        )
 
     # Prevent duplicates (unique pair per group_id + supervisor_id)
     existing = await db.execute(
@@ -72,7 +78,10 @@ async def list_shortlisted_supervisors(
 ):
     # Only students, must be a member of the group
     if current_user.role != "student":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students can view shortlist")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can view shortlist",
+        )
 
     membership = await db.execute(
         select(GroupMember).where(
@@ -81,7 +90,10 @@ async def list_shortlisted_supervisors(
         )
     )
     if membership.scalars().first() is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group",
+        )
 
     # Try cache
     cache_key = f"shortlist:v2:{group_id}"  # v2 includes capacity fields
@@ -122,14 +134,16 @@ async def list_shortlisted_supervisors(
 
 @router.delete("/supervisors/{supervisor_id}", status_code=status.HTTP_200_OK)
 async def remove_from_shortlist(
-    supervisor_id: UUID = Path(..., description="Supervisor user_id to remove from shortlist"),
+    supervisor_id: UUID = Path(
+        ..., description="Supervisor user_id to remove from shortlist"
+    ),
     group_id: UUID = Query(..., description="Group id"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
 ):
     """
     Remove a supervisor from the group's shortlist.
-    
+
     Only students who are members of the group can remove supervisors from the shortlist.
     """
     # Only students can remove from shortlist
@@ -179,4 +193,3 @@ async def remove_from_shortlist(
     await cache.delete(f"shortlist:v2:{group_id}")
 
     return {"message": "Supervisor removed from shortlist"}
-
