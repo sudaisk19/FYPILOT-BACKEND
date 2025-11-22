@@ -111,7 +111,8 @@ class RecommendationService:
                 'domains': domains,
                 'requirements': supervisor.requirements or [],
                 'project_types': supervisor.project_types or [],
-                'user_id': str(user.user_id)
+                'user_id': str(user.user_id),
+                'profile_avatar': user.profile_avatar
             })
 
         # Generate embeddings
@@ -230,6 +231,7 @@ class RecommendationService:
                 'requirements': sup['requirements'],
                 'project_type': sup['project_types'],
                 'user_id': sup['user_id'],
+                'profile_avatar': sup['profile_avatar'],
                 'similarity': float(similarity),
                 'skills_match': float(skills_j),
                 'interests_match': float(interests_j),
@@ -261,6 +263,7 @@ class RecommendationService:
                     'requirements': sup['requirements'],
                     'project_type': sup['project_type'],
                     'user_id': sup['user_id'],
+                    'profile_avatar': sup['profile_avatar'],
                     'score': sup['score'],
                     'reason': reason if reason else "Based on matching domains and requirements."
                 })
@@ -274,6 +277,7 @@ class RecommendationService:
                     'requirements': sup['requirements'],
                     'project_type': sup['project_type'],
                     'user_id': sup['user_id'],
+                    'profile_avatar': sup['profile_avatar'],
                     'score': sup['score'],
                     'reason': "Based on matching domains and requirements."
                 })
@@ -289,6 +293,7 @@ class RecommendationService:
                 'requirements': sup['requirements'],
                 'project_type': sup['project_type'],
                 'user_id': sup['user_id'],
+                'profile_avatar': sup['profile_avatar'],
                 'score': sup['score'],
                 'reason': "Based on matching domains and requirements."
             } for sup in unique_candidates]

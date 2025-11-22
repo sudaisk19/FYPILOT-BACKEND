@@ -12,6 +12,10 @@ from .domain import Domain
 from .group import Group, GroupInvite, GroupMember
 from .industry import Industry
 
+# Request and Shortlist models
+from .request import Request, RequestTypeEnum
+from .shortlisted_supervisor import ShortlistedSupervisor
+
 # Other models
 from .password_reset import PasswordResetToken
 
@@ -39,6 +43,9 @@ __all__ = [
     "Group",
     "GroupMember",
     "GroupInvite",
+    "Request",
+    "RequestTypeEnum",
+    "ShortlistedSupervisor",
     "Project",
     "ProjectDomain",
     "Domain",

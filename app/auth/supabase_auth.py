@@ -52,7 +52,8 @@ logger = logging.getLogger(__name__)
 from fastapi.security import HTTPBearer
 
 oauth2_scheme = HTTPBearer(
-    scheme_name="Bearer", description="Bearer token authentication using JWT"
+    scheme_name="Bearer", 
+    description="Bearer token authentication using JWT"
 )
 
 

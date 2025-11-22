@@ -14,6 +14,7 @@ from app.schemas.user import Role
 class ProjectType(str, Enum):
     research = "research"
     product = "product"
+    both = "both"
 
 
 # Base user fields (common to all roles)
@@ -22,25 +23,50 @@ class BaseUserFields(BaseModel):
     email: Optional[str] = Field(
         None, max_length=255
     )  # Changed from EmailStr to str to allow empty strings
-    profile_avatar: Optional[str] = Field(None, max_length=500)
+    profile_avatar: Optional[str] = Field(None, max_length=5000)
 
-    @field_validator("full_name", "profile_avatar")
+    @field_validator("full_name")
     @classmethod
-    def validate_string_fields(cls, v):
-        """Validate string fields - convert empty strings to None"""
-        if v is not None and v.strip() == "":
+    def validate_full_name(cls, v):
+        """Validate full name field - convert empty strings to None"""
+        if v is None:
             return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            return v
+        return v
+
+    @field_validator("profile_avatar")
+    @classmethod
+    def validate_profile_avatar(cls, v):
+        """Validate profile avatar - accepts any non-empty string (URL or data URI)"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            # Accept any non-empty string (URL, data URI, or other format)
+            # Frontend is responsible for ensuring valid format
+            return v
+        # If not a string, let Pydantic handle type validation
         return v
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
         """Validate email field - allow None, empty string, or valid email"""
-        if v is None or v.strip() == "":
+        if v is None:
             return None
-        # Basic email validation
-        if "@" not in v or "." not in v.split("@")[-1]:
-            raise ValueError("Invalid email format")
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            # Basic email validation
+            if "@" not in v or "." not in v.split("@")[-1]:
+                raise ValueError("Invalid email format")
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
         return v
 
 
@@ -58,8 +84,13 @@ class StudentFields(BaseModel):
     @classmethod
     def validate_string_fields(cls, v):
         """Convert empty strings to None for string fields"""
-        if v is not None and v.strip() == "":
+        if v is None:
             return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
         return v
 
 
@@ -85,7 +116,7 @@ class SupervisorFields(BaseModel):
 # Admin-specific fields
 class AdminFields(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
-    profile_pic: Optional[str] = Field(None, max_length=500)
+    profile_pic: Optional[str] = Field(None, max_length=5000)
 
 
 # Request schemas for PATCH endpoints
@@ -99,7 +130,7 @@ class StudentProfilePatchUpdate(BaseModel):
     # User fields (mutable)
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = Field(None, max_length=255)
-    profile_avatar: Optional[str] = Field(None, max_length=500)
+    profile_avatar: Optional[str] = Field(None, max_length=5000)
 
     # Student fields (mutable - excluding roll_number)
     department: Optional[str] = Field(None, max_length=255)
@@ -113,8 +144,13 @@ class StudentProfilePatchUpdate(BaseModel):
     @classmethod
     def validate_string_fields(cls, v):
         """Validate string fields - convert empty strings to None"""
-        if v is not None and v.strip() == "":
+        if v is None:
             return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
         return v
 
     @field_validator("email")
@@ -139,7 +175,7 @@ class SupervisorProfilePatchUpdate(BaseModel):
     # User fields (mutable)
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = Field(None, max_length=255)
-    profile_avatar: Optional[str] = Field(None, max_length=500)
+    profile_avatar: Optional[str] = Field(None, max_length=5000)
 
     # Supervisor fields (mutable - excluding required fields)
     department: Optional[str] = Field(None, max_length=255)
@@ -148,25 +184,49 @@ class SupervisorProfilePatchUpdate(BaseModel):
     requirements: Optional[List[str]] = Field(None, max_items=20)
     # Note: project_types, capacity_max, capacity_filled are immutable
 
-    @field_validator(
-        "full_name", "profile_avatar", "department", "designation", "office"
-    )
+    @field_validator("full_name", "department", "designation", "office")
     @classmethod
     def validate_string_fields(cls, v):
         """Validate string fields - convert empty strings to None"""
-        if v is not None and v.strip() == "":
+        if v is None:
             return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
+        return v
+
+    @field_validator("profile_avatar")
+    @classmethod
+    def validate_profile_avatar(cls, v):
+        """Validate profile avatar - accepts any non-empty string (URL or data URI)"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            # Accept any non-empty string (URL, data URI, or other format)
+            # Frontend is responsible for ensuring valid format
+            return v
+        # If not a string, let Pydantic handle type validation
         return v
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
         """Validate email field - allow None, empty string, or valid email"""
-        if v is None or v.strip() == "":
+        if v is None:
             return None
-        # Basic email validation
-        if "@" not in v or "." not in v.split("@")[-1]:
-            raise ValueError("Invalid email format")
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            # Basic email validation
+            if "@" not in v or "." not in v.split("@")[-1]:
+                raise ValueError("Invalid email format")
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
         return v
 
 
@@ -180,29 +240,55 @@ class AdminProfilePatchUpdate(BaseModel):
     # User fields (mutable)
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = Field(None, max_length=255)
-    profile_avatar: Optional[str] = Field(None, max_length=500)
+    profile_avatar: Optional[str] = Field(None, max_length=5000)
 
     # Admin fields (all mutable)
     phone: Optional[str] = Field(None, max_length=20)
-    profile_pic: Optional[str] = Field(None, max_length=500)
+    profile_pic: Optional[str] = Field(None, max_length=5000)
 
-    @field_validator("full_name", "profile_avatar", "phone", "profile_pic")
+    @field_validator("full_name", "phone", "profile_pic")
     @classmethod
     def validate_string_fields(cls, v):
         """Validate string fields - convert empty strings to None"""
-        if v is not None and v.strip() == "":
+        if v is None:
             return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
+        return v
+
+    @field_validator("profile_avatar")
+    @classmethod
+    def validate_profile_avatar(cls, v):
+        """Validate profile avatar - accepts any non-empty string (URL or data URI)"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            # Accept any non-empty string (URL, data URI, or other format)
+            # Frontend is responsible for ensuring valid format
+            return v
+        # If not a string, let Pydantic handle type validation
         return v
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
         """Validate email field - allow None, empty string, or valid email"""
-        if v is None or v.strip() == "":
+        if v is None:
             return None
-        # Basic email validation
-        if "@" not in v or "." not in v.split("@")[-1]:
-            raise ValueError("Invalid email format")
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            # Basic email validation
+            if "@" not in v or "." not in v.split("@")[-1]:
+                raise ValueError("Invalid email format")
+            return v
+        # If not a string, return as-is (Pydantic will handle type validation)
         return v
 
 

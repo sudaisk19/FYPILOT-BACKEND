@@ -14,9 +14,8 @@ class ProjectType(str, Enum):
     """
 
     RESEARCH = "research"
-    DEVELOPMENT = "development"
-    THESIS = "thesis"
-    CAPSTONE = "capstone"
+    PRODUCT = "product"
+    BOTH = "both"
 
 
 class SupervisorProfileBase(BaseModel):
@@ -55,7 +54,7 @@ class SupervisorProfileBase(BaseModel):
     project_types: List[ProjectType] = Field(
         default_factory=list,
         description="Types of projects willing to supervise",
-        example=["research", "thesis"],
+        example=["research", "product"],
     )
 
     capacity_max: int = Field(

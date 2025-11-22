@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     ENV: str = "development"
 
+    # ─── Cache / Infra ───────────────────────────────────────
+    redis_url: str = Field(default="redis://localhost:6379/0")  # REDIS_URL
+
     # ─── Mailer Settings ────────────────────────────────────
     mailer_provider: str = "mailtrap"
 
@@ -32,6 +35,16 @@ class Settings(BaseSettings):
     oauth_redirect_origin: AnyHttpUrl = (
         "http://127.0.0.1:8000"  # Backend API URL for OAuth callbacks
     )
+    
+    # ─── Email Template Settings ────────────────────────────
+    email_logo_url: str | None = Field(
+        default=None,
+        description="URL to your FYP logo image (e.g., https://yourdomain.com/logo.png or data URI)"
+    )  # EMAIL_LOGO_URL
+    email_company_name: str = Field(
+        default="FYPilot",
+        description="Company/Project name to display in emails"
+    )  # EMAIL_COMPANY_NAME
 
     # Required by SessionMiddleware (for OAuth state cookies)
     session_secret: str  # SESSION_SECRET

@@ -1,5 +1,4 @@
 # Import required libraries
-import enum
 import uuid
 
 from sqlalchemy import CheckConstraint, Column
@@ -10,16 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
 from app.db import Base
-
-
-class ProjectTypeEnum(str, enum.Enum):
-    """
-    Enum for valid project types a supervisor can oversee.
-    Using str.Enum ensures values are stored as strings in the database.
-    """
-
-    research = "research"
-    product = "product"
+from app.models.project import ProjectTypeEnum
 
 
 class Supervisor(Base):

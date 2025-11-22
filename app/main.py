@@ -22,6 +22,7 @@ from app.auth.routes import router as auth_router  # your signup/login endpoints
 from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
+from app.services.cache import cache  # Redis cache
 
 # Configure logger
 logger = logging.getLogger("uvicorn.error")
@@ -83,6 +84,15 @@ async def on_startup():
 
     # Note: Skipping additional connection test to avoid prepared statement issues
     # The table creation above already proves the database connection works
+
+    # 2) Initialize Redis cache connection
+    await cache.connect()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    # Gracefully close Redis connection
+    await cache.disconnect()
 
 
 if __name__ == "__main__":

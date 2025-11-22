@@ -41,6 +41,7 @@ class SupervisorRecommendation(BaseModel):
     requirements: List[str]
     project_type: List[str]
     user_id: str
+    profile_avatar: Optional[str] = None
     score: float
     reason: str
 
