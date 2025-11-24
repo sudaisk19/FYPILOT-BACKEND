@@ -14,7 +14,7 @@ class UserCreate(BaseModel):
     SPECIAL_CHARS: ClassVar[str] = '!@#$%^&*(),.?":{}|<>'
 
     # Model fields
-    full_name: str = Field(..., min_length=2, max_length=120, example="Alice Johnson")
+    full_name: str = Field(..., min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(
         ...,
@@ -27,9 +27,19 @@ class UserCreate(BaseModel):
             "- At least 1 number\n"
             '- At least 1 special character from: !@#$%^&*(),.?":{}|<>'
         ),
-        example="SecureP@ss123",
     )
     role: Role
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "full_name": "Alice Johnson",
+                "email": "alice@example.com",
+                "password": "SecureP@ss123",
+                "role": "student",
+            }
+        }
+    )
 
     @field_validator("password")
     def validate_password(cls, v: str) -> str:

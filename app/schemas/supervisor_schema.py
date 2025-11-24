@@ -25,51 +25,44 @@ class SupervisorProfileBase(BaseModel):
     """
 
     department: Optional[str] = Field(
-        None,
+        default=None,
         max_length=120,
         description="Academic department name",
-        example="Computer Science",
     )
 
     designation: Optional[str] = Field(
-        None,
+        default=None,
         max_length=100,
         description="Academic designation or title",
-        example="Associate Professor",
     )
 
     office: Optional[str] = Field(
-        None,
+        default=None,
         max_length=50,
         description="Office location or room number",
-        example="CS-304",
     )
 
     requirements: Optional[List[str]] = Field(
-        default=list,
+        default_factory=list,
         description="List of requirements for potential projects",
-        example=["Strong programming skills", "Knowledge of ML"],
     )
 
     project_types: List[ProjectType] = Field(
         default_factory=list,
         description="Types of projects willing to supervise",
-        example=["research", "product"],
     )
 
     capacity_max: int = Field(
-        8,  # Default value
-        ge=0,  # Greater than or equal to 0
-        le=20,  # Reasonable upper limit
+        default=8,
+        ge=0,
+        le=20,
         description="Maximum number of students that can be supervised",
-        example=8,
     )
 
     capacity_filled: int = Field(
-        0,  # Default value
-        ge=0,  # Greater than or equal to 0
+        default=0,
+        ge=0,
         description="Current number of students being supervised",
-        example=3,
     )
 
     @field_validator("department")
