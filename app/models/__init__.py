@@ -18,6 +18,10 @@ from .password_reset import PasswordResetToken
 # Project models (depend on Group, Domain, Industry)
 from .project import Project, ProjectDomain
 
+# Request and Shortlist models
+from .request import Request, RequestTypeEnum
+from .shortlisted_supervisor import ShortlistedSupervisor
+
 # Profile models (depend on User)
 from .student import Student
 from .supervisor import Supervisor
@@ -39,6 +43,9 @@ __all__ = [
     "Group",
     "GroupMember",
     "GroupInvite",
+    "Request",
+    "RequestTypeEnum",
+    "ShortlistedSupervisor",
     "Project",
     "ProjectDomain",
     "Domain",

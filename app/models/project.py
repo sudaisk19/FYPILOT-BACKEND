@@ -1,13 +1,24 @@
 # app/models/project.py
+import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Date, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
 from app.db import Base
+
+
+class ProjectTypeEnum(str, enum.Enum):
+    """Enum for valid project type values."""
+
+    research = "research"
+    product = "product"
+    both = "both"
 
 
 class Project(Base):
@@ -17,7 +28,7 @@ class Project(Base):
 
     group_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("groups.group_id"),
+        ForeignKey("groups.group_id", ondelete="CASCADE"),
         unique=True,  # One project per group
         nullable=True,
     )
@@ -28,7 +39,11 @@ class Project(Base):
     tech_stack = Column(JSONB, nullable=True)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
-    project_type = Column(Text, nullable=False, default="capstone")
+    project_type = Column(
+        SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False),
+        nullable=True,
+        default=None,
+    )
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
     )

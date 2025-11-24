@@ -12,7 +12,6 @@ from app.db import get_db
 from app.models.user import User
 from app.schemas.recommendation_schema import (
     RecommendationRequest,
-    PaginatedRecommendationResponse,
 )
 from app.services.recommendation_service import recommendation_service
 
@@ -46,12 +45,14 @@ async def get_supervisor_recommendations(
         )
 
     # Validate at least one idea field is provided
-    if not any([
-        request.idea_domain,
-        request.idea_description,
-        request.idea_industry,
-        request.project_type,
-    ]):
+    if not any(
+        [
+            request.idea_domain,
+            request.idea_description,
+            request.idea_industry,
+            request.project_type,
+        ]
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please provide at least one of: idea_domain, idea_description, idea_industry, or project_type",
@@ -67,7 +68,9 @@ async def get_supervisor_recommendations(
             project_type=request.project_type,
         )
 
-        logger.info(f"Generated {len(recommendations)} recommendations for group {request.group_id}")
+        logger.info(
+            f"Generated {len(recommendations)} recommendations for group {request.group_id}"
+        )
 
         return {"recommendations": recommendations}
 

@@ -418,8 +418,16 @@ async def get_student_group_info(
         return GroupInfo(
             group_id=group.group_id,
             group_name=group.name,
-            fyp_stage=group.fyp_stage,
-            fyp_cycle=group.fyp_cycle,
+            fyp_stage=(
+                group.fyp_stage.value
+                if hasattr(group.fyp_stage, "value")
+                else str(group.fyp_stage)
+            ),
+            fyp_cycle=(
+                group.fyp_cycle.value
+                if hasattr(group.fyp_cycle, "value")
+                else str(group.fyp_cycle)
+            ),
             cohort_year=group.cohort_year,
             supervisor_id=group.supervisor_id,
             cosupervisor_id=group.cosupervisor_id,

@@ -2,6 +2,7 @@
 """Schemas for supervisor recommendation requests and responses."""
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -41,6 +42,7 @@ class SupervisorRecommendation(BaseModel):
     requirements: List[str]
     project_type: List[str]
     user_id: str
+    profile_avatar: Optional[str] = None
     score: float
     reason: str
 

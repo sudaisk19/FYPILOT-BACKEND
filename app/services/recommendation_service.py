@@ -6,8 +6,9 @@ This service provides intelligent supervisor recommendations for student groups
 using semantic search, heuristic scoring, and LLM-generated explanations.
 """
 
-from typing import List, Optional, Dict, Any
 import logging
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 
 # Import your existing models
@@ -17,20 +18,20 @@ from sqlalchemy.orm import selectinload
 
 # AI libraries
 try:
+    import faiss
     import ollama
     from sentence_transformers import SentenceTransformer
-    import faiss
 except ImportError:
     logging.warning("AI libraries not installed. Recommendation service will not work.")
 
-from app.models.group import Group, GroupMember
-from app.models.supervisor import Supervisor
-from app.models.user import User
-from app.models.student import Student
 from app.models.domain import Domain
+from app.models.group import Group, GroupMember
 from app.models.industry import Industry
+from app.models.student import Student
+from app.models.supervisor import Supervisor
 from app.models.supervisor_domain import SupervisorDomain
 from app.models.supervisor_industry import SupervisorIndustry
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,7 @@ class RecommendationService:
 
         # Fetch all supervisors
         result = await db.execute(
-            select(Supervisor, User)
-            .join(User, Supervisor.user_id == User.user_id)
+            select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
         )
         rows = result.all()
 
@@ -82,15 +82,26 @@ class RecommendationService:
             # Fetch industries for this supervisor
             industries_result = await db.execute(
                 select(Industry)
-                .join(SupervisorIndustry, Industry.industry_id == SupervisorIndustry.industry_id)
+                .join(
+                    SupervisorIndustry,
+                    Industry.industry_id == SupervisorIndustry.industry_id,
+                )
                 .where(SupervisorIndustry.supervisor_id == supervisor.user_id)
             )
-            industries = [i.name for i in industries_result.scalars().all()]
+            [i.name for i in industries_result.scalars().all()]
 
             # Build descriptive text for this supervisor
             domains_str = ", ".join(domains) if domains else "General"
-            requirements_str = ", ".join(supervisor.requirements) if supervisor.requirements else "None specified"
-            project_types_str = ", ".join(supervisor.project_types) if supervisor.project_types else "Any"
+            requirements_str = (
+                ", ".join(supervisor.requirements)
+                if supervisor.requirements
+                else "None specified"
+            )
+            project_types_str = (
+                ", ".join(supervisor.project_types)
+                if supervisor.project_types
+                else "Any"
+            )
 
             sup_text = (
                 f"Name: {user.full_name}. "
@@ -100,22 +111,23 @@ class RecommendationService:
                 f"Project Types: {project_types_str}."
             )
 
-            supervisors_data.append({
-                'supervisor': supervisor,
-                'user': user,
-                'text': sup_text
-            })
-            supervisors_list.append({
-                'name': user.full_name,
-                'department': supervisor.department,
-                'domains': domains,
-                'requirements': supervisor.requirements or [],
-                'project_types': supervisor.project_types or [],
-                'user_id': str(user.user_id)
-            })
+            supervisors_data.append(
+                {"supervisor": supervisor, "user": user, "text": sup_text}
+            )
+            supervisors_list.append(
+                {
+                    "name": user.full_name,
+                    "department": supervisor.department,
+                    "domains": domains,
+                    "requirements": supervisor.requirements or [],
+                    "project_types": supervisor.project_types or [],
+                    "user_id": str(user.user_id),
+                    "profile_avatar": user.profile_avatar,
+                }
+            )
 
         # Generate embeddings
-        texts = [item['text'] for item in supervisors_data]
+        texts = [item["text"] for item in supervisors_data]
         embeddings = self.model.encode(texts, convert_to_numpy=True)
         embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
 
@@ -161,7 +173,9 @@ class RecommendationService:
         result = await db.execute(
             select(Group)
             .options(
-                selectinload(Group.members).selectinload(GroupMember.student).selectinload(Student.user)
+                selectinload(Group.members)
+                .selectinload(GroupMember.student)
+                .selectinload(Student.user)
             )
             .where(Group.group_id == group_id)
         )
@@ -185,9 +199,9 @@ class RecommendationService:
             if student.portfolio_projects:
                 if isinstance(student.portfolio_projects, list):
                     for project in student.portfolio_projects:
-                        if isinstance(project, dict) and 'tech_stack' in project:
-                            if isinstance(project['tech_stack'], list):
-                                group_skills.extend(project['tech_stack'])
+                        if isinstance(project, dict) and "tech_stack" in project:
+                            if isinstance(project["tech_stack"], list):
+                                group_skills.extend(project["tech_stack"])
 
         # Build semantic query
         query_text = (
@@ -205,113 +219,141 @@ class RecommendationService:
 
         # Search all supervisors (not just 10)
         search_k = min(50, len(self._supervisors_cache))
-        D, I = self._index.search(q_embedding, search_k)
-        similarities = np.clip(D[0], 0.0, 1.0)
+        distances, indices = self._index.search(q_embedding, search_k)
+        similarities = np.clip(distances[0], 0.0, 1.0)
 
         # Score candidates
         candidates = []
-        for rank, (idx, similarity) in enumerate(zip(I[0], similarities)):
+        for rank, (idx, similarity) in enumerate(zip(indices[0], similarities)):
             sup = self._supervisors_cache[idx]
 
             # Jaccard similarity for skills and domains
-            skills_j = self._jaccard_similarity(group_skills, sup['requirements'])
-            interests_j = self._jaccard_similarity(group_interests, sup['domains'])
+            skills_j = self._jaccard_similarity(group_skills, sup["requirements"])
+            interests_j = self._jaccard_similarity(group_interests, sup["domains"])
 
             # Project type bonus
-            type_bonus = 0.05 if project_type in sup['project_types'] else 0.0
+            type_bonus = 0.05 if project_type in sup["project_types"] else 0.0
 
             # Weighted score
-            raw_score = (0.50 * similarity + 0.35 * skills_j + 0.10 * interests_j + type_bonus) * 100
+            raw_score = (
+                0.50 * similarity + 0.35 * skills_j + 0.10 * interests_j + type_bonus
+            ) * 100
 
-            candidates.append({
-                'name': sup['name'],
-                'department': sup['department'],
-                'domains': sup['domains'],
-                'requirements': sup['requirements'],
-                'project_type': sup['project_types'],
-                'user_id': sup['user_id'],
-                'similarity': float(similarity),
-                'skills_match': float(skills_j),
-                'interests_match': float(interests_j),
-                'raw_score': float(raw_score),
-            })
+            candidates.append(
+                {
+                    "name": sup["name"],
+                    "department": sup["department"],
+                    "domains": sup["domains"],
+                    "requirements": sup["requirements"],
+                    "project_type": sup["project_types"],
+                    "user_id": sup["user_id"],
+                    "profile_avatar": sup["profile_avatar"],
+                    "similarity": float(similarity),
+                    "skills_match": float(skills_j),
+                    "interests_match": float(interests_j),
+                    "raw_score": float(raw_score),
+                }
+            )
 
         # Normalize scores
-        max_score = max(c['raw_score'] for c in candidates) if candidates else 1
+        max_score = max(c["raw_score"] for c in candidates) if candidates else 1
         for c in candidates:
-            c['score'] = round((c['raw_score'] / max_score) * 100, 2)
+            c["score"] = round((c["raw_score"] / max_score) * 100, 2)
 
         # Sort and get top 5 unique candidates
-        candidates.sort(key=lambda x: x['score'], reverse=True)
+        candidates.sort(key=lambda x: x["score"], reverse=True)
         unique_candidates = self._deduplicate(candidates)[:5]  # Only take top 5
-        
+
         # Generate AI reasons for all 5 candidates
         try:
             reasons = await self._generate_reasons(
-                group, unique_candidates, idea_domain, idea_description, idea_industry, project_type
+                group,
+                unique_candidates,
+                idea_domain,
+                idea_description,
+                idea_industry,
+                project_type,
             )
 
             # Merge reasons with candidates
             result = []
             for sup, reason in zip(unique_candidates, reasons):
-                result.append({
-                    'name': sup['name'],
-                    'department': sup['department'],
-                    'domains': sup['domains'],
-                    'requirements': sup['requirements'],
-                    'project_type': sup['project_type'],
-                    'user_id': sup['user_id'],
-                    'score': sup['score'],
-                    'reason': reason if reason else "Based on matching domains and requirements."
-                })
-            
+                result.append(
+                    {
+                        "name": sup["name"],
+                        "department": sup["department"],
+                        "domains": sup["domains"],
+                        "requirements": sup["requirements"],
+                        "project_type": sup["project_type"],
+                        "user_id": sup["user_id"],
+                        "profile_avatar": sup["profile_avatar"],
+                        "score": sup["score"],
+                        "reason": (
+                            reason
+                            if reason
+                            else "Based on matching domains and requirements."
+                        ),
+                    }
+                )
+
             # Add generic reasons for any remaining candidates
-            for sup in unique_candidates[len(reasons):]:
-                result.append({
-                    'name': sup['name'],
-                    'department': sup['department'],
-                    'domains': sup['domains'],
-                    'requirements': sup['requirements'],
-                    'project_type': sup['project_type'],
-                    'user_id': sup['user_id'],
-                    'score': sup['score'],
-                    'reason': "Based on matching domains and requirements."
-                })
+            for sup in unique_candidates[len(reasons) :]:
+                result.append(
+                    {
+                        "name": sup["name"],
+                        "department": sup["department"],
+                        "domains": sup["domains"],
+                        "requirements": sup["requirements"],
+                        "project_type": sup["project_type"],
+                        "user_id": sup["user_id"],
+                        "profile_avatar": sup["profile_avatar"],
+                        "score": sup["score"],
+                        "reason": "Based on matching domains and requirements.",
+                    }
+                )
 
             return result
         except Exception as e:
             logger.error(f"Error generating AI reasons: {e}")
             # Return without reasons if LLM fails
-            result = [{
-                'name': sup['name'],
-                'department': sup['department'],
-                'domains': sup['domains'],
-                'requirements': sup['requirements'],
-                'project_type': sup['project_type'],
-                'user_id': sup['user_id'],
-                'score': sup['score'],
-                'reason': "Based on matching domains and requirements."
-            } for sup in unique_candidates]
-            
+            result = [
+                {
+                    "name": sup["name"],
+                    "department": sup["department"],
+                    "domains": sup["domains"],
+                    "requirements": sup["requirements"],
+                    "project_type": sup["project_type"],
+                    "user_id": sup["user_id"],
+                    "profile_avatar": sup["profile_avatar"],
+                    "score": sup["score"],
+                    "reason": "Based on matching domains and requirements.",
+                }
+                for sup in unique_candidates
+            ]
+
             return result
 
     async def _generate_reasons(
         self, group, candidates, domain, description, industry, project_type
     ) -> List[str]:
         """Generate AI explanations for recommendations."""
-        member_text = "\n".join([
-            f"- {member.student.user.full_name if member.student.user else 'Member'} "
-            f"(CGPA {member.student.cgpa or 'N/A'})"
-            for member in group.members
-        ])
+        member_text = "\n".join(
+            [
+                f"- {member.student.user.full_name if member.student.user else 'Member'} "
+                f"(CGPA {member.student.cgpa or 'N/A'})"
+                for member in group.members
+            ]
+        )
 
-        supervisors_text = "\n".join([
-            f"{i+1}. {s['name']} "
-            f"(Domains: {', '.join(s['domains'])}, "
-            f"Requirements: {', '.join(s['requirements'])}, "
-            f"Project Types: {', '.join(s['project_type'])})"
-            for i, s in enumerate(candidates)
-        ])
+        supervisors_text = "\n".join(
+            [
+                f"{i + 1}. {s['name']} "
+                f"(Domains: {', '.join(s['domains'])}, "
+                f"Requirements: {', '.join(s['requirements'])}, "
+                f"Project Types: {', '.join(s['project_type'])})"
+                for i, s in enumerate(candidates)
+            ]
+        )
 
         prompt = f"""You are assisting with supervisor recommendations.
 
@@ -340,7 +382,7 @@ Return exactly 5 bullet points. Do not repeat names or scores.
             options={
                 "temperature": 0.1,
                 "top_p": 0.9,
-            }
+            },
         )
 
         reasons = response["message"]["content"].strip().split("\n")
@@ -363,8 +405,8 @@ Return exactly 5 bullet points. Do not repeat names or scores.
         seen = set()
         unique = []
         for c in candidates:
-            if c['name'] not in seen:
-                seen.add(c['name'])
+            if c["name"] not in seen:
+                seen.add(c["name"])
                 unique.append(c)
         return unique
 

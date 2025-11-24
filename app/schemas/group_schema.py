@@ -14,6 +14,7 @@ class CreateGroupRequest(BaseModel):
 class GroupResponse(BaseModel):
     group_id: UUID
     name: str
+    project_id: Optional[UUID] = None
 
 
 class InviteRequest(BaseModel):
@@ -68,7 +69,7 @@ class ProjectInfo(BaseModel):
     industry: Optional[IndustryInfo] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    project_type: str
+    project_type: Optional[str] = None
     repo_links: Optional[List[str]] = Field(default_factory=list)
     updated_at: datetime
 
@@ -105,7 +106,7 @@ class ProjectUpdateData(BaseModel):
     industry_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    project_type: Optional[str] = Field(None, pattern="^(capstone|research|industry)$")
+    project_type: Optional[str] = Field(None, pattern="^(research|product|both)$")
     repo_links: Optional[List[str]] = Field(None, max_items=10)
 
 

@@ -9,14 +9,18 @@ from app.api.http.health import router as health_router
 
 # Import profile status router
 from app.api.http.profile_status import router as profile_status_router
+from app.api.http.shortlist import router as shortlist_router
 
 # Import profile routers
 from app.api.http.student_profile import router as student_profile_router
 
 # Import explore routers
 from app.api.http.supervisor_explore import router as supervisor_explore_router
+from app.api.http.supervisor_invites import router as invites_router
 from app.api.http.supervisor_profile import router as supervisor_profile_router
-from app.api.http.supervisor_recommendation import router as supervisor_recommendation_router
+from app.api.http.supervisor_recommendation import (
+    router as supervisor_recommendation_router,
+)
 from app.api.http.users import router as user_router
 
 # Create a "master" router that mounts all HTTP routers
@@ -44,6 +48,12 @@ router.include_router(
 
 # Mount recommendation router
 router.include_router(supervisor_recommendation_router)
+
+# Mount shortlist router
+router.include_router(shortlist_router)
+
+# Mount supervisor invites router
+router.include_router(invites_router)
 
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
