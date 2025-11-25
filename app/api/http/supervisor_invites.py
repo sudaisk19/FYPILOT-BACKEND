@@ -9,16 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
+from app.models.domain import Domain
 from app.models.group import Group, GroupMember, InviteStatusEnum
+from app.models.project import Project, ProjectDomain
 from app.models.request import Request, RequestTypeEnum
+from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.invite_schema import (
     PendingInviteItem,
     PendingInvitesResponse,
+    PortfolioProject,
+    ProjectDetail,
+    ProjectDomainInfo,
     SendSupervisorInviteRequest,
     SentRequestItem,
     SentRequestsResponse,
+    StudentDetail,
+    SupervisorRequestDetailResponse,
 )
 
 router = APIRouter(prefix="/invites", tags=["supervisor-invites"])
@@ -196,7 +204,7 @@ async def list_sent_requests(
     return SentRequestsResponse(group_id=group_id, requests=items)
 
 
-@router.get("/supervisor/pending", response_model=PendingInvitesResponse)
+@router.get("/supervisor/pending/requests", response_model=PendingInvitesResponse)
 async def list_pending_invites_for_supervisor(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -207,7 +215,7 @@ async def list_pending_invites_for_supervisor(
             detail="Only supervisors can view invites",
         )
 
-    # Fetch pending requests for this supervisor
+    # Fetch pending requests for this supervisor with group info
     requests_result = await db.execute(
         select(Request, Group)
         .join(Group, Group.group_id == Request.group_id)
@@ -221,13 +229,78 @@ async def list_pending_invites_for_supervisor(
 
     items: list[PendingInviteItem] = []
     for req, group in rows:
+        # Fetch project information for this group
+        project_name = None
+        project_type = None
+        project_domains = []
+
+        try:
+            project_result = await db.execute(
+                select(Project).where(Project.group_id == req.group_id)
+            )
+            project = project_result.scalars().first()
+
+            if project:
+                project_name = project.name
+                project_type = (
+                    str(project.project_type) if project.project_type else None
+                )
+
+                # Fetch project domains
+                domains_result = await db.execute(
+                    select(Domain)
+                    .join(ProjectDomain, ProjectDomain.domain_id == Domain.domain_id)
+                    .where(ProjectDomain.project_id == project.project_id)
+                )
+                project_domains = [d.name for d in domains_result.scalars().all()]
+        except Exception:
+            # Handle potential enum issues with raw SQL
+            from sqlalchemy import text
+
+            try:
+                raw_project = await db.execute(
+                    text(
+                        """
+                        SELECT project_id, name, project_type
+                        FROM projects 
+                        WHERE group_id = :group_id
+                    """
+                    ),
+                    {"group_id": req.group_id},
+                )
+                raw_data = raw_project.fetchone()
+                if raw_data:
+                    project_name = raw_data[1]
+                    project_type = str(raw_data[2]) if raw_data[2] else None
+
+                    # Fetch domains using project_id
+                    if raw_data[0]:
+                        raw_domains = await db.execute(
+                            text(
+                                """
+                                SELECT d.name 
+                                FROM domains d
+                                JOIN project_domains pd ON d.domain_id = pd.domain_id
+                                WHERE pd.project_id = :project_id
+                            """
+                            ),
+                            {"project_id": raw_data[0]},
+                        )
+                        project_domains = [row[0] for row in raw_domains.fetchall()]
+            except Exception:
+                # If project fetch fails, continue with None values
+                pass
+
         items.append(
             PendingInviteItem(
-                invite_id=req.request_id,  # Using request_id as invite_id for compatibility
+                request_id=req.request_id,
                 group_id=req.group_id,
                 group_name=group.name,
                 requested_role=req.request_type.value,
                 created_at=req.created_at,
+                project_name=project_name,
+                project_type=project_type,
+                project_domains=project_domains,
             )
         )
     return PendingInvitesResponse(invites=items)
@@ -409,3 +482,199 @@ async def cancel_invite(
     await db.execute(delete(Request).where(Request.request_id == request_id))
     await db.commit()
     return {"message": "Request cancelled"}
+
+
+@router.get(
+    "/supervisor/{request_id}/details",
+    response_model=SupervisorRequestDetailResponse,
+)
+async def get_request_details_for_supervisor(
+    request_id: UUID = Path(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+):
+    """
+    Get detailed group information for a supervisor request.
+
+    This endpoint allows supervisors to view comprehensive information about
+    a group that has sent them a request, including:
+    - Request details (status, message, dates)
+    - Project information (name, description, objectives, tech stack, domains)
+    - All group members with their academic and professional details
+    - Student skills, interests, experience, and portfolio projects
+
+    Only supervisors can access this endpoint, and only for requests sent to them.
+    """
+    if current_user.role != "supervisor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only supervisors can view request details",
+        )
+
+    # Fetch the request and verify it belongs to this supervisor
+    request_result = await db.execute(
+        select(Request).where(
+            Request.request_id == request_id,
+            Request.supervisor_id == current_user.user_id,
+        )
+    )
+    req = request_result.scalars().first()
+
+    if not req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found or you don't have access to it",
+        )
+
+    # Calculate expires_at (7 days from created_at)
+    from datetime import timedelta
+
+    expires_at = req.created_at + timedelta(days=7)
+
+    # Fetch group information
+    group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
+    group = group_result.scalars().first()
+
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+        )
+
+    # Fetch project information
+    project_data = None
+    project_detail = None
+    project_brief = None
+
+    try:
+        project_result = await db.execute(
+            select(Project).where(Project.group_id == req.group_id)
+        )
+        project_data = project_result.scalars().first()
+    except Exception:
+        # Handle potential enum issues
+        from sqlalchemy import text
+
+        raw_result = await db.execute(
+            text(
+                """
+                SELECT project_id, name, description, objectives, tech_stack,
+                       project_type, repo_links
+                FROM projects 
+                WHERE group_id = :group_id
+            """
+            ),
+            {"group_id": req.group_id},
+        )
+        raw_data = raw_result.fetchone()
+        if raw_data:
+            # Create a simple object for project data
+            class SimpleProject:
+                def __init__(self, data):
+                    self.project_id = data[0]
+                    self.name = data[1]
+                    self.description = data[2]
+                    self.objectives = data[3]
+                    self.tech_stack = data[4]
+                    self.project_type = data[5]
+                    self.repo_links = data[6]
+
+            project_data = SimpleProject(raw_data)
+
+    if project_data:
+        # Get project domains
+        domains_result = await db.execute(
+            select(Domain)
+            .join(ProjectDomain, ProjectDomain.domain_id == Domain.domain_id)
+            .where(ProjectDomain.project_id == project_data.project_id)
+        )
+        domains = [
+            ProjectDomainInfo(name=d.name) for d in domains_result.scalars().all()
+        ]
+
+        # Extract data safely
+        objectives = (
+            project_data.objectives if isinstance(project_data.objectives, list) else []
+        )
+        tech_stack = (
+            project_data.tech_stack if isinstance(project_data.tech_stack, list) else []
+        )
+        repo_links = (
+            project_data.repo_links if isinstance(project_data.repo_links, list) else []
+        )
+        project_type = (
+            str(project_data.project_type) if project_data.project_type else None
+        )
+
+        project_brief = project_data.description
+        project_detail = ProjectDetail(
+            name=project_data.name,
+            description=project_data.description,
+            objectives=objectives,
+            tech_stack=tech_stack,
+            project_type=project_type,
+            github_repositories=repo_links,
+            domains=domains,
+        )
+
+    # Fetch all group members with their student and user details
+    members_result = await db.execute(
+        select(GroupMember, User, Student)
+        .join(User, User.user_id == GroupMember.student_id)
+        .join(Student, Student.user_id == User.user_id)
+        .where(GroupMember.group_id == req.group_id)
+        .order_by(GroupMember.joined_at.asc())
+    )
+    members_data = members_result.all()
+
+    # Build students list with detailed information
+    students = []
+    for member, user, student in members_data:
+        # Parse portfolio_projects if it exists
+        portfolio_projects = []
+        if student.portfolio_projects:
+            if isinstance(student.portfolio_projects, list):
+                for proj in student.portfolio_projects:
+                    if isinstance(proj, dict):
+                        portfolio_projects.append(
+                            PortfolioProject(
+                                title=proj.get("title", ""),
+                                link=proj.get("link", ""),
+                            )
+                        )
+
+        # Get skills_levels from JSONB field
+        # skills_levels is a JSONB dict mapping skill names to levels (1-5)
+        # Fill missing skills with default level 1
+        skills_levels = student.skills_levels if student.skills_levels else {}
+        if student.skills:
+            for skill in student.skills:
+                if skill not in skills_levels:
+                    skills_levels[skill] = 1  # Default level for missing skills
+
+        students.append(
+            StudentDetail(
+                user_id=user.user_id,
+                name=user.full_name,
+                roll_number=student.roll_number,
+                department=student.department,
+                cgpa=float(student.cgpa) if student.cgpa else None,
+                skills=student.skills or [],
+                skills_levels=skills_levels,
+                interests=student.interests or [],
+                experience=student.experience,
+                portfolio_projects=portfolio_projects,
+            )
+        )
+
+    return SupervisorRequestDetailResponse(
+        request_id=req.request_id,
+        group_id=req.group_id,
+        supervisor_id=req.supervisor_id,
+        status=req.status.value,
+        message=req.message,
+        created_at=req.created_at,
+        expires_at=expires_at,
+        project_brief=project_brief,
+        project=project_detail,
+        students=students,
+    )
