@@ -70,6 +70,12 @@ class Student(Base):
         default=list,  # Initialize as empty list
     )
 
+    skills_levels = Column(
+        JSONB,  # JSONB for per-skill level mapping (e.g., {"React": 5, "Python": 3})
+        nullable=False,  # Required field
+        default=dict,  # Initialize as empty dict
+    )
+
     # Relationship to User model (bidirectional)
     user = relationship(
         "User",  # References User model
