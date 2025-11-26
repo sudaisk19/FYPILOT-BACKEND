@@ -22,18 +22,34 @@ logger = logging.getLogger(__name__)
 
 # Get the original database URL
 original_url = settings.database_url
+
+# Validate DATABASE_URL is not empty
+if not original_url or not original_url.strip():
+    raise ValueError(
+        "DATABASE_URL is empty or not set. "
+        "Please set DATABASE_URL environment variable."
+    )
+
 logger.info(f"Original database URL: {original_url[:50]}...")
 
 # Convert to asyncpg format and add statement cache size parameter
-if original_url.startswith("postgresql://"):
-    # Replace with asyncpg driver and add statement_cache_size parameter
-    database_url = original_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif original_url.startswith("postgresql+asyncpg://"):
-    database_url = original_url
-else:
-    raise ValueError(
-        "DATABASE_URL must start with postgresql:// or postgresql+asyncpg://"
-    )
+try:
+    if original_url.startswith("postgresql://"):
+        # Replace with asyncpg driver
+        database_url = original_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif original_url.startswith("postgresql+asyncpg://"):
+        database_url = original_url
+    elif original_url.startswith("postgres://"):
+        # Handle postgres:// (alternative format used by some providers)
+        database_url = original_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    else:
+        raise ValueError(
+            f"DATABASE_URL must start with postgresql://, postgres://, or postgresql+asyncpg://. "
+            f"Got: {original_url[:100]}..."
+        )
+except Exception as e:
+    logger.error(f"Error parsing DATABASE_URL: {e}")
+    raise
 
 # Configure for Supabase session pooler
 if "pooler.supabase.com" in database_url:
@@ -69,12 +85,14 @@ engine = create_async_engine(
             "jit": "off",  # Disable JIT compilation
             "application_name": "fypilot_backend",
         },
+        "command_timeout": 10,  # 10 second command timeout for asyncpg
     },
     # Session pooler handles connection pooling, so use minimal SQLAlchemy pooling
     pool_pre_ping=True,  # Verify connections before use
     pool_recycle=300,  # Recycle connections every 5 minutes
     pool_size=3,  # Smaller pool size since session pooler handles pooling
     max_overflow=5,  # Reduced overflow for session pooler
+    pool_timeout=10,  # 10 second timeout for getting connection from pool
 )
 
 
