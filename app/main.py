@@ -80,6 +80,7 @@ register_exception_handlers(app)
 async def on_startup():
     """Fast startup - don't block on database operations."""
     logger.info("Application starting...")
+<<<<<<< HEAD
 
     # Initialize Redis cache connection (non-blocking with timeout)
     # If Redis fails, app will continue without cache
@@ -123,6 +124,10 @@ async def on_startup():
     asyncio.create_task(test_db_connection())
 =======
     # 2) Initialize Redis cache connection (non-blocking with timeout)
+=======
+
+    # Initialize Redis cache connection (non-blocking with timeout)
+>>>>>>> b5bc866 (deliverables)
     # If Redis fails, app will continue without cache
     try:
         # Add 3 second timeout to prevent blocking startup
@@ -138,6 +143,26 @@ async def on_startup():
             "App will continue without cache. Caching will be disabled."
         )
 >>>>>>> 0e68bcd (deliverables)
+
+    # Database tables will be created automatically on first use via SQLAlchemy
+    # Or you can run migrations separately. This ensures fast startup.
+    logger.info("Application startup complete. Database will connect on first use.")
+
+    # Optional: Test database connection in background (non-blocking)
+    # This helps identify connection issues early without blocking startup
+    async def test_db_connection():
+        try:
+            from sqlalchemy import text
+
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("✅ Database connection verified successfully.")
+        except Exception as e:
+            logger.error(f"⚠️ Database connection test failed: {e}")
+            logger.warning("Database will be retried on first request.")
+
+    # Run database test in background (fire and forget)
+    asyncio.create_task(test_db_connection())
 
 
 @app.on_event("shutdown")
