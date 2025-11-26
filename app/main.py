@@ -105,6 +105,7 @@ async def on_startup():
     # Or you can run migrations separately. This ensures fast startup.
     logger.info("Application startup complete. Database will connect on first use.")
 
+<<<<<<< HEAD
     # Optional: Test database connection in background (non-blocking)
     # This helps identify connection issues early without blocking startup
     async def test_db_connection():
@@ -120,6 +121,23 @@ async def on_startup():
 
     # Run database test in background (fire and forget)
     asyncio.create_task(test_db_connection())
+=======
+    # 2) Initialize Redis cache connection (non-blocking with timeout)
+    # If Redis fails, app will continue without cache
+    try:
+        # Add 3 second timeout to prevent blocking startup
+        await asyncio.wait_for(cache.connect(), timeout=3.0)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Redis connection timed out during startup. "
+            "App will continue without cache. Caching will be disabled."
+        )
+    except Exception as e:
+        logger.warning(
+            f"Redis connection failed during startup: {e}. "
+            "App will continue without cache. Caching will be disabled."
+        )
+>>>>>>> 0e68bcd (deliverables)
 
 
 @app.on_event("shutdown")
