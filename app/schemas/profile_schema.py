@@ -79,6 +79,10 @@ class StudentFields(BaseModel):
     experience: Optional[str] = Field(None, max_length=2000)
     portfolio_projects: Optional[Dict[str, Any]] = None
     skills: Optional[List[str]] = Field(None, max_items=50)
+    skills_levels: Optional[Dict[str, int]] = Field(
+        None,
+        description="Mapping of skill names to their levels (1-5). Skills without explicit levels default to 1.",
+    )
 
     @field_validator("roll_number", "department", "experience")
     @classmethod
@@ -139,6 +143,10 @@ class StudentProfilePatchUpdate(BaseModel):
     experience: Optional[str] = Field(None, max_length=2000)
     portfolio_projects: Optional[Dict[str, Any]] = None
     skills: Optional[List[str]] = Field(None, max_items=50)
+    skills_levels: Optional[Dict[str, int]] = Field(
+        None,
+        description="Mapping of skill names to their levels (1-5). Skills without explicit levels default to 1.",
+    )
 
     @field_validator("full_name", "profile_avatar", "department", "experience")
     @classmethod
@@ -336,6 +344,10 @@ class StudentProfileResponse(BaseModel):
     experience: Optional[str] = None
     portfolio_projects: Optional[Dict[str, Any]] = None
     skills: List[str] = Field(default_factory=list)
+    skills_levels: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Mapping of skill names to their levels (1-5). Skills without explicit levels default to 1.",
+    )
 
     # Group information (optional - only if student is in a group)
     group: Optional[GroupInfo] = None

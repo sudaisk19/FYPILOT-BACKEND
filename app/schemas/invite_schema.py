@@ -47,7 +47,7 @@ class SentRequestItem(BaseModel):
     supervisor_id: UUID
     supervisor_name: str = Field(..., description="Supervisor's full name")
     requested_role: str = Field(..., description="supervisor or cosupervisor")
-    status: str = Field(..., description="pending, accepted, rejected, or cancelled")
+    status: str = Field(..., description="pending, accepted, declined, or cancelled")
     message: str | None = None
     created_at: datetime
     updated_at: datetime

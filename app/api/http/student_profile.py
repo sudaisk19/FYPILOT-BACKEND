@@ -1,5 +1,7 @@
 # app/api/http/student_profile.py
 
+from typing import Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +22,33 @@ from app.schemas.profile_schema import (
 )
 
 router = APIRouter()
+
+
+def normalize_skills_levels(
+    skills: Optional[List[str]], skills_levels: Optional[Dict[str, int]]
+) -> Dict[str, int]:
+    """
+    Normalize skills_levels to ensure all skills have a level.
+    If a skill is in the skills list but not in skills_levels, default to level 1.
+
+    Args:
+        skills: List of skill names
+        skills_levels: Dictionary mapping skill names to levels (1-5)
+
+    Returns:
+        Normalized dictionary with all skills having a level (default 1 if not specified)
+    """
+    if not skills:
+        return skills_levels or {}
+
+    normalized = skills_levels.copy() if skills_levels else {}
+
+    # Ensure all skills have a level (default to 1 if not specified)
+    for skill in skills:
+        if skill not in normalized:
+            normalized[skill] = 1
+
+    return normalized
 
 
 @router.get("/profile", response_model=StudentProfileResponse)
@@ -71,6 +100,7 @@ async def get_student_profile(
             experience=None,
             portfolio_projects=None,
             skills=[],
+            skills_levels={},
             # Group information (None since no student profile)
             group=None,
         )
@@ -162,6 +192,7 @@ async def get_student_profile(
         experience=user.student_profile.experience,
         portfolio_projects=user.student_profile.portfolio_projects,
         skills=user.student_profile.skills or [],
+        skills_levels=user.student_profile.skills_levels or {},
         # Group information
         group=group_info,
     )
@@ -235,6 +266,20 @@ async def complete_student_wizard_profile(
         if profile_data.skills is not None and profile_data.skills:
             student_updates["skills"] = profile_data.skills
 
+        # Handle skills_levels - normalize to ensure all skills have a level
+        if profile_data.skills is not None or profile_data.skills_levels is not None:
+            # Get current skills if updating, or use provided skills
+            current_skills = (
+                profile_data.skills
+                if profile_data.skills is not None
+                else (student_profile.skills if student_profile else [])
+            )
+            # Normalize skills_levels to include all skills with default level 1
+            normalized_levels = normalize_skills_levels(
+                current_skills, profile_data.skills_levels
+            )
+            student_updates["skills_levels"] = normalized_levels
+
         # If no student profile exists, create one with the required data
         if not student_profile:
             # Validate that roll_number is provided for new profiles
@@ -297,6 +342,7 @@ async def complete_student_wizard_profile(
             experience=student_profile.experience,
             portfolio_projects=student_profile.portfolio_projects,
             skills=student_profile.skills or [],
+            skills_levels=student_profile.skills_levels or {},
             # Group information (will be None for new profiles)
             group=None,
         )
@@ -392,6 +438,26 @@ async def update_student_profile(
         if profile_data.skills is not None and profile_data.skills:
             student_updates["skills"] = profile_data.skills
 
+        # Handle skills_levels - normalize to ensure all skills have a level
+        if profile_data.skills is not None or profile_data.skills_levels is not None:
+            # Get current skills if updating, or use existing skills
+            current_skills = (
+                profile_data.skills
+                if profile_data.skills is not None
+                else student_profile.skills
+            )
+            # If skills_levels is provided, use it; otherwise keep existing or normalize
+            if profile_data.skills_levels is not None:
+                normalized_levels = normalize_skills_levels(
+                    current_skills, profile_data.skills_levels
+                )
+            else:
+                # If only skills are updated, normalize existing skills_levels with new skills
+                normalized_levels = normalize_skills_levels(
+                    current_skills, student_profile.skills_levels
+                )
+            student_updates["skills_levels"] = normalized_levels
+
         # Update student table if there are changes
         if student_updates:
             await db.execute(
@@ -429,6 +495,7 @@ async def update_student_profile(
             experience=updated_user.student_profile.experience,
             portfolio_projects=updated_user.student_profile.portfolio_projects,
             skills=updated_user.student_profile.skills or [],
+            skills_levels=updated_user.student_profile.skills_levels or {},
             # Group information (will be None if not in a group)
             group=None,
         )
