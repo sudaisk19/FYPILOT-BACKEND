@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path, override=True)
 
+import asyncio
 import logging
 
 import uvicorn
@@ -85,8 +86,21 @@ async def on_startup():
     # Note: Skipping additional connection test to avoid prepared statement issues
     # The table creation above already proves the database connection works
 
-    # 2) Initialize Redis cache connection
-    await cache.connect()
+    # 2) Initialize Redis cache connection (non-blocking with timeout)
+    # If Redis fails, app will continue without cache
+    try:
+        # Add 3 second timeout to prevent blocking startup
+        await asyncio.wait_for(cache.connect(), timeout=3.0)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Redis connection timed out during startup. "
+            "App will continue without cache. Caching will be disabled."
+        )
+    except Exception as e:
+        logger.warning(
+            f"Redis connection failed during startup: {e}. "
+            "App will continue without cache. Caching will be disabled."
+        )
 
 
 @app.on_event("shutdown")
