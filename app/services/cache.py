@@ -26,8 +26,14 @@ class Cache:
         self._url: str = url or settings.redis_url
         self._is_connected: bool = False
         if _HAS_REDIS:
+            # Add connection timeout to prevent hanging
             self._client = Redis.from_url(
-                self._url, encoding="utf-8", decode_responses=True
+                self._url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=2,  # 2 second connection timeout
+                socket_timeout=2,  # 2 second socket timeout
+                retry_on_timeout=False,  # Don't retry on timeout
             )  # type: ignore
         else:
             logger.warning(
@@ -55,8 +61,14 @@ class Cache:
             return False
 
         if not self._client:
+            # Add connection timeout to prevent hanging
             self._client = Redis.from_url(
-                self._url, encoding="utf-8", decode_responses=True
+                self._url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=2,  # 2 second connection timeout
+                socket_timeout=2,  # 2 second socket timeout
+                retry_on_timeout=False,  # Don't retry on timeout
             )
 
         try:
