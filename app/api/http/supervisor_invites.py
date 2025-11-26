@@ -1,10 +1,10 @@
 # app/api/http/supervisor_invites.py
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -149,7 +149,7 @@ async def list_sent_requests(
     - Checking if a request already exists for a supervisor
     - Getting the request_id to cancel a request
     - Toggling button text between "Send Request" and "Cancel Request"
-    - Displaying request status (pending, accepted, rejected, cancelled)
+    - Displaying request status (pending, accepted, declined, cancelled)
     """
     # Only students can view sent requests
     if current_user.role != "student":
@@ -172,7 +172,7 @@ async def list_sent_requests(
         )
 
     # Fetch all requests sent by this group (excluding cancelled - they're deleted)
-    # Only show pending, accepted, and rejected requests
+    # Only show pending, accepted, and declined requests
     requests_result = await db.execute(
         select(Request, Supervisor, User)
         .join(Supervisor, Supervisor.user_id == Request.supervisor_id)
@@ -303,7 +303,7 @@ async def list_pending_invites_for_supervisor(
                 project_domains=project_domains,
             )
         )
-    return PendingInvitesResponse(invites=items)
+    return PendingInvitesResponse(requests=items)
 
 
 @router.post("/supervisor/{request_id}/accept")
@@ -381,15 +381,22 @@ async def accept_invite(
             .where(Group.group_id == req.group_id)
             .values(cosupervisor_id=current_user.user_id)
         )
-    # Mark request accepted
+    # Mark request accepted - use raw SQL to completely bypass any caching
     await db.execute(
-        update(Request)
-        .where(Request.request_id == request_id)
-        .values(
-            status=InviteStatusEnum.accepted,
-            updated_by=current_user.user_id,
-            updated_at=datetime.now(timezone.utc),
-        )
+        text(
+            """
+            UPDATE requests 
+            SET status = 'accepted'::invite_status_enum,
+                updated_at = :updated_at,
+                updated_by = :updated_by
+            WHERE request_id = :request_id
+        """
+        ),
+        {
+            "updated_at": datetime.utcnow(),
+            "updated_by": current_user.user_id,
+            "request_id": request_id,
+        },
     )
     await db.commit()
     return {"message": "Request accepted", "role": req.request_type.value}
@@ -427,9 +434,9 @@ async def reject_invite(
         update(Request)
         .where(Request.request_id == request_id)
         .values(
-            status=InviteStatusEnum.rejected,
+            status=InviteStatusEnum.declined,
             updated_by=current_user.user_id,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.utcnow(),
         )
     )
     await db.commit()
