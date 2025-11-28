@@ -3,7 +3,11 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
+<<<<<<< HEAD
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
+=======
+from fastapi import APIRouter, Depends, HTTPException, Path, status
+>>>>>>> 7a34e0c (deliverables)
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -339,6 +343,7 @@ async def accept_supervisor_request(
             detail="Request not found or already processed",
         )
 
+<<<<<<< HEAD
     # Get group and supervisor info for email
     group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
     group = group_result.scalars().first()
@@ -348,6 +353,8 @@ async def accept_supervisor_request(
         else "cosupervisor"
     )
 
+=======
+>>>>>>> 7a34e0c (deliverables)
     # Supervisor role logic
     if req.request_type == RequestTypeEnum.supervisor:
         # Set supervisor_id in groups
@@ -397,6 +404,7 @@ async def accept_supervisor_request(
         )
     )
     await db.commit()
+<<<<<<< HEAD
 
     # Send acceptance emails to all group members
     if group:
@@ -416,6 +424,8 @@ async def accept_supervisor_request(
                 role,
             )
 
+=======
+>>>>>>> 7a34e0c (deliverables)
     return {"message": "Request accepted"}
 
 
