@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -307,7 +307,7 @@ async def list_pending_invites_for_supervisor(
 
 
 @router.post("/supervisor/{request_id}/accept")
-async def accept_invite(
+async def accept_supervisor_request(
     request_id: UUID = Path(...),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
@@ -317,89 +317,73 @@ async def accept_invite(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only supervisors can accept invites",
         )
-    # Load request
+
+    # Load and validate the pending request
     request_result = await db.execute(
-        select(Request).where(Request.request_id == request_id)
+        select(Request).where(
+            Request.request_id == request_id,
+            Request.supervisor_id == current_user.user_id,
+            Request.status == InviteStatusEnum.pending,
+        )
     )
     req = request_result.scalars().first()
+
     if not req:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found or already processed",
         )
-    if req.supervisor_id != current_user.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not your request"
-        )
-    if req.status != InviteStatusEnum.pending:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Request already processed"
-        )
-    # Check if supervisor is already assigned to the other role (aligns with DB constraint)
-    grp = (
-        (await db.execute(select(Group).where(Group.group_id == req.group_id)))
-        .scalars()
-        .first()
-    )
-    if not grp:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
-        )
-    if (
-        req.request_type == RequestTypeEnum.supervisor
-        and grp.cosupervisor_id == current_user.user_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You are already assigned as cosupervisor. Cannot be both supervisor and cosupervisor.",
-        )
-    if (
-        req.request_type == RequestTypeEnum.cosupervisor
-        and grp.supervisor_id == current_user.user_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You are already assigned as supervisor. Cannot be both supervisor and cosupervisor.",
-        )
-    # Update group record based on role
+
+    # Supervisor role logic
     if req.request_type == RequestTypeEnum.supervisor:
+        # Set supervisor_id in groups
         await db.execute(
             update(Group)
             .where(Group.group_id == req.group_id)
-            .values(supervisor_id=current_user.user_id)
+            .values(supervisor_id=current_user.user_id, updated_at=datetime.utcnow())
         )
         # Increment supervisor capacity_filled
-        from app.models.supervisor import Supervisor
-
         await db.execute(
             update(Supervisor)
             .where(Supervisor.user_id == current_user.user_id)
             .values(capacity_filled=Supervisor.capacity_filled + 1)
         )
-    else:
+        # Auto-decline other pending supervisor requests for this group
+        await db.execute(
+            update(Request)
+            .where(
+                Request.group_id == req.group_id,
+                Request.request_type == RequestTypeEnum.supervisor,
+                Request.request_id != req.request_id,
+                Request.status == InviteStatusEnum.pending,
+            )
+            .values(status=InviteStatusEnum.declined, updated_at=datetime.utcnow())
+        )
+
+    # Cosupervisor role logic
+    elif req.request_type == RequestTypeEnum.cosupervisor:
+        # Set cosupervisor_id in groups
         await db.execute(
             update(Group)
             .where(Group.group_id == req.group_id)
-            .values(cosupervisor_id=current_user.user_id)
+            .values(cosupervisor_id=current_user.user_id, updated_at=datetime.utcnow())
         )
-    # Mark request accepted - use raw SQL to completely bypass any caching
+        # (No supervisor capacity update for cosupervisor)
+    else:
+        raise HTTPException(400, detail="Unknown request type")
+
+    # Set THIS request status to accepted
     await db.execute(
-        text(
-            """
-            UPDATE requests 
-            SET status = 'accepted'::invite_status_enum,
-                updated_at = :updated_at,
-                updated_by = :updated_by
-            WHERE request_id = :request_id
-        """
-        ),
-        {
-            "updated_at": datetime.utcnow(),
-            "updated_by": current_user.user_id,
-            "request_id": request_id,
-        },
+        update(Request)
+        .where(Request.request_id == request_id)
+        .values(
+            status=InviteStatusEnum.accepted,
+            updated_at=datetime.utcnow(),
+            updated_by=current_user.user_id,
+        )
     )
     await db.commit()
-    return {"message": "Request accepted", "role": req.request_type.value}
+    return {"message": "Request accepted"}
 
 
 @router.post("/supervisor/{request_id}/reject")
