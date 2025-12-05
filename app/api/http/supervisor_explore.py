@@ -219,16 +219,22 @@ async def explore_supervisors(
         query = query.add_columns(relevance_score.label("relevance_score"))
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d174ec0 (feat: bugs fixing v3)
     # Get total count BEFORE pagination (count filtered results only)
     # Build a count query from the same filtered query
     count_subquery = query.subquery()
     count_query = select(func.count()).select_from(count_subquery)
+<<<<<<< HEAD
 =======
     # Get total count for pagination (using same query structure)
     count_query = select(func.count(User.user_id.distinct())).select_from(
         query.subquery()
     )
 >>>>>>> bf3f867 (bugs fixing)
+=======
+>>>>>>> d174ec0 (feat: bugs fixing v3)
     total = (await db.execute(count_query)).scalar() or 0
 
     # Calculate pagination

@@ -183,16 +183,27 @@ class SupervisorProfilePatchUpdate(BaseModel):
     requirements: Optional[List[str]] = Field(None, max_items=20)
     project_type: Optional[str] = Field(
         None,
+<<<<<<< HEAD
         pattern="^(research|product|product and research)$",
+=======
+>>>>>>> d174ec0 (feat: bugs fixing v3)
         description="Single project type: research, product, or product and research",
     )
 
     # Preference fields (mutable)
+<<<<<<< HEAD
     domains: Optional[List[UUID]] = Field(
         None, max_items=50, description="List of domain IDs"
     )
     industries: Optional[List[UUID]] = Field(
         None, max_items=50, description="List of industry IDs"
+=======
+    domains: Optional[List[str]] = Field(
+        None, max_items=50, description="List of domain names"
+    )
+    industries: Optional[List[str]] = Field(
+        None, max_items=50, description="List of industry names"
+>>>>>>> d174ec0 (feat: bugs fixing v3)
     )
     capacity_max: Optional[int] = Field(
         None, ge=1, le=20, description="Maximum student capacity"

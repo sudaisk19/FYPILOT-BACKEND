@@ -48,10 +48,99 @@ class RecommendationService:
         """
         Check if the AI Recommender service is available.
 
+<<<<<<< HEAD
         Returns:
             bool: True if service is healthy, False otherwise.
         """
         return await self._ai_client.health_check()
+=======
+    async def initialize_index(self, db: AsyncSession):
+        """Build and cache the FAISS index for supervisor embeddings."""
+        if self._index is not None:
+            return
+
+        logger.info("Building FAISS index for supervisors...")
+
+        # Fetch all supervisors
+        result = await db.execute(
+            select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
+        )
+        rows = result.all()
+
+        supervisors_data = []
+        supervisors_list = []
+
+        for supervisor, user in rows:
+            # Fetch domains for this supervisor
+            domains_result = await db.execute(
+                select(Domain)
+                .join(SupervisorDomain, Domain.domain_id == SupervisorDomain.domain_id)
+                .where(SupervisorDomain.supervisor_id == supervisor.user_id)
+            )
+            domains = [d.name for d in domains_result.scalars().all()]
+
+            # Fetch industries for this supervisor
+            industries_result = await db.execute(
+                select(Industry)
+                .join(
+                    SupervisorIndustry,
+                    Industry.industry_id == SupervisorIndustry.industry_id,
+                )
+                .where(SupervisorIndustry.supervisor_id == supervisor.user_id)
+            )
+            [i.name for i in industries_result.scalars().all()]
+
+            # Build descriptive text for this supervisor
+            domains_str = ", ".join(domains) if domains else "General"
+            requirements_str = (
+                ", ".join(supervisor.requirements)
+                if supervisor.requirements
+                else "None specified"
+            )
+            project_types_str = (
+                supervisor.project_type if supervisor.project_type else "Any"
+            )
+
+            sup_text = (
+                f"Name: {user.full_name}. "
+                f"Department: {supervisor.department or 'N/A'}. "
+                f"Domains: {domains_str}. "
+                f"Requirements: {requirements_str}. "
+                f"Project Types: {project_types_str}."
+            )
+
+            supervisors_data.append(
+                {"supervisor": supervisor, "user": user, "text": sup_text}
+            )
+            supervisors_list.append(
+                {
+                    "name": user.full_name,
+                    "department": supervisor.department,
+                    "domains": domains,
+                    "requirements": supervisor.requirements or [],
+                    "project_types": (
+                        [supervisor.project_type] if supervisor.project_type else []
+                    ),
+                    "user_id": str(user.user_id),
+                    "profile_avatar": user.profile_avatar,
+                }
+            )
+
+        # Generate embeddings
+        texts = [item["text"] for item in supervisors_data]
+        embeddings = self.model.encode(texts, convert_to_numpy=True)
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+        # Build FAISS index
+        dimension = embeddings.shape[1]
+        self._index = faiss.IndexFlatIP(dimension)
+        self._index.add(embeddings)
+
+        # Cache supervisor data
+        self._supervisors_cache = supervisors_list
+
+        logger.info(f"Index built with {len(supervisors_list)} supervisors")
+>>>>>>> d174ec0 (feat: bugs fixing v3)
 
     async def recommend_supervisors(
         self,

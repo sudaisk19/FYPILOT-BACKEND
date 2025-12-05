@@ -392,7 +392,10 @@ async def update_supervisor_profile(
 
         # Prepare supervisor updates - only include non-empty values
         supervisor_updates = {}
+<<<<<<< HEAD
 
+=======
+>>>>>>> d174ec0 (feat: bugs fixing v3)
         if profile_data.department is not None and profile_data.department.strip():
             supervisor_updates["department"] = profile_data.department.strip()
         if profile_data.designation is not None and profile_data.designation.strip():
@@ -401,6 +404,11 @@ async def update_supervisor_profile(
             supervisor_updates["office"] = profile_data.office.strip()
         if profile_data.requirements is not None and profile_data.requirements:
             supervisor_updates["requirements"] = profile_data.requirements
+<<<<<<< HEAD
+=======
+        if profile_data.project_type is not None:
+            supervisor_updates["project_type"] = profile_data.project_type
+>>>>>>> d174ec0 (feat: bugs fixing v3)
         if profile_data.capacity_max is not None:
             supervisor_updates["capacity_max"] = profile_data.capacity_max
 
@@ -412,6 +420,7 @@ async def update_supervisor_profile(
             )
             domains_to_add = domain_result.scalars().all()
 
+<<<<<<< HEAD
         industries_to_add = []
         if profile_data.industries:
             industry_result = await db.execute(
@@ -451,6 +460,47 @@ async def update_supervisor_profile(
             supervisor.industries.extend(industries_to_add)
 
         # Commit all changes together
+=======
+        # Handle domains update
+        if profile_data.domains is not None:
+            # Fetch supervisor to update relationships
+            result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+            )
+            supervisor = result.scalar_one()
+
+            # Clear existing domains
+            supervisor.domains.clear()
+
+            # Fetch and add new domains by name
+            if profile_data.domains:
+                domain_result = await db.execute(
+                    select(Domain).where(Domain.name.in_(profile_data.domains))
+                )
+                domains = domain_result.scalars().all()
+                supervisor.domains.extend(domains)
+
+        # Handle industries update
+        if profile_data.industries is not None:
+            # Fetch supervisor to update relationships
+            result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+            )
+            supervisor = result.scalar_one()
+
+            # Clear existing industries
+            supervisor.industries.clear()
+
+            # Fetch and add new industries by name
+            if profile_data.industries:
+                industry_result = await db.execute(
+                    select(Industry).where(Industry.name.in_(profile_data.industries))
+                )
+                industries = industry_result.scalars().all()
+                supervisor.industries.extend(industries)
+
+        # Commit transaction
+>>>>>>> d174ec0 (feat: bugs fixing v3)
         await db.commit()
 
         # Fetch updated user and supervisor profile with domains and industries

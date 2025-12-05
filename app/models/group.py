@@ -131,6 +131,7 @@ class InviteStatusEnum(str, enum.Enum):
     pending = "pending"
     accepted = "accepted"
 <<<<<<< HEAD
+<<<<<<< HEAD
     declined = "declined"
 <<<<<<< HEAD
 =======
@@ -138,6 +139,9 @@ class InviteStatusEnum(str, enum.Enum):
 >>>>>>> 910e373 (deliverables)
 =======
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    declined = "declined"
+>>>>>>> d174ec0 (feat: bugs fixing v3)
     expired = "expired"
     cancelled = "cancelled"
 
