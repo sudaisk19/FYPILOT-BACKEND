@@ -65,12 +65,15 @@ class PaginatedSupervisorResponse(BaseModel):
 
 # Query parameters for filtering
 class SupervisorFilters(BaseModel):
-    department: Optional[str] = Field(None, description="Filter by department")
+    department: Optional[str] = Field(
+        None,
+        description="Filter by department (e.g., Software Engineering, SE, Computer Science, CS)",
+    )
     designation: Optional[str] = Field(
         None, description="Filter by designation (Professor, Associate Professor, etc.)"
     )
-    project_type: Optional[str] = Field(
-        None, description="Filter by project type (web, mobile, ai, etc.)"
+    domain: Optional[str] = Field(
+        None, description="Filter by domain expertise (e.g., Web, Mobile, AI, etc.)"
     )
     search: Optional[str] = Field(None, description="Search by name or email")
     page: int = Field(1, ge=1, description="Page number")

@@ -14,7 +14,7 @@ from app.schemas.user import Role
 class ProjectType(str, Enum):
     research = "research"
     product = "product"
-    both = "both"
+    product_and_research = "product and research"
 
 
 # Base user fields (common to all roles)
@@ -104,17 +104,8 @@ class SupervisorFields(BaseModel):
     designation: Optional[str] = Field(None, max_length=255)
     office: Optional[str] = Field(None, max_length=255)
     requirements: Optional[List[str]] = Field(None, max_items=20)
-    project_types: Optional[List[ProjectType]] = Field(None, max_items=10)
+    project_type: Optional[ProjectType] = None
     capacity_max: Optional[int] = Field(None, ge=0, le=20)
-
-    @field_validator("project_types")
-    @classmethod
-    def validate_project_types(cls, v):
-        """Convert project type values to their enum values"""
-        if v is None:
-            return v
-        # Convert enum objects to their string values for storage
-        return [pt.value if isinstance(pt, ProjectType) else pt for pt in v]
 
 
 # Admin-specific fields
@@ -374,9 +365,19 @@ class SupervisorProfileResponse(BaseModel):
     designation: Optional[str] = None
     office: Optional[str] = None
     requirements: List[str] = Field(default_factory=list)
-    project_types: List[str] = Field(default_factory=list)
+    project_type: Optional[str] = Field(
+        None, description="Project type preference (research|product|both)"
+    )
     capacity_max: int = 8
     capacity_filled: int = 0
+
+    # Domain and industry expertise
+    domains: List[str] = Field(
+        default_factory=list, description="List of domain expertise names"
+    )
+    industries: List[str] = Field(
+        default_factory=list, description="List of industry focus names"
+    )
 
 
 class SupervisorProfileUpdateResponse(BaseModel):

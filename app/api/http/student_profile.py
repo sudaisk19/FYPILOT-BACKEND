@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.group import GroupMember
+from app.models.group import Group, GroupMember
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.profile_schema import (
@@ -71,7 +71,11 @@ async def get_student_profile(
     # Fetch user with student profile and group information
     result = await db.execute(
         select(User)
-        .options(selectinload(User.student_profile).selectinload(Student.groups))
+        .options(
+            selectinload(User.student_profile)
+            .selectinload(Student.groups)
+            .selectinload(Group.project)
+        )
         .where(User.user_id == current_user.user_id)
     )
     user = result.scalar_one_or_none()
@@ -170,7 +174,11 @@ async def get_student_profile(
             max_members=group.max_members,
             supervisor_name=supervisor_name,
             cosupervisor_name=cosupervisor_name,
-            project_name=None,  # TODO: Add project information when Project model is available
+            project_name=(
+                group.project[0].name
+                if group.project and len(group.project) > 0
+                else None
+            ),
             members=members,
         )
 

@@ -36,10 +36,13 @@ async def get_supervisor_profile(
             detail="Access denied. This endpoint is only for supervisors.",
         )
 
-    # Fetch user with supervisor profile
+    # Fetch user with supervisor profile, domains, and industries
     result = await db.execute(
         select(User)
-        .options(selectinload(User.supervisor_profile))
+        .options(
+            selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
+            selectinload(User.supervisor_profile).selectinload(Supervisor.industries),
+        )
         .where(User.user_id == current_user.user_id)
     )
     user = result.scalar_one_or_none()
@@ -65,14 +68,24 @@ async def get_supervisor_profile(
             designation=None,
             office=None,
             requirements=[],
-            project_types=[],
+            project_types=None,
             capacity_max=8,  # Default value
             capacity_filled=0,
+            domains=[],
+            industries=[],
         )
+
+    # Extract domain and industry names
+    domain_names = [domain.name for domain in user.supervisor_profile.domains]
+    industry_names = [industry.name for industry in user.supervisor_profile.industries]
+
+    # Get project type (single value)
+    project_type = None
+    if user.supervisor_profile.project_type:
+        project_type = user.supervisor_profile.project_type
 
     # Build response with combined user and supervisor data
     return SupervisorProfileResponse(
-        # User fields
         user_id=user.user_id,
         full_name=user.full_name,
         email=user.email,
@@ -80,14 +93,15 @@ async def get_supervisor_profile(
         profile_avatar=user.profile_avatar,
         created_at=user.created_at,
         updated_at=user.updated_at,
-        # Supervisor fields
         department=user.supervisor_profile.department,
         designation=user.supervisor_profile.designation,
         office=user.supervisor_profile.office,
         requirements=user.supervisor_profile.requirements or [],
-        project_types=user.supervisor_profile.project_types or [],
+        project_type=project_type,
         capacity_max=user.supervisor_profile.capacity_max,
         capacity_filled=user.supervisor_profile.capacity_filled,
+        domains=domain_names,
+        industries=industry_names,
     )
 
 
@@ -146,8 +160,8 @@ async def complete_supervisor_wizard_profile(
             supervisor_updates["office"] = profile_data.office
         if profile_data.requirements is not None:
             supervisor_updates["requirements"] = profile_data.requirements
-        if profile_data.project_types is not None:
-            supervisor_updates["project_types"] = profile_data.project_types
+        if profile_data.project_type is not None:
+            supervisor_updates["project_type"] = profile_data.project_type
         if profile_data.capacity_max is not None:
             supervisor_updates["capacity_max"] = profile_data.capacity_max
 
@@ -170,29 +184,40 @@ async def complete_supervisor_wizard_profile(
         # Commit transaction
         await db.commit()
 
-        # Refresh the supervisor_profile object to get the committed data
-        if not supervisor_profile:
-            # Fetch the newly created profile
-            result = await db.execute(
-                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+        # Fetch updated user and supervisor profile with domains and industries
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
+                selectinload(User.supervisor_profile).selectinload(
+                    Supervisor.industries
+                ),
             )
-            supervisor_profile = result.scalar_one_or_none()
+            .where(User.user_id == current_user.user_id)
+        )
+        updated_user = result.scalar_one()
 
-        if not supervisor_profile:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Supervisor profile was not created properly. Please try again.",
-            )
+        # Extract domain and industry names
+        domain_names = []
+        industry_names = []
+        if updated_user.supervisor_profile:
+            domain_names = [
+                domain.name for domain in updated_user.supervisor_profile.domains
+            ]
+            industry_names = [
+                industry.name for industry in updated_user.supervisor_profile.industries
+            ]
 
-        # Refresh to get latest user data
-        await db.refresh(current_user)
+        # Get project type (single value)
+        project_type = None
+        if (
+            updated_user.supervisor_profile
+            and updated_user.supervisor_profile.project_type
+        ):
+            project_type = updated_user.supervisor_profile.project_type
 
-        # Use current_user and supervisor_profile to build response
-        updated_user = current_user
-
-        # Return updated profile with success message
+        # Build response
         profile_data = SupervisorProfileResponse(
-            # User fields
             user_id=updated_user.user_id,
             full_name=updated_user.full_name,
             email=updated_user.email,
@@ -200,14 +225,35 @@ async def complete_supervisor_wizard_profile(
             profile_avatar=updated_user.profile_avatar,
             created_at=updated_user.created_at,
             updated_at=updated_user.updated_at,
-            # Supervisor fields (use the supervisor_profile object directly)
-            department=supervisor_profile.department,
-            designation=supervisor_profile.designation,
-            office=supervisor_profile.office,
-            requirements=supervisor_profile.requirements or [],
-            project_types=supervisor_profile.project_types or [],
-            capacity_max=supervisor_profile.capacity_max,
-            capacity_filled=supervisor_profile.capacity_filled,
+            department=(
+                updated_user.supervisor_profile.department
+                if updated_user.supervisor_profile
+                else None
+            ),
+            designation=(
+                updated_user.supervisor_profile.designation
+                if updated_user.supervisor_profile
+                else None
+            ),
+            office=(
+                updated_user.supervisor_profile.office
+                if updated_user.supervisor_profile
+                else None
+            ),
+            requirements=updated_user.supervisor_profile.requirements or [],
+            project_types=project_type,
+            capacity_max=(
+                updated_user.supervisor_profile.capacity_max
+                if updated_user.supervisor_profile
+                else 8
+            ),
+            capacity_filled=(
+                updated_user.supervisor_profile.capacity_filled
+                if updated_user.supervisor_profile
+                else 0
+            ),
+            domains=domain_names,
+            industries=industry_names,
         )
 
         return SupervisorProfileUpdateResponse(
@@ -305,17 +351,40 @@ async def update_supervisor_profile(
         # Commit transaction
         await db.commit()
 
-        # Fetch updated data
+        # Fetch updated user and supervisor profile with domains and industries
         result = await db.execute(
             select(User)
-            .options(selectinload(User.supervisor_profile))
+            .options(
+                selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
+                selectinload(User.supervisor_profile).selectinload(
+                    Supervisor.industries
+                ),
+            )
             .where(User.user_id == current_user.user_id)
         )
         updated_user = result.scalar_one()
 
-        # Return updated profile with success message
+        # Extract domain and industry names
+        domain_names = []
+        industry_names = []
+        if updated_user.supervisor_profile:
+            domain_names = [
+                domain.name for domain in updated_user.supervisor_profile.domains
+            ]
+            industry_names = [
+                industry.name for industry in updated_user.supervisor_profile.industries
+            ]
+
+        # Get project type (single value)
+        project_type = None
+        if (
+            updated_user.supervisor_profile
+            and updated_user.supervisor_profile.project_type
+        ):
+            project_type = updated_user.supervisor_profile.project_type
+
+        # Build response
         profile_data = SupervisorProfileResponse(
-            # User fields
             user_id=updated_user.user_id,
             full_name=updated_user.full_name,
             email=updated_user.email,
@@ -323,14 +392,35 @@ async def update_supervisor_profile(
             profile_avatar=updated_user.profile_avatar,
             created_at=updated_user.created_at,
             updated_at=updated_user.updated_at,
-            # Supervisor fields
-            department=updated_user.supervisor_profile.department,
-            designation=updated_user.supervisor_profile.designation,
-            office=updated_user.supervisor_profile.office,
+            department=(
+                updated_user.supervisor_profile.department
+                if updated_user.supervisor_profile
+                else None
+            ),
+            designation=(
+                updated_user.supervisor_profile.designation
+                if updated_user.supervisor_profile
+                else None
+            ),
+            office=(
+                updated_user.supervisor_profile.office
+                if updated_user.supervisor_profile
+                else None
+            ),
             requirements=updated_user.supervisor_profile.requirements or [],
-            project_types=updated_user.supervisor_profile.project_types or [],
-            capacity_max=updated_user.supervisor_profile.capacity_max,
-            capacity_filled=updated_user.supervisor_profile.capacity_filled,
+            project_type=project_type,
+            capacity_max=(
+                updated_user.supervisor_profile.capacity_max
+                if updated_user.supervisor_profile
+                else 8
+            ),
+            capacity_filled=(
+                updated_user.supervisor_profile.capacity_filled
+                if updated_user.supervisor_profile
+                else 0
+            ),
+            domains=domain_names,
+            industries=industry_names,
         )
 
         return SupervisorProfileUpdateResponse(

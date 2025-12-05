@@ -112,8 +112,6 @@ class GroupMember(Base):
 class InviteStatusEnum(str, enum.Enum):
     pending = "pending"
     accepted = "accepted"
-    declined = "declined"
-    cancelled = "cancelled"
     expired = "expired"
 
 

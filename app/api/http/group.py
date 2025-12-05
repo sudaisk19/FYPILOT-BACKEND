@@ -1,7 +1,7 @@
 # app/api/http/group.py
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import delete, func, select, update
@@ -20,7 +20,7 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain, ProjectTypeEnum
+from app.models.project import Project, ProjectDomain
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
@@ -88,7 +88,7 @@ async def create_group(
         created_at=datetime.utcnow(),
     )
     db.add(grp)
-    await db.flush()  # populate grp.group_id (and fire DB triggers)
+    await db.flush()  # populate grp.group_id
 
     # 4) Add as first member
     member = GroupMember(
@@ -98,19 +98,21 @@ async def create_group(
     )
     db.add(member)
 
-    # 5) Let DB trigger create the Project row; just read it back
-    project_result = await db.execute(
-        select(Project).where(Project.group_id == grp.group_id)
+    # 5) Commit everything
+    # 5) Create a Project row associated with this group (defaults)
+    project = Project(
+        group_id=grp.group_id,
+        name=grp.name,
+        # project_type will use model default ('capstone') if not provided
     )
-    project = project_result.scalars().first()
+    db.add(project)
+    await db.flush()  # populate project.project_id
 
     # 6) Commit everything
     await db.commit()
 
     return GroupResponse(
-        group_id=grp.group_id,
-        name=grp.name,
-        project_id=project.project_id if project else None,
+        group_id=grp.group_id, name=grp.name, project_id=project.project_id
     )
 
 
@@ -198,41 +200,14 @@ async def send_invite(
     await db.commit()
 
     # Send the email
-    from app.services.mailer import get_email_template
-
-    frontend_base = getattr(settings, "frontend_url", settings.frontend_app_url)
-    link = f"{frontend_base}/groups/{group_id}/invites/{token}/accept"
-
-    content = f"""
-    <p style="margin: 0 0 16px;">Hi <strong>{invitee.full_name}</strong>,</p>
-    
-    <p style="margin: 0 0 16px;">
-        <strong>{current_user.full_name}</strong> has invited you to join their FYP group on {settings.email_company_name}.
-    </p>
-    
-    <p style="margin: 0 0 24px; color: #6b7280;">
-        Click the button below to accept the invitation and become a member of the group. This invitation will expire in 7 days.
-    </p>
-    
-    <p style="margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #9ca3af;">
-        If the button doesn't work, copy and paste this link into your browser:<br>
-        <a href="{link}" style="color: #2563eb; word-break: break-all;">{link}</a>
-    </p>
-    """
-
-    html = get_email_template(
-        title="Group Invitation",
-        content=content,
-        button_text="Accept Invitation",
-        button_link=link,
-        footer_text=f"You're receiving this because {current_user.full_name} invited you to join their group.",
+    link = f"{settings.frontend_url}/groups/{group_id}/invites/{token}/accept"
+    html = (
+        f"<p>Hi {invitee.full_name},</p>"
+        f"<p>{current_user.full_name} invited you to join the group.</p>"
+        f"<p><a href='{link}'>Accept invite</a> (expires in 7 days)</p>"
     )
-
     background_tasks.add_task(
-        get_mailer().send,
-        invitee.email,
-        f"Group Invitation - {settings.email_company_name}",
-        html,
+        get_mailer().send, invitee.email, "FYP Group Invitation", html
     )
 
     return {"message": "Invitation sent; check Ethereal preview URL"}
@@ -254,18 +229,12 @@ async def accept_invite(
         .scalars()
         .first()
     )
-    now = datetime.now(timezone.utc)
-    if not invite or invite.status != InviteStatusEnum.pending:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invite"
-        )
-
-    expires_at = (
-        invite.expires_at
-        if invite.expires_at.tzinfo
-        else invite.expires_at.replace(tzinfo=timezone.utc)
-    )
-    if expires_at < now:
+    now = datetime.utcnow()
+    if (
+        not invite
+        or invite.status != InviteStatusEnum.pending
+        or invite.expires_at < now
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invite"
         )
@@ -334,17 +303,7 @@ async def leave_group(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Check if group exists
-    group_result = await db.execute(select(Group).where(Group.group_id == group_id))
-    group = group_result.scalars().first()
-
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
-        )
-
-    # Check if user is a member
+    # Must be a member
     is_member = await db.execute(
         select(GroupMember).where(
             GroupMember.group_id == group_id,
@@ -353,8 +312,8 @@ async def leave_group(
     )
     if not is_member.scalars().first():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You’re not a member of that group",
         )
 
     # Remove membership
@@ -403,7 +362,8 @@ async def delete_group(
         DeleteGroupResponse: Confirmation of deletion with timestamp
 
     Raises:
-        HTTPException(404): Group not found or user is not a member/creator
+        HTTPException(403): User is not authorized to delete this group
+        HTTPException(404): Group not found
         HTTPException(500): Database error during deletion
     """
     # Verify user is a student
@@ -434,8 +394,8 @@ async def delete_group(
 
     if not membership:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group",
         )
 
     # Check if user is the group creator (first member)
@@ -450,8 +410,8 @@ async def delete_group(
 
     if not creator or creator.student_id != current_user.user_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the group creator can delete the group",
         )
 
     try:
@@ -510,7 +470,8 @@ async def get_group_profile(
         GroupProfileResponse: Comprehensive group profile data
 
     Raises:
-        HTTPException(404): Group not found or user is not a member
+        HTTPException(403): User is not a member of the group
+        HTTPException(404): Group not found
         HTTPException(500): Database error
     """
     # Verify user is a student
@@ -541,8 +502,8 @@ async def get_group_profile(
 
     if not membership:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group",
         )
 
     try:
@@ -689,7 +650,9 @@ async def get_group_profile(
 
             # Handle project_type - convert to string and validate
             project_type = (
-                str(project_data.project_type) if project_data.project_type else None
+                str(project_data.project_type)
+                if project_data.project_type
+                else "capstone"
             )
 
             project = ProjectInfo(
@@ -774,7 +737,7 @@ async def update_group_profile(
         GroupProfileUpdateResponse: Confirmation of update with timestamp
 
     Raises:
-        HTTPException(404): Group not found or user is not a member
+        HTTPException(403): User is not a member of the group
         HTTPException(404): Group not found
         HTTPException(400): Invalid update data
         HTTPException(500): Database error
@@ -807,8 +770,8 @@ async def update_group_profile(
 
     if not membership:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group",
         )
 
     try:
@@ -821,25 +784,11 @@ async def update_group_profile(
             if update_data.group.name is not None:
                 group_updates["name"] = update_data.group.name
             if update_data.group.fyp_stage is not None:
-                try:
-                    group_updates["fyp_stage"] = FYPStageEnum(
-                        update_data.group.fyp_stage
-                    )
-                except ValueError:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid fyp_stage value",
-                    )
+                # Cast to proper enum type to avoid database constraint issues
+                group_updates["fyp_stage"] = update_data.group.fyp_stage
             if update_data.group.fyp_cycle is not None:
-                try:
-                    group_updates["fyp_cycle"] = FYPCycleEnum(
-                        update_data.group.fyp_cycle
-                    )
-                except ValueError:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid fyp_cycle value",
-                    )
+                # Cast to proper enum type to avoid database constraint issues
+                group_updates["fyp_cycle"] = update_data.group.fyp_cycle
             if update_data.group.cohort_year is not None:
                 group_updates["cohort_year"] = update_data.group.cohort_year
             if update_data.group.supervisor_id is not None:
@@ -850,11 +799,39 @@ async def update_group_profile(
             if group_updates:
                 group_updates["updated_at"] = updated_at
 
-                await db.execute(
-                    update(Group)
-                    .where(Group.group_id == group_id)
-                    .values(**group_updates)
-                )
+                # Handle special field types before using SQLAlchemy update
+                processed_updates = {}
+                enum_updates = {}
+
+                for key, value in group_updates.items():
+                    if key in ["fyp_stage", "fyp_cycle"]:
+                        # Store enum fields for separate handling
+                        enum_updates[key] = value
+                    else:
+                        processed_updates[key] = value
+
+                # Update non-enum fields using SQLAlchemy
+                if processed_updates:
+                    await db.execute(
+                        update(Group)
+                        .where(Group.group_id == group_id)
+                        .values(**processed_updates)
+                    )
+
+                # Handle enum fields separately with raw SQL
+                if enum_updates:
+                    from sqlalchemy import text
+
+                    for key, value in enum_updates.items():
+                        enum_type = (
+                            "fyp_stage_enum" if key == "fyp_stage" else "fyp_cycle_enum"
+                        )
+                        await db.execute(
+                            text(
+                                f"UPDATE groups SET {key} = :value::{enum_type} WHERE group_id = :group_id"
+                            ),
+                            {"value": value, "group_id": group_id},
+                        )
 
         # Update project information if provided
         if update_data.project:
@@ -866,22 +843,10 @@ async def update_group_profile(
 
             if not project:
                 # Create new project if it doesn't exist
-                project_type_value = None
-                if update_data.project.project_type is not None:
-                    try:
-                        project_type_value = ProjectTypeEnum(
-                            update_data.project.project_type
-                        )
-                    except ValueError:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Invalid project_type value",
-                        )
-
                 project = Project(
                     group_id=group_id,
                     name=update_data.project.name or "Untitled Project",
-                    project_type=project_type_value,
+                    project_type=update_data.project.project_type or "capstone",
                 )
                 db.add(project)
                 await db.flush()  # Get the project_id
@@ -904,26 +869,47 @@ async def update_group_profile(
             if update_data.project.end_date is not None:
                 project_updates["end_date"] = update_data.project.end_date
             if update_data.project.project_type is not None:
-                try:
-                    project_updates["project_type"] = ProjectTypeEnum(
-                        update_data.project.project_type
-                    )
-                except ValueError:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid project_type value",
-                    )
+                project_updates["project_type"] = update_data.project.project_type
             if update_data.project.repo_links is not None:
                 project_updates["repo_links"] = update_data.project.repo_links
 
             if project_updates:
                 project_updates["updated_at"] = updated_at
 
-                await db.execute(
-                    update(Project)
-                    .where(Project.project_id == project.project_id)
-                    .values(**project_updates)
-                )
+                # Handle special field types before using SQLAlchemy update
+                processed_updates = {}
+                for key, value in project_updates.items():
+                    if key in ["objectives", "tech_stack", "repo_links"]:
+                        # JSONB fields - SQLAlchemy handles serialization automatically
+                        processed_updates[key] = value
+                    elif key == "project_type":
+                        # For enum fields, we need to use raw SQL with proper casting
+                        # We'll handle this separately
+                        continue
+                    else:
+                        processed_updates[key] = value
+
+                # Update non-enum fields using SQLAlchemy (handles JSONB automatically)
+                if processed_updates:
+                    await db.execute(
+                        update(Project)
+                        .where(Project.project_id == project.project_id)
+                        .values(**processed_updates)
+                    )
+
+                # Handle project_type separately with raw SQL if needed
+                if "project_type" in project_updates:
+                    from sqlalchemy import text
+
+                    await db.execute(
+                        text(
+                            "UPDATE projects SET project_type = :project_type::project_type_enum WHERE project_id = :project_id"
+                        ),
+                        {
+                            "project_type": project_updates["project_type"],
+                            "project_id": project.project_id,
+                        },
+                    )
 
             # Update project domains if provided
             if update_data.project.domain_ids is not None:
