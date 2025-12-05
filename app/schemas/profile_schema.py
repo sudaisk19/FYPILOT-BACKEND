@@ -169,19 +169,33 @@ class SupervisorProfileUpdate(BaseUserFields, SupervisorFields):
 
 
 class SupervisorProfilePatchUpdate(BaseModel):
-    """Schema for PATCH updates - excludes immutable fields like project_types, capacity_max, capacity_filled"""
+    """Schema for PATCH updates - allows updating profile, academic info, and preferences"""
 
     # User fields (mutable)
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = Field(None, max_length=255)
     profile_avatar: Optional[str] = Field(None, max_length=5000)
 
-    # Supervisor fields (mutable - excluding required fields)
+    # Supervisor fields (mutable)
     department: Optional[str] = Field(None, max_length=255)
     designation: Optional[str] = Field(None, max_length=255)
     office: Optional[str] = Field(None, max_length=255)
     requirements: Optional[List[str]] = Field(None, max_items=20)
-    # Note: project_types, capacity_max, capacity_filled are immutable
+    project_type: Optional[str] = Field(
+        None,
+        description="Single project type: research, product, or product and research",
+    )
+
+    # Preference fields (mutable)
+    domains: Optional[List[str]] = Field(
+        None, max_items=50, description="List of domain names"
+    )
+    industries: Optional[List[str]] = Field(
+        None, max_items=50, description="List of industry names"
+    )
+    capacity_max: Optional[int] = Field(
+        None, ge=1, le=20, description="Maximum student capacity"
+    )
 
     @field_validator("full_name", "department", "designation", "office")
     @classmethod

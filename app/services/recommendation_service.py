@@ -98,9 +98,7 @@ class RecommendationService:
                 else "None specified"
             )
             project_types_str = (
-                ", ".join(supervisor.project_types)
-                if supervisor.project_types
-                else "Any"
+                supervisor.project_type if supervisor.project_type else "Any"
             )
 
             sup_text = (
@@ -120,7 +118,9 @@ class RecommendationService:
                     "department": supervisor.department,
                     "domains": domains,
                     "requirements": supervisor.requirements or [],
-                    "project_types": supervisor.project_types or [],
+                    "project_types": (
+                        [supervisor.project_type] if supervisor.project_type else []
+                    ),
                     "user_id": str(user.user_id),
                     "profile_avatar": user.profile_avatar,
                 }

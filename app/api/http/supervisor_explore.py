@@ -159,10 +159,10 @@ async def explore_supervisors(
     if relevance_score is not None:
         query = query.add_columns(relevance_score.label("relevance_score"))
 
-    # Get total count for pagination (using same query structure)
-    count_query = select(func.count(User.user_id.distinct())).select_from(
-        query.subquery()
-    )
+    # Get total count BEFORE pagination (count filtered results only)
+    # Build a count query from the same filtered query
+    count_subquery = query.subquery()
+    count_query = select(func.count()).select_from(count_subquery)
     total = (await db.execute(count_query)).scalar() or 0
 
     # Calculate pagination
@@ -263,6 +263,11 @@ async def get_supervisor_details(
     # Calculate available slots
     available_slots = supervisor.capacity_max - supervisor.capacity_filled
 
+    # Get project type (single value) - convert to list for response
+    project_types = []
+    if supervisor.project_type:
+        project_types = [supervisor.project_type]
+
     # Get current groups count (you might want to add this to your database)
     # For now, we'll use capacity_filled as current_groups
     current_groups = supervisor.capacity_filled
@@ -284,7 +289,7 @@ async def get_supervisor_details(
         designation=supervisor.designation,
         office=supervisor.office,
         requirements=supervisor.requirements or [],
-        project_types=supervisor.project_types or [],
+        project_types=project_types,
         capacity_max=supervisor.capacity_max,
         capacity_filled=supervisor.capacity_filled,
         available_slots=available_slots,

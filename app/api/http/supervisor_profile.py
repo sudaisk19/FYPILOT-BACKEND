@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
+from app.models.domain import Domain
+from app.models.industry import Industry
 from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.profile_schema import (
@@ -281,10 +283,15 @@ async def update_supervisor_profile(
     """
     Update existing supervisor profile information.
 
-    Updates both user and supervisor data in a single atomic transaction.
+    Updates user, supervisor data, domains, industries, project type, and capacity in a single atomic transaction.
     Only supervisors can access this endpoint. Only updates provided fields.
 
-    Note: project_types, capacity_max, and capacity_filled cannot be updated via this endpoint as they are immutable.
+    Fields that can be updated:
+    - User fields: full_name, email, profile_avatar
+    - Supervisor fields: department, designation, office, requirements
+    - Preferences: project_type, domains, industries, capacity_max
+
+    Note: capacity_filled is read-only and automatically managed.
     """
     # Verify user is a supervisor
     if current_user.role != "supervisor":
@@ -333,9 +340,8 @@ async def update_supervisor_profile(
                 .values(**user_updates)
             )
 
-        # Prepare supervisor updates - only include non-empty values (excluding required fields)
+        # Prepare supervisor updates - only include non-empty values
         supervisor_updates = {}
-        # Note: project_types, capacity_max, capacity_filled are required and should not be updated via PATCH
         if profile_data.department is not None and profile_data.department.strip():
             supervisor_updates["department"] = profile_data.department.strip()
         if profile_data.designation is not None and profile_data.designation.strip():
@@ -344,6 +350,10 @@ async def update_supervisor_profile(
             supervisor_updates["office"] = profile_data.office.strip()
         if profile_data.requirements is not None and profile_data.requirements:
             supervisor_updates["requirements"] = profile_data.requirements
+        if profile_data.project_type is not None:
+            supervisor_updates["project_type"] = profile_data.project_type
+        if profile_data.capacity_max is not None:
+            supervisor_updates["capacity_max"] = profile_data.capacity_max
 
         # Update supervisor table if there are changes
         if supervisor_updates:
@@ -352,6 +362,44 @@ async def update_supervisor_profile(
                 .where(Supervisor.user_id == current_user.user_id)
                 .values(**supervisor_updates)
             )
+
+        # Handle domains update
+        if profile_data.domains is not None:
+            # Fetch supervisor to update relationships
+            result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+            )
+            supervisor = result.scalar_one()
+
+            # Clear existing domains
+            supervisor.domains.clear()
+
+            # Fetch and add new domains by name
+            if profile_data.domains:
+                domain_result = await db.execute(
+                    select(Domain).where(Domain.name.in_(profile_data.domains))
+                )
+                domains = domain_result.scalars().all()
+                supervisor.domains.extend(domains)
+
+        # Handle industries update
+        if profile_data.industries is not None:
+            # Fetch supervisor to update relationships
+            result = await db.execute(
+                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
+            )
+            supervisor = result.scalar_one()
+
+            # Clear existing industries
+            supervisor.industries.clear()
+
+            # Fetch and add new industries by name
+            if profile_data.industries:
+                industry_result = await db.execute(
+                    select(Industry).where(Industry.name.in_(profile_data.industries))
+                )
+                industries = industry_result.scalars().all()
+                supervisor.industries.extend(industries)
 
         # Commit transaction
         await db.commit()

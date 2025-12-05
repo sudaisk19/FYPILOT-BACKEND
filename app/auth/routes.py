@@ -518,7 +518,7 @@ async def get_supervisor_info(
             office=supervisor.office,
             capacity_max=supervisor.capacity_max,
             capacity_filled=supervisor.capacity_filled,
-            project_types=supervisor.project_types or [],
+            project_types=[supervisor.project_type] if supervisor.project_type else [],
             requirements=supervisor.requirements or [],
             supervised_groups=supervised_groups,
             domains=domains,
