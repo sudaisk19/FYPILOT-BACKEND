@@ -20,7 +20,7 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain, ProjectTypeEnum
+from app.models.project import Project, ProjectDomain
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
@@ -101,6 +101,7 @@ async def create_group(
     )
     db.add(member)
 
+<<<<<<< HEAD
     # 5) Create a Project row associated with this group (defaults)
     # Check if project already exists for this group
     existing_project_result = await db.execute(
@@ -119,6 +120,17 @@ async def create_group(
     else:
         # Reuse existing project
         project = existing_project
+=======
+    # 5) Commit everything
+    # 5) Create a Project row associated with this group (defaults)
+    project = Project(
+        group_id=grp.group_id,
+        name=grp.name,
+        # project_type will use model default ('capstone') if not provided
+    )
+    db.add(project)
+    await db.flush()  # populate project.project_id
+>>>>>>> bf3f867 (bugs fixing)
 
     # 6) Commit everything
     await db.commit()
@@ -224,6 +236,7 @@ async def send_invite(
     db.add(invite)
     await db.commit()
 
+<<<<<<< HEAD
     # Send the email with proper template
     accept_link = (
         f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
@@ -238,6 +251,17 @@ async def send_invite(
         current_user.full_name,
         accept_link,
         reject_link,
+=======
+    # Send the email
+    link = f"{settings.frontend_url}/groups/{group_id}/invites/{token}/accept"
+    html = (
+        f"<p>Hi {invitee.full_name},</p>"
+        f"<p>{current_user.full_name} invited you to join the group.</p>"
+        f"<p><a href='{link}'>Accept invite</a> (expires in 7 days)</p>"
+    )
+    background_tasks.add_task(
+        get_mailer().send, invitee.email, "FYP Group Invitation", html
+>>>>>>> bf3f867 (bugs fixing)
     )
 
     return {"message": "Invitation sent successfully"}
@@ -259,9 +283,13 @@ async def accept_invite(
         .scalars()
         .first()
     )
+<<<<<<< HEAD
     from datetime import timezone
 
     now = datetime.now(timezone.utc)
+=======
+    now = datetime.utcnow()
+>>>>>>> bf3f867 (bugs fixing)
     if (
         not invite
         or invite.status != InviteStatusEnum.pending
@@ -822,7 +850,15 @@ async def get_group_profile(
                     )
 
             # Handle project_type - convert to string and validate
+<<<<<<< HEAD
             project_type = project_type_value(project_data.project_type) or "capstone"
+=======
+            project_type = (
+                str(project_data.project_type)
+                if project_data.project_type
+                else "capstone"
+            )
+>>>>>>> bf3f867 (bugs fixing)
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
@@ -1096,7 +1132,11 @@ async def update_group_profile(
 
                     await db.execute(
                         text(
+<<<<<<< HEAD
                             "UPDATE projects SET project_type = :project_type WHERE project_id = :project_id"
+=======
+                            "UPDATE projects SET project_type = :project_type::project_type_enum WHERE project_id = :project_id"
+>>>>>>> bf3f867 (bugs fixing)
                         ),
                         {
                             "project_type": project_updates["project_type"],

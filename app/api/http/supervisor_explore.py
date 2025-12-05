@@ -60,6 +60,7 @@ def normalize_department(dept: str) -> str:
     return DEPARTMENT_ALIASES.get(normalized, dept)
 
 
+<<<<<<< HEAD
 @router.get(
     "/supervisors",
     response_model=PaginatedSupervisorResponse,
@@ -100,6 +101,9 @@ def normalize_department(dept: str) -> str:
         },
     },
 )
+=======
+@router.get("/supervisors", response_model=PaginatedSupervisorResponse)
+>>>>>>> bf3f867 (bugs fixing)
 async def explore_supervisors(
     # Query parameters for filtering
     department: Optional[str] = Query(
@@ -214,10 +218,17 @@ async def explore_supervisors(
     if relevance_score is not None:
         query = query.add_columns(relevance_score.label("relevance_score"))
 
+<<<<<<< HEAD
     # Get total count BEFORE pagination (count filtered results only)
     # Build a count query from the same filtered query
     count_subquery = query.subquery()
     count_query = select(func.count()).select_from(count_subquery)
+=======
+    # Get total count for pagination (using same query structure)
+    count_query = select(func.count(User.user_id.distinct())).select_from(
+        query.subquery()
+    )
+>>>>>>> bf3f867 (bugs fixing)
     total = (await db.execute(count_query)).scalar() or 0
 
     # Calculate pagination

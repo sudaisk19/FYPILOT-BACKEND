@@ -398,18 +398,31 @@ class SupervisorProfileResponse(BaseModel):
     office: Optional[str] = None
     requirements: List[str] = Field(default_factory=list)
     project_type: Optional[str] = Field(
+<<<<<<< HEAD
         None,
         description="Project type preference (research|product|product and research)",
+=======
+        None, description="Project type preference (research|product|both)"
+>>>>>>> bf3f867 (bugs fixing)
     )
     capacity_max: int = 8
     capacity_filled: int = 0
 
+<<<<<<< HEAD
     # Domain and industry expertise - now with both ID and name
     domains: List[DomainDetail] = Field(
         default_factory=list, description="List of domains with ID and name"
     )
     industries: List[IndustryDetail] = Field(
         default_factory=list, description="List of industries with ID and name"
+=======
+    # Domain and industry expertise
+    domains: List[str] = Field(
+        default_factory=list, description="List of domain expertise names"
+    )
+    industries: List[str] = Field(
+        default_factory=list, description="List of industry focus names"
+>>>>>>> bf3f867 (bugs fixing)
     )
 
 

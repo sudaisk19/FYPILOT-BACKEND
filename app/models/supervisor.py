@@ -1,9 +1,7 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -51,6 +49,7 @@ class Supervisor(Base):
         default=list,  # Initialize as empty list
     )
 
+<<<<<<< HEAD
     project_type = Column(
         SQLEnum(
             "research",
@@ -62,6 +61,10 @@ class Supervisor(Base):
         nullable=False,
         default="research",
     )
+=======
+    project_type = Column(Text, nullable=False)
+
+>>>>>>> bf3f867 (bugs fixing)
     # Capacity Management
     capacity_max = Column(
         Integer,  # Integer type for max students

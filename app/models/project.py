@@ -3,9 +3,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, Date, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -19,6 +17,7 @@ class ProjectTypeEnum(str, Enum):
     research = "research"
     product = "product"
     product_and_research = "product and research"
+<<<<<<< HEAD
     
 def parse_project_type(value):
     """Normalize input and return ProjectTypeEnum.
@@ -49,6 +48,8 @@ def project_type_value(pt):
         return parse_project_type(pt).value
     except ValueError:
         return str(pt)
+=======
+>>>>>>> bf3f867 (bugs fixing)
 
 
 class Project(Base):
@@ -69,6 +70,7 @@ class Project(Base):
     tech_stack = Column(JSONB, nullable=True)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
+<<<<<<< HEAD
     project_type = Column(
         SQLEnum(
             "research",
@@ -80,6 +82,9 @@ class Project(Base):
         nullable=False,
         default="research",
     )
+=======
+    project_type = Column(Text, nullable=False, default=ProjectTypeEnum.research.value)
+>>>>>>> bf3f867 (bugs fixing)
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
     )
