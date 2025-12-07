@@ -36,9 +36,9 @@ class Group(Base):
     group_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
     fyp_stage = Column(
-        SQLEnum(FYPStageEnum, name="fyp_stage_enum", create_type=False),
+        Text,
         nullable=False,
-        default=FYPStageEnum.ideation,
+        default="ideation",
     )
     fyp_cycle = Column(
         SQLEnum(FYPCycleEnum, name="fyp_cycle_enum", create_type=False),

@@ -87,10 +87,6 @@ class GroupProfileResponse(BaseModel):
 # PATCH Request Schemas
 class GroupUpdateData(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    fyp_stage: Optional[str] = Field(
-        None,
-        pattern="^(ideation|proposal|approval|implementation|evaluation|completed)$",
-    )
     fyp_cycle: Optional[str] = Field(None, pattern="^(fyp1|fyp2)$")
     cohort_year: Optional[int] = Field(None, ge=2020, le=2030)
     supervisor_id: Optional[UUID] = None
