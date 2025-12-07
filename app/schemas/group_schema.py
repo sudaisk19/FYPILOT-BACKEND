@@ -106,7 +106,9 @@ class ProjectUpdateData(BaseModel):
     industry_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    project_type: Optional[str] = Field(None, pattern="^(capstone|research|industry)$")
+    project_type: Optional[str] = Field(
+        None, pattern="^(research|product|product and research)$"
+    )
     repo_links: Optional[List[str]] = Field(None, max_items=10)
 
 

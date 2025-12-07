@@ -1,7 +1,7 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, Enum, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -49,7 +49,16 @@ class Supervisor(Base):
         default=list,  # Initialize as empty list
     )
 
-    project_type = Column(Text, nullable=False)
+    project_type = Column(
+        Enum(
+            "research",
+            "product",
+            "product and research",
+            name="project_type_enum",
+            native_enum=False,
+        ),
+        nullable=False,
+    )
 
     # Capacity Management
     capacity_max = Column(

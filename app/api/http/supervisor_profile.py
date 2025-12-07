@@ -70,16 +70,22 @@ async def get_supervisor_profile(
             designation=None,
             office=None,
             requirements=[],
-            project_types=None,
+            project_type=None,
             capacity_max=8,  # Default value
             capacity_filled=0,
             domains=[],
             industries=[],
         )
 
-    # Extract domain and industry names
-    domain_names = [domain.name for domain in user.supervisor_profile.domains]
-    industry_names = [industry.name for industry in user.supervisor_profile.industries]
+    # Extract domain and industry details (ID and name)
+    domain_details = [
+        {"domain_id": domain.domain_id, "name": domain.name}
+        for domain in user.supervisor_profile.domains
+    ]
+    industry_details = [
+        {"industry_id": industry.industry_id, "name": industry.name}
+        for industry in user.supervisor_profile.industries
+    ]
 
     # Get project type (single value)
     project_type = None
@@ -102,8 +108,8 @@ async def get_supervisor_profile(
         project_type=project_type,
         capacity_max=user.supervisor_profile.capacity_max,
         capacity_filled=user.supervisor_profile.capacity_filled,
-        domains=domain_names,
-        industries=industry_names,
+        domains=domain_details,
+        industries=industry_details,
     )
 
 
@@ -199,15 +205,17 @@ async def complete_supervisor_wizard_profile(
         )
         updated_user = result.scalar_one()
 
-        # Extract domain and industry names
-        domain_names = []
-        industry_names = []
+        # Extract domain and industry details (ID and name)
+        domain_details = []
+        industry_details = []
         if updated_user.supervisor_profile:
-            domain_names = [
-                domain.name for domain in updated_user.supervisor_profile.domains
+            domain_details = [
+                {"domain_id": domain.domain_id, "name": domain.name}
+                for domain in updated_user.supervisor_profile.domains
             ]
-            industry_names = [
-                industry.name for industry in updated_user.supervisor_profile.industries
+            industry_details = [
+                {"industry_id": industry.industry_id, "name": industry.name}
+                for industry in updated_user.supervisor_profile.industries
             ]
 
         # Get project type (single value)
@@ -243,7 +251,7 @@ async def complete_supervisor_wizard_profile(
                 else None
             ),
             requirements=updated_user.supervisor_profile.requirements or [],
-            project_types=project_type,
+            project_type=project_type,
             capacity_max=(
                 updated_user.supervisor_profile.capacity_max
                 if updated_user.supervisor_profile
@@ -254,8 +262,8 @@ async def complete_supervisor_wizard_profile(
                 if updated_user.supervisor_profile
                 else 0
             ),
-            domains=domain_names,
-            industries=industry_names,
+            domains=domain_details,
+            industries=industry_details,
         )
 
         return SupervisorProfileUpdateResponse(
@@ -342,6 +350,7 @@ async def update_supervisor_profile(
 
         # Prepare supervisor updates - only include non-empty values
         supervisor_updates = {}
+
         if profile_data.department is not None and profile_data.department.strip():
             supervisor_updates["department"] = profile_data.department.strip()
         if profile_data.designation is not None and profile_data.designation.strip():
@@ -350,58 +359,56 @@ async def update_supervisor_profile(
             supervisor_updates["office"] = profile_data.office.strip()
         if profile_data.requirements is not None and profile_data.requirements:
             supervisor_updates["requirements"] = profile_data.requirements
-        if profile_data.project_type is not None:
-            supervisor_updates["project_type"] = profile_data.project_type
         if profile_data.capacity_max is not None:
             supervisor_updates["capacity_max"] = profile_data.capacity_max
 
-        # Update supervisor table if there are changes
-        if supervisor_updates:
-            await db.execute(
-                update(Supervisor)
-                .where(Supervisor.user_id == current_user.user_id)
-                .values(**supervisor_updates)
+        # Fetch domains and industries FIRST (before any modifications)
+        domains_to_add = []
+        if profile_data.domains:
+            domain_result = await db.execute(
+                select(Domain).where(Domain.domain_id.in_(profile_data.domains))
             )
+            domains_to_add = domain_result.scalars().all()
+
+        industries_to_add = []
+        if profile_data.industries:
+            industry_result = await db.execute(
+                select(Industry).where(
+                    Industry.industry_id.in_(profile_data.industries)
+                )
+            )
+            industries_to_add = industry_result.scalars().all()
+
+        # Fetch supervisor WITH eager-loaded relationships (like in group profile)
+        supervisor_result = await db.execute(
+            select(Supervisor)
+            .options(
+                selectinload(Supervisor.domains),
+                selectinload(Supervisor.industries),
+            )
+            .where(Supervisor.user_id == current_user.user_id)
+        )
+        supervisor = supervisor_result.scalar_one()
+
+        # Apply supervisor attribute updates
+        for key, value in supervisor_updates.items():
+            setattr(supervisor, key, value)
+
+        # Handle project_type update
+        if profile_data.project_type is not None:
+            supervisor.project_type = profile_data.project_type
 
         # Handle domains update
         if profile_data.domains is not None:
-            # Fetch supervisor to update relationships
-            result = await db.execute(
-                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
-            )
-            supervisor = result.scalar_one()
-
-            # Clear existing domains
             supervisor.domains.clear()
-
-            # Fetch and add new domains by name
-            if profile_data.domains:
-                domain_result = await db.execute(
-                    select(Domain).where(Domain.name.in_(profile_data.domains))
-                )
-                domains = domain_result.scalars().all()
-                supervisor.domains.extend(domains)
+            supervisor.domains.extend(domains_to_add)
 
         # Handle industries update
         if profile_data.industries is not None:
-            # Fetch supervisor to update relationships
-            result = await db.execute(
-                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
-            )
-            supervisor = result.scalar_one()
-
-            # Clear existing industries
             supervisor.industries.clear()
+            supervisor.industries.extend(industries_to_add)
 
-            # Fetch and add new industries by name
-            if profile_data.industries:
-                industry_result = await db.execute(
-                    select(Industry).where(Industry.name.in_(profile_data.industries))
-                )
-                industries = industry_result.scalars().all()
-                supervisor.industries.extend(industries)
-
-        # Commit transaction
+        # Commit all changes together
         await db.commit()
 
         # Fetch updated user and supervisor profile with domains and industries
@@ -417,15 +424,17 @@ async def update_supervisor_profile(
         )
         updated_user = result.scalar_one()
 
-        # Extract domain and industry names
-        domain_names = []
-        industry_names = []
+        # Extract domain and industry details (ID and name)
+        domain_details = []
+        industry_details = []
         if updated_user.supervisor_profile:
-            domain_names = [
-                domain.name for domain in updated_user.supervisor_profile.domains
+            domain_details = [
+                {"domain_id": domain.domain_id, "name": domain.name}
+                for domain in updated_user.supervisor_profile.domains
             ]
-            industry_names = [
-                industry.name for industry in updated_user.supervisor_profile.industries
+            industry_details = [
+                {"industry_id": industry.industry_id, "name": industry.name}
+                for industry in updated_user.supervisor_profile.industries
             ]
 
         # Get project type (single value)
@@ -472,8 +481,8 @@ async def update_supervisor_profile(
                 if updated_user.supervisor_profile
                 else 0
             ),
-            domains=domain_names,
-            industries=industry_names,
+            domains=domain_details,
+            industries=industry_details,
         )
 
         return SupervisorProfileUpdateResponse(
@@ -482,6 +491,10 @@ async def update_supervisor_profile(
 
     except Exception as e:
         await db.rollback()
+        import traceback
+
+        error_detail = f"Failed to update profile: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log to console for debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile: {str(e)}",

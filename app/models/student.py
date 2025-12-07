@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import (
     JSONB,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID  # Postgres-specific types
+from sqlalchemy.ext.hybrid import hybrid_property  # For hybrid properties
 from sqlalchemy.orm import relationship  # For ORM relationships
 
 from app.db import Base  # Base class for declarative models
@@ -75,6 +76,39 @@ class Student(Base):
         nullable=False,  # Required field
         default=dict,  # Initialize as empty dict
     )
+
+    @hybrid_property
+    def skills_levels_normalized(self):
+        """
+        Returns skills_levels with all skills having a default level of 1 if not specified.
+        This ensures consistency: if a skill exists in the skills array but not in skills_levels,
+        it defaults to level 1.
+
+        Returns:
+            dict: Normalized skills_levels mapping with default 1 for missing skills
+        """
+        levels = self.skills_levels or {}
+        normalized = levels.copy()
+
+        # Add default level 1 for any skills not in the mapping
+        if self.skills:
+            for skill in self.skills:
+                if skill not in normalized:
+                    normalized[skill] = 1
+
+        return normalized
+
+    def normalize_skills_levels_for_save(self):
+        """
+        Call this before saving to ensure skills_levels in DB has default 1 for all skills.
+        Updates the skills_levels column in place.
+        """
+        if self.skills:
+            normalized = self.skills_levels.copy() if self.skills_levels else {}
+            for skill in self.skills:
+                if skill not in normalized:
+                    normalized[skill] = 1
+            self.skills_levels = normalized
 
     # Relationship to User model (bidirectional)
     user = relationship(

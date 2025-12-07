@@ -183,15 +183,16 @@ class SupervisorProfilePatchUpdate(BaseModel):
     requirements: Optional[List[str]] = Field(None, max_items=20)
     project_type: Optional[str] = Field(
         None,
+        pattern="^(research|product|product and research)$",
         description="Single project type: research, product, or product and research",
     )
 
     # Preference fields (mutable)
-    domains: Optional[List[str]] = Field(
-        None, max_items=50, description="List of domain names"
+    domains: Optional[List[UUID]] = Field(
+        None, max_items=50, description="List of domain IDs"
     )
-    industries: Optional[List[str]] = Field(
-        None, max_items=50, description="List of industry names"
+    industries: Optional[List[UUID]] = Field(
+        None, max_items=50, description="List of industry IDs"
     )
     capacity_max: Optional[int] = Field(
         None, ge=1, le=20, description="Maximum student capacity"
@@ -358,6 +359,23 @@ class StudentProfileResponse(BaseModel):
     group: Optional[GroupInfo] = None
 
 
+# Domain and Industry detail models
+class DomainDetail(BaseModel):
+    domain_id: UUID = Field(..., alias="id")
+    name: str
+
+    class Config:
+        populate_by_name = True
+
+
+class IndustryDetail(BaseModel):
+    industry_id: UUID = Field(..., alias="id")
+    name: str
+
+    class Config:
+        populate_by_name = True
+
+
 # Response schemas for PATCH endpoints (with success messages)
 class StudentProfileUpdateResponse(BaseModel):
     message: str = "Student profile updated successfully"
@@ -380,17 +398,18 @@ class SupervisorProfileResponse(BaseModel):
     office: Optional[str] = None
     requirements: List[str] = Field(default_factory=list)
     project_type: Optional[str] = Field(
-        None, description="Project type preference (research|product|both)"
+        None,
+        description="Project type preference (research|product|product and research)",
     )
     capacity_max: int = 8
     capacity_filled: int = 0
 
-    # Domain and industry expertise
-    domains: List[str] = Field(
-        default_factory=list, description="List of domain expertise names"
+    # Domain and industry expertise - now with both ID and name
+    domains: List[DomainDetail] = Field(
+        default_factory=list, description="List of domains with ID and name"
     )
-    industries: List[str] = Field(
-        default_factory=list, description="List of industry focus names"
+    industries: List[IndustryDetail] = Field(
+        default_factory=list, description="List of industries with ID and name"
     )
 
 

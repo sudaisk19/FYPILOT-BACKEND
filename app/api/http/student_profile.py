@@ -200,7 +200,7 @@ async def get_student_profile(
         experience=user.student_profile.experience,
         portfolio_projects=user.student_profile.portfolio_projects,
         skills=user.student_profile.skills or [],
-        skills_levels=user.student_profile.skills_levels or {},
+        skills_levels=user.student_profile.skills_levels_normalized,
         # Group information
         group=group_info,
     )
@@ -304,10 +304,25 @@ async def complete_student_wizard_profile(
 
             # Create new student profile with all provided data
             student_profile = Student(user_id=current_user.user_id, **student_updates)
+            # Normalize skills_levels before saving to ensure all skills have default level 1
+            student_profile.normalize_skills_levels_for_save()
             db.add(student_profile)
         else:
             # Update existing student profile if there are changes
             if student_updates:
+                # Ensure skills_levels is normalized before updating
+                if "skills" in student_updates or "skills_levels" in student_updates:
+                    # Create temporary object to normalize
+                    temp_student = Student()
+                    temp_student.skills = student_updates.get(
+                        "skills", student_profile.skills
+                    )
+                    temp_student.skills_levels = student_updates.get(
+                        "skills_levels", student_profile.skills_levels
+                    )
+                    temp_student.normalize_skills_levels_for_save()
+                    student_updates["skills_levels"] = temp_student.skills_levels
+
                 await db.execute(
                     update(Student)
                     .where(Student.user_id == current_user.user_id)
@@ -478,6 +493,19 @@ async def update_student_profile(
 
         # Update student table if there are changes
         if student_updates:
+            # Ensure skills_levels is normalized before updating
+            if "skills" in student_updates or "skills_levels" in student_updates:
+                # Create temporary object to normalize
+                temp_student = Student()
+                temp_student.skills = student_updates.get(
+                    "skills", student_profile.skills
+                )
+                temp_student.skills_levels = student_updates.get(
+                    "skills_levels", student_profile.skills_levels
+                )
+                temp_student.normalize_skills_levels_for_save()
+                student_updates["skills_levels"] = temp_student.skills_levels
+
             await db.execute(
                 update(Student)
                 .where(Student.user_id == current_user.user_id)
@@ -513,7 +541,7 @@ async def update_student_profile(
             experience=updated_user.student_profile.experience,
             portfolio_projects=updated_user.student_profile.portfolio_projects,
             skills=updated_user.student_profile.skills or [],
-            skills_levels=updated_user.student_profile.skills_levels or {},
+            skills_levels=updated_user.student_profile.skills_levels_normalized,
             # Group information (will be None if not in a group)
             group=None,
         )

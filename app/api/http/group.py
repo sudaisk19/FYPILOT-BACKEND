@@ -903,7 +903,7 @@ async def update_group_profile(
 
                     await db.execute(
                         text(
-                            "UPDATE projects SET project_type = :project_type::project_type_enum WHERE project_id = :project_id"
+                            "UPDATE projects SET project_type = :project_type WHERE project_id = :project_id"
                         ),
                         {
                             "project_type": project_updates["project_type"],

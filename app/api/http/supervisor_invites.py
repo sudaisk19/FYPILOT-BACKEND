@@ -633,14 +633,10 @@ async def get_request_details_for_supervisor(
                             )
                         )
 
-        # Get skills_levels from JSONB field
+        # Get skills_levels from JSONB field - use normalized version for consistency
         # skills_levels is a JSONB dict mapping skill names to levels (1-5)
-        # Fill missing skills with default level 1
-        skills_levels = student.skills_levels if student.skills_levels else {}
-        if student.skills:
-            for skill in student.skills:
-                if skill not in skills_levels:
-                    skills_levels[skill] = 1  # Default level for missing skills
+        # The normalized property ensures all skills have a level (default 1 if missing)
+        skills_levels = student.skills_levels_normalized
 
         students.append(
             StudentDetail(
