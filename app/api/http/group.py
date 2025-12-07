@@ -253,7 +253,7 @@ async def send_invite(
         reject_link,
 =======
     # Send the email
-    link = f"{settings.frontend_url}/groups/{group_id}/invites/{token}/accept"
+    link = f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
     html = (
         f"<p>Hi {invitee.full_name},</p>"
         f"<p>{current_user.full_name} invited you to join the group.</p>"
