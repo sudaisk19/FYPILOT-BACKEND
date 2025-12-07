@@ -1,7 +1,7 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, Enum, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -50,12 +50,18 @@ class Supervisor(Base):
     )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     project_type = Column(
         SQLEnum(
+=======
+    project_type = Column(
+        Enum(
+>>>>>>> 4c72848 (chore: bugs fixing)
             "research",
             "product",
             "product and research",
             name="project_type_enum",
+<<<<<<< HEAD
             create_type=False,
         ),
         nullable=False,
@@ -63,6 +69,12 @@ class Supervisor(Base):
     )
 =======
     project_type = Column(Text, nullable=False)
+=======
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+>>>>>>> 4c72848 (chore: bugs fixing)
 
 >>>>>>> bf3f867 (bugs fixing)
     # Capacity Management

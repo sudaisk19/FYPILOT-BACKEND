@@ -184,13 +184,18 @@ class SupervisorProfilePatchUpdate(BaseModel):
     project_type: Optional[str] = Field(
         None,
 <<<<<<< HEAD
+<<<<<<< HEAD
         pattern="^(research|product|product and research)$",
 =======
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+        pattern="^(research|product|product and research)$",
+>>>>>>> 4c72848 (chore: bugs fixing)
         description="Single project type: research, product, or product and research",
     )
 
     # Preference fields (mutable)
+<<<<<<< HEAD
 <<<<<<< HEAD
     domains: Optional[List[UUID]] = Field(
         None, max_items=50, description="List of domain IDs"
@@ -204,6 +209,13 @@ class SupervisorProfilePatchUpdate(BaseModel):
     industries: Optional[List[str]] = Field(
         None, max_items=50, description="List of industry names"
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+    domains: Optional[List[UUID]] = Field(
+        None, max_items=50, description="List of domain IDs"
+    )
+    industries: Optional[List[UUID]] = Field(
+        None, max_items=50, description="List of industry IDs"
+>>>>>>> 4c72848 (chore: bugs fixing)
     )
     capacity_max: Optional[int] = Field(
         None, ge=1, le=20, description="Maximum student capacity"
@@ -410,15 +422,21 @@ class SupervisorProfileResponse(BaseModel):
     requirements: List[str] = Field(default_factory=list)
     project_type: Optional[str] = Field(
 <<<<<<< HEAD
+<<<<<<< HEAD
         None,
         description="Project type preference (research|product|product and research)",
 =======
         None, description="Project type preference (research|product|both)"
 >>>>>>> bf3f867 (bugs fixing)
+=======
+        None,
+        description="Project type preference (research|product|product and research)",
+>>>>>>> 4c72848 (chore: bugs fixing)
     )
     capacity_max: int = 8
     capacity_filled: int = 0
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     # Domain and industry expertise - now with both ID and name
     domains: List[DomainDetail] = Field(
@@ -434,6 +452,14 @@ class SupervisorProfileResponse(BaseModel):
     industries: List[str] = Field(
         default_factory=list, description="List of industry focus names"
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    # Domain and industry expertise - now with both ID and name
+    domains: List[DomainDetail] = Field(
+        default_factory=list, description="List of domains with ID and name"
+    )
+    industries: List[IndustryDetail] = Field(
+        default_factory=list, description="List of industries with ID and name"
+>>>>>>> 4c72848 (chore: bugs fixing)
     )
 
 

@@ -71,10 +71,14 @@ async def get_supervisor_profile(
             office=None,
             requirements=[],
 <<<<<<< HEAD
+<<<<<<< HEAD
             project_type=None,
 =======
             project_types=None,
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            project_type=None,
+>>>>>>> 4c72848 (chore: bugs fixing)
             capacity_max=8,  # Default value
             capacity_filled=0,
             domains=[],
@@ -82,6 +86,9 @@ async def get_supervisor_profile(
         )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 4c72848 (chore: bugs fixing)
     # Extract domain and industry details (ID and name)
     domain_details = [
         {"domain_id": domain.domain_id, "name": domain.name}
@@ -91,11 +98,14 @@ async def get_supervisor_profile(
         {"industry_id": industry.industry_id, "name": industry.name}
         for industry in user.supervisor_profile.industries
     ]
+<<<<<<< HEAD
 =======
     # Extract domain and industry names
     domain_names = [domain.name for domain in user.supervisor_profile.domains]
     industry_names = [industry.name for industry in user.supervisor_profile.industries]
 >>>>>>> bf3f867 (bugs fixing)
+=======
+>>>>>>> 4c72848 (chore: bugs fixing)
 
     # Get project type (single value)
     project_type = None
@@ -119,12 +129,17 @@ async def get_supervisor_profile(
         capacity_max=user.supervisor_profile.capacity_max,
         capacity_filled=user.supervisor_profile.capacity_filled,
 <<<<<<< HEAD
+<<<<<<< HEAD
         domains=domain_details,
         industries=industry_details,
 =======
         domains=domain_names,
         industries=industry_names,
 >>>>>>> bf3f867 (bugs fixing)
+=======
+        domains=domain_details,
+        industries=industry_details,
+>>>>>>> 4c72848 (chore: bugs fixing)
     )
 
 
@@ -221,6 +236,7 @@ async def complete_supervisor_wizard_profile(
         updated_user = result.scalar_one()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Extract domain and industry details (ID and name)
         domain_details = []
         industry_details = []
@@ -236,13 +252,25 @@ async def complete_supervisor_wizard_profile(
         # Extract domain and industry names
         domain_names = []
         industry_names = []
+=======
+        # Extract domain and industry details (ID and name)
+        domain_details = []
+        industry_details = []
+>>>>>>> 4c72848 (chore: bugs fixing)
         if updated_user.supervisor_profile:
-            domain_names = [
-                domain.name for domain in updated_user.supervisor_profile.domains
+            domain_details = [
+                {"domain_id": domain.domain_id, "name": domain.name}
+                for domain in updated_user.supervisor_profile.domains
             ]
+<<<<<<< HEAD
             industry_names = [
                 industry.name for industry in updated_user.supervisor_profile.industries
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            industry_details = [
+                {"industry_id": industry.industry_id, "name": industry.name}
+                for industry in updated_user.supervisor_profile.industries
+>>>>>>> 4c72848 (chore: bugs fixing)
             ]
 
         # Get project type (single value)
@@ -287,8 +315,12 @@ async def complete_supervisor_wizard_profile(
             project_type=project_type,
 =======
             requirements=updated_user.supervisor_profile.requirements or [],
+<<<<<<< HEAD
             project_types=project_type,
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            project_type=project_type,
+>>>>>>> 4c72848 (chore: bugs fixing)
             capacity_max=(
                 updated_user.supervisor_profile.capacity_max
                 if updated_user.supervisor_profile
@@ -300,12 +332,17 @@ async def complete_supervisor_wizard_profile(
                 else 0
             ),
 <<<<<<< HEAD
+<<<<<<< HEAD
             domains=domain_details,
             industries=industry_details,
 =======
             domains=domain_names,
             industries=industry_names,
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            domains=domain_details,
+            industries=industry_details,
+>>>>>>> 4c72848 (chore: bugs fixing)
         )
 
         return SupervisorProfileUpdateResponse(
@@ -393,9 +430,13 @@ async def update_supervisor_profile(
         # Prepare supervisor updates - only include non-empty values
         supervisor_updates = {}
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+
+>>>>>>> 4c72848 (chore: bugs fixing)
         if profile_data.department is not None and profile_data.department.strip():
             supervisor_updates["department"] = profile_data.department.strip()
         if profile_data.designation is not None and profile_data.designation.strip():
@@ -405,10 +446,13 @@ async def update_supervisor_profile(
         if profile_data.requirements is not None and profile_data.requirements:
             supervisor_updates["requirements"] = profile_data.requirements
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         if profile_data.project_type is not None:
             supervisor_updates["project_type"] = profile_data.project_type
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+>>>>>>> 4c72848 (chore: bugs fixing)
         if profile_data.capacity_max is not None:
             supervisor_updates["capacity_max"] = profile_data.capacity_max
 
@@ -419,6 +463,37 @@ async def update_supervisor_profile(
                 select(Domain).where(Domain.domain_id.in_(profile_data.domains))
             )
             domains_to_add = domain_result.scalars().all()
+<<<<<<< HEAD
+=======
+
+        industries_to_add = []
+        if profile_data.industries:
+            industry_result = await db.execute(
+                select(Industry).where(
+                    Industry.industry_id.in_(profile_data.industries)
+                )
+            )
+            industries_to_add = industry_result.scalars().all()
+
+        # Fetch supervisor WITH eager-loaded relationships (like in group profile)
+        supervisor_result = await db.execute(
+            select(Supervisor)
+            .options(
+                selectinload(Supervisor.domains),
+                selectinload(Supervisor.industries),
+            )
+            .where(Supervisor.user_id == current_user.user_id)
+        )
+        supervisor = supervisor_result.scalar_one()
+
+        # Apply supervisor attribute updates
+        for key, value in supervisor_updates.items():
+            setattr(supervisor, key, value)
+
+        # Handle project_type update
+        if profile_data.project_type is not None:
+            supervisor.project_type = profile_data.project_type
+>>>>>>> 4c72848 (chore: bugs fixing)
 
 <<<<<<< HEAD
         industries_to_add = []
@@ -463,34 +538,15 @@ async def update_supervisor_profile(
 =======
         # Handle domains update
         if profile_data.domains is not None:
-            # Fetch supervisor to update relationships
-            result = await db.execute(
-                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
-            )
-            supervisor = result.scalar_one()
-
-            # Clear existing domains
             supervisor.domains.clear()
-
-            # Fetch and add new domains by name
-            if profile_data.domains:
-                domain_result = await db.execute(
-                    select(Domain).where(Domain.name.in_(profile_data.domains))
-                )
-                domains = domain_result.scalars().all()
-                supervisor.domains.extend(domains)
+            supervisor.domains.extend(domains_to_add)
 
         # Handle industries update
         if profile_data.industries is not None:
-            # Fetch supervisor to update relationships
-            result = await db.execute(
-                select(Supervisor).where(Supervisor.user_id == current_user.user_id)
-            )
-            supervisor = result.scalar_one()
-
-            # Clear existing industries
             supervisor.industries.clear()
+            supervisor.industries.extend(industries_to_add)
 
+<<<<<<< HEAD
             # Fetch and add new industries by name
             if profile_data.industries:
                 industry_result = await db.execute(
@@ -501,6 +557,9 @@ async def update_supervisor_profile(
 
         # Commit transaction
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+        # Commit all changes together
+>>>>>>> 4c72848 (chore: bugs fixing)
         await db.commit()
 
         # Fetch updated user and supervisor profile with domains and industries
@@ -517,6 +576,7 @@ async def update_supervisor_profile(
         updated_user = result.scalar_one()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Extract domain and industry details (ID and name)
         domain_details = []
         industry_details = []
@@ -532,13 +592,25 @@ async def update_supervisor_profile(
         # Extract domain and industry names
         domain_names = []
         industry_names = []
+=======
+        # Extract domain and industry details (ID and name)
+        domain_details = []
+        industry_details = []
+>>>>>>> 4c72848 (chore: bugs fixing)
         if updated_user.supervisor_profile:
-            domain_names = [
-                domain.name for domain in updated_user.supervisor_profile.domains
+            domain_details = [
+                {"domain_id": domain.domain_id, "name": domain.name}
+                for domain in updated_user.supervisor_profile.domains
             ]
+<<<<<<< HEAD
             industry_names = [
                 industry.name for industry in updated_user.supervisor_profile.industries
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            industry_details = [
+                {"industry_id": industry.industry_id, "name": industry.name}
+                for industry in updated_user.supervisor_profile.industries
+>>>>>>> 4c72848 (chore: bugs fixing)
             ]
 
         # Get project type (single value)
@@ -595,12 +667,17 @@ async def update_supervisor_profile(
                 else 0
             ),
 <<<<<<< HEAD
+<<<<<<< HEAD
             domains=domain_details,
             industries=industry_details,
 =======
             domains=domain_names,
             industries=industry_names,
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            domains=domain_details,
+            industries=industry_details,
+>>>>>>> 4c72848 (chore: bugs fixing)
         )
 
         return SupervisorProfileUpdateResponse(

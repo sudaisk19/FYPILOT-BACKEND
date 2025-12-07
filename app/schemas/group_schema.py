@@ -132,12 +132,18 @@ class ProjectUpdateData(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
 <<<<<<< HEAD
+<<<<<<< HEAD
     project_type: Optional[str] = Field(
         None, pattern="^(research|product|product and research)$"
     )
 =======
     project_type: Optional[str] = Field(None, pattern="^(capstone|research|industry)$")
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    project_type: Optional[str] = Field(
+        None, pattern="^(research|product|product and research)$"
+    )
+>>>>>>> 4c72848 (chore: bugs fixing)
     repo_links: Optional[List[str]] = Field(None, max_items=10)
 
 
