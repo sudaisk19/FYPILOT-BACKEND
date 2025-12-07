@@ -162,6 +162,21 @@ async def send_invite(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User is already in a group"
         )
 
+    # Check for existing pending invite to this group
+    from sqlalchemy import text
+
+    existing_invite_result = await db.execute(
+        text(
+            "SELECT * FROM group_invites WHERE group_id = :group_id AND invitee_id = :invitee_id AND status = :status"
+        ),
+        {"group_id": group_id, "invitee_id": student.user_id, "status": "pending"},
+    )
+    if existing_invite_result.first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This user already has a pending invite to this group",
+        )
+
     # Capacity check (members + pending invites < 3)
     m_count = (
         await db.execute(
@@ -171,8 +186,6 @@ async def send_invite(
         )
     ).scalar_one()
     # Get pending invites count using raw SQL to avoid enum constraint issues
-    from sqlalchemy import text
-
     pending_result = await db.execute(
         text(
             "SELECT COUNT(*) FROM group_invites WHERE group_id = :group_id AND status = :status"
@@ -200,7 +213,7 @@ async def send_invite(
     await db.commit()
 
     # Send the email
-    link = f"{settings.frontend_url}/groups/{group_id}/invites/{token}/accept"
+    link = f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
     html = (
         f"<p>Hi {invitee.full_name},</p>"
         f"<p>{current_user.full_name} invited you to join the group.</p>"
