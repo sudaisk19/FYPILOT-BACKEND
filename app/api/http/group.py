@@ -242,7 +242,9 @@ async def accept_invite(
         .scalars()
         .first()
     )
-    now = datetime.utcnow()
+    from datetime import timezone
+
+    now = datetime.now(timezone.utc)
     if (
         not invite
         or invite.status != InviteStatusEnum.pending
