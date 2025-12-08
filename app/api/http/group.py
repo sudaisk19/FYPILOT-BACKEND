@@ -28,6 +28,7 @@ from app.schemas.group_schema import (
     CreateGroupRequest,
     DeleteGroupResponse,
     DomainInfo,
+    GroupInvitesInfo,
     GroupMemberInfo,
     GroupProfileResponse,
     GroupProfileUpdateRequest,
@@ -36,6 +37,7 @@ from app.schemas.group_schema import (
     IndustryInfo,
     InviteRequest,
     MessageResponse,
+    PendingInviteInfo,
     ProjectInfo,
     SupervisorInfo,
 )
@@ -307,7 +309,67 @@ async def accept_invite(
     invite.status = InviteStatusEnum.accepted
 
     await db.commit()
-    return {"message": "You’ve joined the group!"}
+    return {"message": "You've joined the group!"}
+
+
+@router.delete(
+    "/invites/{invite_id}",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def cancel_invite(
+    invite_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a pending group invite.
+
+    Any group member can delete a pending invite.
+    The invite must be in 'pending' status and will be permanently removed.
+
+    Args:
+        invite_id (str): UUID of the invite to delete
+        db (AsyncSession): Database session
+        current_user (User): Current authenticated user (must be group member)
+
+    Returns:
+        MessageResponse: Confirmation of deletion
+
+    Raises:
+        HTTPException(404): Invite not found or not pending
+        HTTPException(403): User is not a member of the group
+    """
+    # Fetch invite
+    invite_result = await db.execute(
+        select(GroupInvite).where(GroupInvite.invite_id == invite_id)
+    )
+    invite = invite_result.scalars().first()
+
+    if not invite or invite.status != InviteStatusEnum.pending:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invite not found or is no longer pending",
+        )
+
+    # Check if current user is a member of the group
+    is_member = await db.execute(
+        select(GroupMember).where(
+            GroupMember.group_id == invite.group_id,
+            GroupMember.student_id == current_user.user_id,
+        )
+    )
+    if not is_member.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only group members can delete invites",
+        )
+
+    # Delete the invite
+    await db.execute(delete(GroupInvite).where(GroupInvite.invite_id == invite_id))
+    await db.commit()
+
+    return {"message": "Invite has been deleted"}
 
 
 @router.post(
@@ -685,16 +747,39 @@ async def get_group_profile(
                 updated_at=project_data.updated_at,
             )
 
-        # Get pending invites count using raw SQL to avoid enum constraint issues
+        # Get pending invites with inviter details
         from sqlalchemy import text
 
-        invites_count_result = await db.execute(
-            text(
-                "SELECT COUNT(*) FROM group_invites WHERE group_id = :group_id AND status = :status"
-            ),
-            {"group_id": group_id, "status": "pending"},
+        pending_invites_result = await db.execute(
+            select(GroupInvite, User)
+            .join(User, User.user_id == GroupInvite.inviter_id)
+            .where(
+                GroupInvite.group_id == group_id,
+                GroupInvite.status == InviteStatusEnum.pending,
+            )
+            .order_by(GroupInvite.created_at.desc())
         )
-        pending_count = invites_count_result.scalar_one()
+        pending_invites_data = pending_invites_result.all()
+
+        # Build pending invites list with inviter info
+        pending_invites_list = []
+        for invite, inviter_user in pending_invites_data:
+            pending_invites_list.append(
+                PendingInviteInfo(
+                    invite_id=str(invite.invite_id),
+                    inviter_id=str(inviter_user.user_id),
+                    inviter_full_name=inviter_user.full_name,
+                    inviter_avatar=inviter_user.profile_avatar,
+                    created_at=invite.created_at.isoformat(),
+                    expires_at=invite.expires_at.isoformat(),
+                )
+            )
+
+        # Create invites info object
+        invites_info = GroupInvitesInfo(
+            pending_count=len(pending_invites_list),
+            pending=pending_invites_list,
+        )
 
         # Build group basic info
         group_info = {
@@ -712,7 +797,7 @@ async def get_group_profile(
             members=members,
             supervisors=supervisors,
             project=project,
-            invites={"pending_count": pending_count},
+            invites=invites_info,
         )
 
     except Exception as e:

@@ -9,7 +9,7 @@ from fastapi.exceptions import (
 )
 from fastapi.responses import JSONResponse
 
-# Use Uvicorn’s logger so uncaught errors still show up in your logs
+# Use Uvicorn's logger so uncaught errors still show up in your logs
 logger = logging.getLogger("uvicorn.error")
 
 

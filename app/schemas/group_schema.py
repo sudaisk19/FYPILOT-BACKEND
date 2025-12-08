@@ -49,6 +49,32 @@ class SupervisorInfo(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class PendingInviteInfo(BaseModel):
+    """Info about a pending invite to a user"""
+
+    invite_id: str = Field(..., description="UUID of the invite as string")
+    inviter_id: str = Field(..., description="UUID of the inviter as string")
+    inviter_full_name: str = Field(
+        ..., description="Full name of the user who sent the invite"
+    )
+    inviter_avatar: Optional[str] = Field(None, description="Avatar URL of the inviter")
+    created_at: str = Field(
+        ..., description="ISO format datetime string when invite was created"
+    )
+    expires_at: str = Field(
+        ..., description="ISO format datetime string when invite expires"
+    )
+
+
+class GroupInvitesInfo(BaseModel):
+    """Information about group invites"""
+
+    pending_count: int = Field(..., description="Number of pending invites")
+    pending: List[PendingInviteInfo] = Field(
+        default_factory=list, description="List of pending invites with inviter details"
+    )
+
+
 class DomainInfo(BaseModel):
     domain_id: UUID
     name: str
@@ -81,7 +107,9 @@ class GroupProfileResponse(BaseModel):
         default_factory=lambda: {"primary": None, "co_supervisor": None}
     )
     project: Optional[ProjectInfo] = None
-    invites: Dict[str, int] = Field(default_factory=lambda: {"pending_count": 0})
+    invites: GroupInvitesInfo = Field(
+        ..., description="Pending invites with inviter details"
+    )
 
 
 # PATCH Request Schemas
