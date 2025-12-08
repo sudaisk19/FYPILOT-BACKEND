@@ -361,6 +361,7 @@ async def accept_invite(
     return {"message": "You've joined the group!"}
 
 
+<<<<<<< HEAD
 @router.post(
     "/invites/{token}/reject",
     response_model=MessageResponse,
@@ -423,24 +424,40 @@ async def reject_invite(
 
 @router.delete(
     "/invites/{invite_identifier}",
+=======
+@router.delete(
+    "/invites/{invite_id}",
+>>>>>>> 8a7cb7b (bugs fixing)
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
 )
 async def cancel_invite(
+<<<<<<< HEAD
     invite_identifier: str,
+=======
+    invite_id: str,
+>>>>>>> 8a7cb7b (bugs fixing)
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
+<<<<<<< HEAD
     Delete a pending group invite by token or UUID.
+=======
+    Delete a pending group invite.
+>>>>>>> 8a7cb7b (bugs fixing)
 
     Any group member can delete a pending invite.
     The invite must be in 'pending' status and will be permanently removed.
 
     Args:
+<<<<<<< HEAD
         invite_identifier (str): Can be either:
             - token (str): URL-safe token string (22 chars, e.g., 'RC7hlHMyxIvpolcCkrUy_A')
             - invite_id (UUID): 32-36 character UUID string
+=======
+        invite_id (str): UUID of the invite to delete
+>>>>>>> 8a7cb7b (bugs fixing)
         db (AsyncSession): Database session
         current_user (User): Current authenticated user (must be group member)
 
@@ -451,6 +468,7 @@ async def cancel_invite(
         HTTPException(404): Invite not found or not pending
         HTTPException(403): User is not a member of the group
     """
+<<<<<<< HEAD
     import uuid
 
     # Determine if identifier is UUID or token
@@ -473,6 +491,13 @@ async def cancel_invite(
             select(GroupInvite).where(GroupInvite.token == invite_identifier)
         )
         invite = invite_result.scalars().first()
+=======
+    # Fetch invite
+    invite_result = await db.execute(
+        select(GroupInvite).where(GroupInvite.invite_id == invite_id)
+    )
+    invite = invite_result.scalars().first()
+>>>>>>> 8a7cb7b (bugs fixing)
 
     if not invite or invite.status != InviteStatusEnum.pending:
         raise HTTPException(
@@ -494,9 +519,13 @@ async def cancel_invite(
         )
 
     # Delete the invite
+<<<<<<< HEAD
     await db.execute(
         delete(GroupInvite).where(GroupInvite.invite_id == invite.invite_id)
     )
+=======
+    await db.execute(delete(GroupInvite).where(GroupInvite.invite_id == invite_id))
+>>>>>>> 8a7cb7b (bugs fixing)
     await db.commit()
 
     return {"message": "Invite has been deleted"}
@@ -881,12 +910,20 @@ async def get_group_profile(
                 updated_at=project_data.updated_at,
             )
 
+<<<<<<< HEAD
         # Get pending invites with invitee details
+=======
+        # Get pending invites with inviter details
+>>>>>>> 8a7cb7b (bugs fixing)
         from sqlalchemy import text
 
         pending_invites_result = await db.execute(
             select(GroupInvite, User)
+<<<<<<< HEAD
             .join(User, User.user_id == GroupInvite.invitee_id)
+=======
+            .join(User, User.user_id == GroupInvite.inviter_id)
+>>>>>>> 8a7cb7b (bugs fixing)
             .where(
                 GroupInvite.group_id == group_id,
                 GroupInvite.status == InviteStatusEnum.pending,
@@ -895,6 +932,7 @@ async def get_group_profile(
         )
         pending_invites_data = pending_invites_result.all()
 
+<<<<<<< HEAD
         # Build pending invites list with invitee info
         pending_invites_list = []
         for invite, invitee_user in pending_invites_data:
@@ -905,6 +943,17 @@ async def get_group_profile(
                     invitee_full_name=invitee_user.full_name,
                     invitee_email=invitee_user.email,
                     invitee_avatar=invitee_user.profile_avatar,
+=======
+        # Build pending invites list with inviter info
+        pending_invites_list = []
+        for invite, inviter_user in pending_invites_data:
+            pending_invites_list.append(
+                PendingInviteInfo(
+                    invite_id=str(invite.invite_id),
+                    inviter_id=str(inviter_user.user_id),
+                    inviter_full_name=inviter_user.full_name,
+                    inviter_avatar=inviter_user.profile_avatar,
+>>>>>>> 8a7cb7b (bugs fixing)
                     created_at=invite.created_at.isoformat(),
                     expires_at=invite.expires_at.isoformat(),
                 )

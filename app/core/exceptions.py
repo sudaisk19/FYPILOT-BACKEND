@@ -6,12 +6,15 @@ from fastapi import FastAPI
 from fastapi.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
+<<<<<<< HEAD
 from app.core.error_handlers import (
     generic_exception_handler,
     http_exception_handler,
     validation_exception_handler,
 )
 
+=======
+>>>>>>> 8a7cb7b (bugs fixing)
 # Use Uvicorn's logger so uncaught errors still show up in your logs
 logger = logging.getLogger("uvicorn.error")
 
