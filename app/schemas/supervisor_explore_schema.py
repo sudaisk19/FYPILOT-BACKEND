@@ -24,6 +24,24 @@ class SupervisorBasicInfo(BaseModel):
         from_attributes = True
 
 
+# Domain info with id and name
+class DomainInfo(BaseModel):
+    domain_id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+# Industry info with id and name
+class IndustryInfo(BaseModel):
+    industry_id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 # Detailed supervisor info for individual view
 class SupervisorDetailedInfo(BaseModel):
     # User fields
@@ -43,6 +61,14 @@ class SupervisorDetailedInfo(BaseModel):
     capacity_max: int = 8
     capacity_filled: int = 0
     available_slots: int = Field(description="Available supervision slots")
+
+    # Expertise and preferences
+    domains: List[DomainInfo] = Field(
+        default_factory=list, description="Areas of expertise (domains)"
+    )
+    industries: List[IndustryInfo] = Field(
+        default_factory=list, description="Industries of interest"
+    )
 
     # Additional computed fields
     current_groups: int = Field(description="Number of groups currently supervising")

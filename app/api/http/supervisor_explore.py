@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
@@ -13,6 +14,8 @@ from app.models.supervisor import Supervisor
 from app.models.supervisor_domain import SupervisorDomain
 from app.models.user import User
 from app.schemas.supervisor_explore_schema import (
+    DomainInfo,
+    IndustryInfo,
     PaginatedSupervisorResponse,
     SupervisorBasicInfo,
     SupervisorDetailedInfo,
@@ -44,7 +47,46 @@ def normalize_department(dept: str) -> str:
     return DEPARTMENT_ALIASES.get(normalized, dept)
 
 
-@router.get("/supervisors", response_model=PaginatedSupervisorResponse)
+@router.get(
+    "/supervisors",
+    response_model=PaginatedSupervisorResponse,
+    summary="Explore Supervisors",
+    description="Browse and search all available supervisors with advanced filtering by department, designation, domain expertise, and full-text search capabilities.",
+    responses={
+        200: {
+            "description": "Successfully retrieved paginated list of supervisors",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "supervisors": [
+                            {
+                                "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                                "full_name": "Dr. Ahmed Hassan",
+                                "email": "ahmed@university.edu",
+                                "profile_avatar": None,
+                                "department": "Software Engineering",
+                                "designation": "Associate Professor",
+                                "office": "Building A, Room 301",
+                                "capacity_max": 5,
+                                "capacity_filled": 3,
+                                "available_slots": 2,
+                            }
+                        ],
+                        "total": 42,
+                        "page": 1,
+                        "per_page": 10,
+                        "total_pages": 5,
+                        "has_next": True,
+                        "has_prev": False,
+                    }
+                }
+            },
+        },
+        403: {
+            "description": "Access denied - only students can access this endpoint",
+        },
+    },
+)
 async def explore_supervisors(
     # Query parameters for filtering
     department: Optional[str] = Query(
@@ -220,7 +262,89 @@ async def explore_supervisors(
     )
 
 
-@router.get("/supervisors/{supervisor_id}", response_model=SupervisorDetailedInfo)
+@router.get(
+    "/supervisors/{supervisor_id}",
+    response_model=SupervisorDetailedInfo,
+    summary="Get Supervisor Details",
+    description="Retrieve comprehensive information about a specific supervisor including personal details, professional information, capacity, domains and industries of expertise.",
+    responses={
+        200: {
+            "description": "Supervisor details retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "full_name": "Dr. Ahmed Hassan",
+                        "email": "ahmed.hassan@university.edu",
+                        "profile_avatar": "https://example.com/avatar.jpg",
+                        "created_at": "2024-01-15T10:00:00Z",
+                        "updated_at": "2024-12-08T14:30:00Z",
+                        "department": "Software Engineering",
+                        "designation": "Associate Professor",
+                        "office": "Building A, Room 301",
+                        "requirements": ["Good communication", "Research experience"],
+                        "project_types": ["product and research"],
+                        "capacity_max": 5,
+                        "capacity_filled": 3,
+                        "available_slots": 2,
+                        "domains": [
+                            {
+                                "domain_id": "550e8400-e29b-41d4-a716-446655440001",
+                                "name": "Artificial Intelligence",
+                            },
+                            {
+                                "domain_id": "550e8400-e29b-41d4-a716-446655440002",
+                                "name": "Machine Learning",
+                            },
+                        ],
+                        "industries": [
+                            {
+                                "industry_id": "550e8400-e29b-41d4-a716-446655440010",
+                                "name": "Technology",
+                            },
+                            {
+                                "industry_id": "550e8400-e29b-41d4-a716-446655440011",
+                                "name": "Finance",
+                            },
+                        ],
+                        "current_groups": 3,
+                        "total_supervised": 12,
+                    }
+                }
+            },
+        },
+        403: {
+            "description": "Access denied - only students can access this endpoint",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "error": {
+                            "code": 403,
+                            "type": "HTTPException",
+                            "message": "Access denied. This endpoint is only for students.",
+                        },
+                    }
+                }
+            },
+        },
+        404: {
+            "description": "Supervisor not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "error": {
+                            "code": 404,
+                            "type": "HTTPException",
+                            "message": "Supervisor not found",
+                        },
+                    }
+                }
+            },
+        },
+    },
+)
 async def get_supervisor_details(
     supervisor_id: str,
     current_user: User = Depends(get_current_user),
@@ -230,13 +354,20 @@ async def get_supervisor_details(
     Get detailed information about a specific supervisor.
 
     This endpoint provides comprehensive supervisor information including:
-    - Personal details
-    - Professional information
-    - Supervision capacity and availability
-    - Project types and requirements
-    - Current supervision load
+    - Personal details (name, email, avatar, created/updated timestamps)
+    - Professional information (department, designation, office location)
+    - Supervision capacity and availability (max capacity, currently filled, available slots)
+    - Project type preferences (research, product, or product and research)
+    - Requirements and qualifications
+    - Domains and industries of expertise (with IDs for filtering/linking)
+    - Current supervision load and historical statistics
 
-    Only students can access this endpoint.
+    **Authentication:** Only authenticated students can access this endpoint.
+
+    **Parameters:**
+    - `supervisor_id` (path): UUID of the supervisor to retrieve
+
+    **Returns:** Detailed supervisor information with all related expertise areas and capacity metrics.
     """
     # Verify user is a student
     if current_user.role != "student":
@@ -245,9 +376,13 @@ async def get_supervisor_details(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Fetch supervisor with user details
+    # Fetch supervisor with user details, domains and industries eagerly loaded
     result = await db.execute(
         select(User, Supervisor)
+        .options(
+            selectinload(Supervisor.domains),
+            selectinload(Supervisor.industries),
+        )
         .join(Supervisor, User.user_id == Supervisor.user_id)
         .where(User.user_id == supervisor_id, User.role == "supervisor")
     )
@@ -276,6 +411,18 @@ async def get_supervisor_details(
     # For now, we'll use current_groups as a placeholder
     total_supervised = current_groups
 
+    # Extract domains with id and name
+    domains = [
+        DomainInfo(domain_id=domain.domain_id, name=domain.name)
+        for domain in supervisor.domains
+    ]
+
+    # Extract industries with id and name
+    industries = [
+        IndustryInfo(industry_id=industry.industry_id, name=industry.name)
+        for industry in supervisor.industries
+    ]
+
     return SupervisorDetailedInfo(
         # User fields
         user_id=user.user_id,
@@ -293,6 +440,9 @@ async def get_supervisor_details(
         capacity_max=supervisor.capacity_max,
         capacity_filled=supervisor.capacity_filled,
         available_slots=available_slots,
+        # Expertise and preferences
+        domains=domains,
+        industries=industries,
         # Computed fields
         current_groups=current_groups,
         total_supervised=total_supervised,
