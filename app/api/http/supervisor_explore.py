@@ -18,6 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
@@ -61,6 +62,9 @@ def normalize_department(dept: str) -> str:
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bc07630 (bugs fixing)
 @router.get(
     "/supervisors",
     response_model=PaginatedSupervisorResponse,
@@ -101,9 +105,12 @@ def normalize_department(dept: str) -> str:
         },
     },
 )
+<<<<<<< HEAD
 =======
 @router.get("/supervisors", response_model=PaginatedSupervisorResponse)
 >>>>>>> bf3f867 (bugs fixing)
+=======
+>>>>>>> bc07630 (bugs fixing)
 async def explore_supervisors(
     # Query parameters for filtering
     department: Optional[str] = Query(
@@ -406,8 +413,23 @@ async def get_supervisor_details(
             detail="Access denied. This endpoint is only for students.",
         )
 
+<<<<<<< HEAD
     # Fetch supervisor with user details using repository
     row = await supervisor_repository.get_with_user(db, supervisor_id)
+=======
+    # Fetch supervisor with user details, domains and industries eagerly loaded
+    result = await db.execute(
+        select(User, Supervisor)
+        .options(
+            selectinload(Supervisor.domains),
+            selectinload(Supervisor.industries),
+        )
+        .join(Supervisor, User.user_id == Supervisor.user_id)
+        .where(User.user_id == supervisor_id, User.role == "supervisor")
+    )
+
+    row = result.first()
+>>>>>>> bc07630 (bugs fixing)
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Supervisor not found"
@@ -435,6 +457,7 @@ async def get_supervisor_details(
     # For now, we'll use current_groups as a placeholder
     total_supervised = current_groups
 
+<<<<<<< HEAD
     # Extract domains with id and name using repository data
     domains = [
         DomainInfo(domain_id=domain.domain_id, name=domain.name)
@@ -445,6 +468,18 @@ async def get_supervisor_details(
     industries = [
         IndustryInfo(industry_id=industry.industry_id, name=industry.name)
         for industry in industries_list
+=======
+    # Extract domains with id and name
+    domains = [
+        DomainInfo(domain_id=domain.domain_id, name=domain.name)
+        for domain in supervisor.domains
+    ]
+
+    # Extract industries with id and name
+    industries = [
+        IndustryInfo(industry_id=industry.industry_id, name=industry.name)
+        for industry in supervisor.industries
+>>>>>>> bc07630 (bugs fixing)
     ]
 
     return SupervisorDetailedInfo(
