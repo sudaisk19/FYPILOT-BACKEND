@@ -51,6 +51,7 @@ class SupervisorInfo(BaseModel):
 
 class PendingInviteInfo(BaseModel):
 <<<<<<< HEAD
+<<<<<<< HEAD
     """Info about a pending invite (invitee data)"""
 
     invite_id: str = Field(..., description="UUID of the invite as string")
@@ -62,14 +63,22 @@ class PendingInviteInfo(BaseModel):
     invitee_avatar: Optional[str] = Field(None, description="Avatar URL of the invitee")
 =======
     """Info about a pending invite to a user"""
+=======
+    """Info about a pending invite (invitee data)"""
+>>>>>>> 38b5098 (bugs fixing)
 
     invite_id: str = Field(..., description="UUID of the invite as string")
-    inviter_id: str = Field(..., description="UUID of the inviter as string")
-    inviter_full_name: str = Field(
-        ..., description="Full name of the user who sent the invite"
+    invitee_id: str = Field(..., description="UUID of the invitee as string")
+    invitee_full_name: str = Field(
+        ..., description="Full name of the user who was invited"
     )
+<<<<<<< HEAD
     inviter_avatar: Optional[str] = Field(None, description="Avatar URL of the inviter")
 >>>>>>> 8a7cb7b (bugs fixing)
+=======
+    invitee_email: str = Field(..., description="Email of the user who was invited")
+    invitee_avatar: Optional[str] = Field(None, description="Avatar URL of the invitee")
+>>>>>>> 38b5098 (bugs fixing)
     created_at: str = Field(
         ..., description="ISO format datetime string when invite was created"
     )
