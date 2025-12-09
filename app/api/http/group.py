@@ -362,6 +362,7 @@ async def accept_invite(
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 @router.post(
     "/invites/{token}/reject",
     response_model=MessageResponse,
@@ -369,10 +370,20 @@ async def accept_invite(
 )
 async def reject_invite(
     token: str,
+=======
+@router.delete(
+    "/invites/{invite_identifier}",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def cancel_invite(
+    invite_identifier: str,
+>>>>>>> 8edf718 (bugs fixing)
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
+<<<<<<< HEAD
     Reject a pending group invite.
 
     Only the invitee can reject an invite. The invite will be marked as 'declined'
@@ -446,11 +457,15 @@ async def cancel_invite(
 =======
     Delete a pending group invite.
 >>>>>>> 8a7cb7b (bugs fixing)
+=======
+    Delete a pending group invite by token or UUID.
+>>>>>>> 8edf718 (bugs fixing)
 
     Any group member can delete a pending invite.
     The invite must be in 'pending' status and will be permanently removed.
 
     Args:
+<<<<<<< HEAD
 <<<<<<< HEAD
         invite_identifier (str): Can be either:
             - token (str): URL-safe token string (22 chars, e.g., 'RC7hlHMyxIvpolcCkrUy_A')
@@ -458,6 +473,11 @@ async def cancel_invite(
 =======
         invite_id (str): UUID of the invite to delete
 >>>>>>> 8a7cb7b (bugs fixing)
+=======
+        invite_identifier (str): Can be either:
+            - token (str): URL-safe token string (22 chars, e.g., 'RC7hlHMyxIvpolcCkrUy_A')
+            - invite_id (UUID): 32-36 character UUID string
+>>>>>>> 8edf718 (bugs fixing)
         db (AsyncSession): Database session
         current_user (User): Current authenticated user (must be group member)
 
@@ -469,6 +489,9 @@ async def cancel_invite(
         HTTPException(403): User is not a member of the group
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 8edf718 (bugs fixing)
     import uuid
 
     # Determine if identifier is UUID or token
@@ -491,6 +514,7 @@ async def cancel_invite(
             select(GroupInvite).where(GroupInvite.token == invite_identifier)
         )
         invite = invite_result.scalars().first()
+<<<<<<< HEAD
 =======
     # Fetch invite
     invite_result = await db.execute(
@@ -498,6 +522,8 @@ async def cancel_invite(
     )
     invite = invite_result.scalars().first()
 >>>>>>> 8a7cb7b (bugs fixing)
+=======
+>>>>>>> 8edf718 (bugs fixing)
 
     if not invite or invite.status != InviteStatusEnum.pending:
         raise HTTPException(
@@ -520,12 +546,18 @@ async def cancel_invite(
 
     # Delete the invite
 <<<<<<< HEAD
+<<<<<<< HEAD
     await db.execute(
         delete(GroupInvite).where(GroupInvite.invite_id == invite.invite_id)
     )
 =======
     await db.execute(delete(GroupInvite).where(GroupInvite.invite_id == invite_id))
 >>>>>>> 8a7cb7b (bugs fixing)
+=======
+    await db.execute(
+        delete(GroupInvite).where(GroupInvite.invite_id == invite.invite_id)
+    )
+>>>>>>> 8edf718 (bugs fixing)
     await db.commit()
 
     return {"message": "Invite has been deleted"}
