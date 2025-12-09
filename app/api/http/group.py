@@ -768,12 +768,12 @@ async def get_group_profile(
                 updated_at=project_data.updated_at,
             )
 
-        # Get pending invites with inviter details
+        # Get pending invites with invitee details
         from sqlalchemy import text
 
         pending_invites_result = await db.execute(
             select(GroupInvite, User)
-            .join(User, User.user_id == GroupInvite.inviter_id)
+            .join(User, User.user_id == GroupInvite.invitee_id)
             .where(
                 GroupInvite.group_id == group_id,
                 GroupInvite.status == InviteStatusEnum.pending,
@@ -782,15 +782,16 @@ async def get_group_profile(
         )
         pending_invites_data = pending_invites_result.all()
 
-        # Build pending invites list with inviter info
+        # Build pending invites list with invitee info
         pending_invites_list = []
-        for invite, inviter_user in pending_invites_data:
+        for invite, invitee_user in pending_invites_data:
             pending_invites_list.append(
                 PendingInviteInfo(
                     invite_id=str(invite.invite_id),
-                    inviter_id=str(inviter_user.user_id),
-                    inviter_full_name=inviter_user.full_name,
-                    inviter_avatar=inviter_user.profile_avatar,
+                    invitee_id=str(invitee_user.user_id),
+                    invitee_full_name=invitee_user.full_name,
+                    invitee_email=invitee_user.email,
+                    invitee_avatar=invitee_user.profile_avatar,
                     created_at=invite.created_at.isoformat(),
                     expires_at=invite.expires_at.isoformat(),
                 )
