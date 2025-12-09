@@ -313,23 +313,25 @@ async def accept_invite(
 
 
 @router.delete(
-    "/invites/{invite_id}",
+    "/invites/{invite_identifier}",
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
 )
 async def cancel_invite(
-    invite_id: str,
+    invite_identifier: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Delete a pending group invite.
+    Delete a pending group invite by token or UUID.
 
     Any group member can delete a pending invite.
     The invite must be in 'pending' status and will be permanently removed.
 
     Args:
-        invite_id (str): UUID of the invite to delete
+        invite_identifier (str): Can be either:
+            - token (str): URL-safe token string (22 chars, e.g., 'RC7hlHMyxIvpolcCkrUy_A')
+            - invite_id (UUID): 32-36 character UUID string
         db (AsyncSession): Database session
         current_user (User): Current authenticated user (must be group member)
 
@@ -340,11 +342,28 @@ async def cancel_invite(
         HTTPException(404): Invite not found or not pending
         HTTPException(403): User is not a member of the group
     """
-    # Fetch invite
-    invite_result = await db.execute(
-        select(GroupInvite).where(GroupInvite.invite_id == invite_id)
-    )
-    invite = invite_result.scalars().first()
+    import uuid
+
+    # Determine if identifier is UUID or token
+    invite = None
+
+    # Try UUID first (if it's valid UUID format)
+    try:
+        invite_uuid = uuid.UUID(invite_identifier)
+        invite_result = await db.execute(
+            select(GroupInvite).where(GroupInvite.invite_id == invite_uuid)
+        )
+        invite = invite_result.scalars().first()
+    except ValueError:
+        # Not a valid UUID, treat as token
+        pass
+
+    # If not found by UUID, try token
+    if not invite:
+        invite_result = await db.execute(
+            select(GroupInvite).where(GroupInvite.token == invite_identifier)
+        )
+        invite = invite_result.scalars().first()
 
     if not invite or invite.status != InviteStatusEnum.pending:
         raise HTTPException(
@@ -366,7 +385,9 @@ async def cancel_invite(
         )
 
     # Delete the invite
-    await db.execute(delete(GroupInvite).where(GroupInvite.invite_id == invite_id))
+    await db.execute(
+        delete(GroupInvite).where(GroupInvite.invite_id == invite.invite_id)
+    )
     await db.commit()
 
     return {"message": "Invite has been deleted"}
