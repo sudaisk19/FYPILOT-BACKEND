@@ -20,7 +20,7 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain
+from app.models.project import Project, ProjectDomain, ProjectTypeEnum
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
@@ -102,6 +102,7 @@ async def create_group(
     db.add(member)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # 5) Create a Project row associated with this group (defaults)
     # Check if project already exists for this group
     existing_project_result = await db.execute(
@@ -122,15 +123,32 @@ async def create_group(
         project = existing_project
 =======
     # 5) Commit everything
+=======
+>>>>>>> 08bb45f (bugs fixing)
     # 5) Create a Project row associated with this group (defaults)
-    project = Project(
-        group_id=grp.group_id,
-        name=grp.name,
-        # project_type will use model default ('capstone') if not provided
+    # Check if project already exists for this group
+    existing_project_result = await db.execute(
+        select(Project).where(Project.group_id == grp.group_id)
     )
+<<<<<<< HEAD
     db.add(project)
     await db.flush()  # populate project.project_id
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    existing_project = existing_project_result.scalars().first()
+
+    if not existing_project:
+        project = Project(
+            group_id=grp.group_id,
+            name=grp.name,
+            project_type=ProjectTypeEnum.research,  # Use enum directly, not .value
+        )
+        db.add(project)
+        await db.flush()  # populate project.project_id
+    else:
+        # Reuse existing project
+        project = existing_project
+>>>>>>> 08bb45f (bugs fixing)
 
     # 6) Commit everything
     await db.commit()

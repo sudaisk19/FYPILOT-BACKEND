@@ -3,7 +3,9 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Date, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -71,6 +73,7 @@ class Project(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
 <<<<<<< HEAD
+<<<<<<< HEAD
     project_type = Column(
         SQLEnum(
             "research",
@@ -85,6 +88,13 @@ class Project(Base):
 =======
     project_type = Column(Text, nullable=False, default=ProjectTypeEnum.research.value)
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    project_type = Column(
+        SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False),
+        nullable=False,
+        default=ProjectTypeEnum.research,
+    )
+>>>>>>> 08bb45f (bugs fixing)
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
     )
