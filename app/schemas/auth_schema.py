@@ -84,24 +84,27 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        errors = []
-
         if len(v) < 8:
-            errors.append("Password must be at least 8 characters long")
-
-        if not any(c.isupper() for c in v):
-            errors.append("Password must contain at least one uppercase letter (A-Z)")
-        if not any(c.islower() for c in v):
-            errors.append("Password must contain at least one lowercase letter (a-z)")
-        if not any(c.isdigit() for c in v):
-            errors.append("Password must contain at least one number (0-9)")
-        if not any(c in cls.SPECIAL_CHARS for c in v):
-            errors.append(
-                f"Password must contain at least one special character from: {cls.SPECIAL_CHARS}"
+            raise ValueError(
+                "Password must be at least 8 characters (e.g., SecureP@ss123)"
             )
 
-        if errors:
-            raise ValueError("\n".join(errors))
+        if not any(c.isupper() for c in v):
+            raise ValueError(
+                "Password must contain at least one uppercase letter (e.g., SecureP@ss123)"
+            )
+        if not any(c.islower() for c in v):
+            raise ValueError(
+                "Password must contain at least one lowercase letter (e.g., SecureP@ss123)"
+            )
+        if not any(c.isdigit() for c in v):
+            raise ValueError(
+                "Password must contain at least one number (e.g., SecureP@ss123)"
+            )
+        if not any(c in cls.SPECIAL_CHARS for c in v):
+            raise ValueError(
+                f"Password must contain a special character like !@#$%^&* (e.g., SecureP@ss123)"
+            )
 
         return v
 

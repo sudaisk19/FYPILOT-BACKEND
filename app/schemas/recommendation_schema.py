@@ -16,8 +16,6 @@ class RecommendationRequest(BaseModel):
     project_type: Optional[str] = Field(
         None, description="Project type (research/product)"
     )
-    page: int = Field(1, ge=1, description="Page number")
-    per_page: int = Field(10, ge=1, le=50, description="Items per page")
 
     class Config:
         json_schema_extra = {
@@ -27,8 +25,6 @@ class RecommendationRequest(BaseModel):
                 "idea_description": "A recommendation system for e-commerce",
                 "idea_industry": "E-commerce",
                 "project_type": "research",
-                "page": 1,
-                "per_page": 10,
             }
         }
 
@@ -47,13 +43,9 @@ class SupervisorRecommendation(BaseModel):
     reason: str
 
 
-class PaginatedRecommendationResponse(BaseModel):
-    """Response schema for paginated supervisor recommendations."""
+class RecommendationResponse(BaseModel):
+    """Response schema for supervisor recommendations."""
 
-    recommendations: List[SupervisorRecommendation]
-    total: int = Field(description="Total number of recommendations")
-    page: int = Field(description="Current page number")
-    per_page: int = Field(description="Items per page")
-    total_pages: int = Field(description="Total number of pages")
-    has_next: bool = Field(description="Whether there's a next page")
-    has_prev: bool = Field(description="Whether there's a previous page")
+    recommendations: List[SupervisorRecommendation] = Field(
+        description="List of top 5 recommended supervisors"
+    )
