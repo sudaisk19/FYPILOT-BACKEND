@@ -237,12 +237,16 @@ async def send_invite(
     await db.commit()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
     # Send the email with proper template
     accept_link = (
         f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
     )
     reject_link = (
         f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/reject"
+<<<<<<< HEAD
     )
     background_tasks.add_task(
         send_group_invitation_email,
@@ -262,6 +266,16 @@ async def send_invite(
     background_tasks.add_task(
         get_mailer().send, invitee.email, "FYP Group Invitation", html
 >>>>>>> bf3f867 (bugs fixing)
+=======
+    )
+    background_tasks.add_task(
+        send_group_invitation_email,
+        invitee.email,
+        invitee.full_name,
+        current_user.full_name,
+        accept_link,
+        reject_link,
+>>>>>>> 04f6eb2 (bugs fixing)
     )
 
     return {"message": "Invitation sent successfully"}
@@ -363,6 +377,9 @@ async def accept_invite(
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
 @router.post(
     "/invites/{token}/reject",
     response_model=MessageResponse,
@@ -370,7 +387,63 @@ async def accept_invite(
 )
 async def reject_invite(
     token: str,
+<<<<<<< HEAD
 =======
+=======
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reject a pending group invite.
+
+    Only the invitee can reject an invite. The invite will be marked as 'declined'
+    and removed from pending list.
+
+    Args:
+        token (str): Token of the invite to reject (URL-safe string)
+        db (AsyncSession): Database session
+        current_user (User): Current authenticated user (must be the invitee)
+
+    Returns:
+        MessageResponse: Confirmation of rejection
+
+    Raises:
+        HTTPException(404): Invite not found or not pending
+        HTTPException(403): User is not the intended recipient of the invite
+    """
+    from datetime import timezone
+
+    # Fetch & validate
+    invite = (
+        (await db.execute(select(GroupInvite).where(GroupInvite.token == token)))
+        .scalars()
+        .first()
+    )
+
+    now = datetime.now(timezone.utc)
+    if (
+        not invite
+        or invite.status != InviteStatusEnum.pending
+        or invite.expires_at < now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invite"
+        )
+
+    # Only the intended recipient can reject
+    if invite.invitee_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="This invite isn't for you"
+        )
+
+    # Mark as declined (not deleted, just status change)
+    invite.status = InviteStatusEnum.declined
+    await db.commit()
+
+    return {"message": "You have declined the invite"}
+
+
+>>>>>>> 04f6eb2 (bugs fixing)
 @router.delete(
     "/invites/{invite_identifier}",
     response_model=MessageResponse,

@@ -4,10 +4,14 @@ from typing import Annotated
 from uuid import UUID
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
 =======
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 >>>>>>> 7a34e0c (deliverables)
+=======
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
+>>>>>>> 04f6eb2 (bugs fixing)
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,6 +348,9 @@ async def accept_supervisor_request(
         )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
     # Get group and supervisor info for email
     group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
     group = group_result.scalars().first()
@@ -353,8 +360,11 @@ async def accept_supervisor_request(
         else "cosupervisor"
     )
 
+<<<<<<< HEAD
 =======
 >>>>>>> 7a34e0c (deliverables)
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
     # Supervisor role logic
     if req.request_type == RequestTypeEnum.supervisor:
         # Set supervisor_id in groups
@@ -405,6 +415,9 @@ async def accept_supervisor_request(
     )
     await db.commit()
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
 
     # Send acceptance emails to all group members
     if group:
@@ -424,8 +437,11 @@ async def accept_supervisor_request(
                 role,
             )
 
+<<<<<<< HEAD
 =======
 >>>>>>> 7a34e0c (deliverables)
+=======
+>>>>>>> 04f6eb2 (bugs fixing)
     return {"message": "Request accepted"}
 
 
