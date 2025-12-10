@@ -43,7 +43,7 @@ def get_email_template(
     if logo:
         logo_html = f'<img src="{logo}" alt="{company_name}" style="max-width: 200px; height: auto; margin-bottom: 20px;" />'
     else:
-        logo_html = f'<div style="font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 20px;">{company_name}</div>'
+        logo_html = f'<div style="font-size: 28px; font-weight: bold; color: #7c3aed; margin-bottom: 20px;">{company_name}</div>'
 
     button_html = ""
     if button_text and button_link:
@@ -78,7 +78,7 @@ def get_email_template(
                     <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                         <!-- Header -->
                         <tr>
-                            <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
+                            <td style="padding: 40px 40px 20px; text-align: center;">
                                 {logo_html}
                             </td>
                         </tr>
@@ -276,6 +276,162 @@ async def send_password_reset_email(to_email: str, user_name: str, reset_link: s
         button_text="Reset My Password",
         button_link=reset_link,
         footer_text="If you didn't request this password reset, you can safely ignore this email.",
+    )
+
+    mailer = get_mailer()
+    await mailer.send(to_email, subject, html_body)
+
+
+async def send_group_invitation_email(
+    to_email: str,
+    invitee_name: str,
+    inviter_name: str,
+    accept_link: str,
+    reject_link: str,
+):
+    """
+    Send group invitation email to student.
+
+    Args:
+        to_email (str): Invitee's email address
+        invitee_name (str): Invitee's full name
+        inviter_name (str): Inviter's full name
+        accept_link (str): Group invite accept link with token
+        reject_link (str): Group invite reject link with token
+    """
+    subject = f"You're Invited to Join a FYP Group - {settings.email_company_name}"
+
+    content = f"""
+    <p style="margin: 0 0 16px;">Hello <strong>{invitee_name}</strong>,</p>
+    
+    <p style="margin: 0 0 16px;">
+        <strong>{inviter_name}</strong> has invited you to join their Final Year Project (FYP) group. 
+        This is a great opportunity to collaborate on an exciting project!
+    </p>
+    
+    <div style="background-color: #dbeafe; border-left: 4px solid #0284c7; padding: 16px; margin: 24px 0; border-radius: 4px;">
+        <p style="margin: 0 0 8px; font-weight: 600; color: #0c4a6e;">About This Invitation:</p>
+        <ul style="margin: 0; padding-left: 20px; color: #0c4a6e;">
+            <li style="margin-bottom: 8px;">This invitation will expire in <strong>7 days</strong></li>
+            <li style="margin-bottom: 8px;">You can accept or decline the invitation below</li>
+            <li style="margin-bottom: 0;">Your group membership status will only change if you accept</li>
+        </ul>
+    </div>
+    
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{accept_link}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin-right: 10px;">
+            Accept Invitation
+        </a>
+        <a href="{reject_link}" style="display: inline-block; background-color: #6b7280; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+            Decline Invitation
+        </a>
+    </div>
+    
+    <p style="margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #9ca3af;">
+        If the buttons don't work, copy and paste these links into your browser:<br>
+        <strong>Accept:</strong> <a href="{accept_link}" style="color: #2563eb; word-break: break-all;">{accept_link}</a><br>
+        <strong>Decline:</strong> <a href="{reject_link}" style="color: #2563eb; word-break: break-all;">{reject_link}</a>
+    </p>
+    """
+
+    html_body = get_email_template(
+        title="FYP Group Invitation",
+        content=content,
+        footer_text="If you didn't expect this invitation, you can safely ignore this email.",
+    )
+
+    mailer = get_mailer()
+    await mailer.send(to_email, subject, html_body)
+
+
+async def send_supervisor_accepted_email(
+    to_email: str, group_name: str, supervisor_name: str, role: str
+):
+    """
+    Send email to group members when supervisor accepts their request.
+
+    Args:
+        to_email (str): Group member's email address
+        group_name (str): Name of the group
+        supervisor_name (str): Name of the supervisor who accepted
+        role (str): Role accepted (supervisor or cosupervisor)
+    """
+    subject = f"Supervisor Request Accepted - {settings.email_company_name}"
+    role_text = "Primary Supervisor" if role == "supervisor" else "Co-Supervisor"
+
+    content = f"""
+    <p style="margin: 0 0 16px;">Hi there,</p>
+    
+    <p style="margin: 0 0 16px;">
+        Great news! <strong>{supervisor_name}</strong> has accepted your group's request to be the <strong>{role_text}</strong> 
+        for your FYP project.
+    </p>
+    
+    <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 16px; margin: 24px 0; border-radius: 4px;">
+        <p style="margin: 0 0 8px; font-weight: 600; color: #065f46;">Request Status: Accepted ✓</p>
+        <ul style="margin: 0; padding-left: 20px; color: #065f46;">
+            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
+            <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
+        </ul>
+    </div>
+    
+    <p style="margin: 0 0 16px;">
+        Your supervisor is now part of your team. You can start collaborating on your project right away!
+    </p>
+    """
+
+    html_body = get_email_template(
+        title="Supervisor Request Accepted",
+        content=content,
+        footer_text="Congratulations on forming your complete team!",
+    )
+
+    mailer = get_mailer()
+    await mailer.send(to_email, subject, html_body)
+
+
+async def send_supervisor_rejected_email(
+    to_email: str, group_name: str, supervisor_name: str, role: str
+):
+    """
+    Send email to group members when supervisor rejects their request.
+
+    Args:
+        to_email (str): Group member's email address
+        group_name (str): Name of the group
+        supervisor_name (str): Name of the supervisor who rejected
+        role (str): Role requested (supervisor or cosupervisor)
+    """
+    subject = f"Supervisor Request Declined - {settings.email_company_name}"
+    role_text = "Primary Supervisor" if role == "supervisor" else "Co-Supervisor"
+
+    content = f"""
+    <p style="margin: 0 0 16px;">Hi there,</p>
+    
+    <p style="margin: 0 0 16px;">
+        Unfortunately, <strong>{supervisor_name}</strong> has declined your group's request to be the <strong>{role_text}</strong> 
+        for your FYP project.
+    </p>
+    
+    <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 4px;">
+        <p style="margin: 0 0 8px; font-weight: 600; color: #7f1d1d;">Request Status: Declined</p>
+        <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
+            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
+            <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
+        </ul>
+    </div>
+    
+    <p style="margin: 0 0 16px;">
+        Don't worry! You can send requests to other supervisors or try again with a different approach.
+    </p>
+    """
+
+    html_body = get_email_template(
+        title="Supervisor Request Declined",
+        content=content,
+        footer_text="Keep exploring other supervisor options for your project.",
     )
 
     mailer = get_mailer()

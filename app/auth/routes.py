@@ -518,7 +518,7 @@ async def get_supervisor_info(
             office=supervisor.office,
             capacity_max=supervisor.capacity_max,
             capacity_filled=supervisor.capacity_filled,
-            project_types=supervisor.project_types or [],
+            project_types=[supervisor.project_type] if supervisor.project_type else [],
             requirements=supervisor.requirements or [],
             supervised_groups=supervised_groups,
             domains=domains,
@@ -1138,8 +1138,10 @@ async def forgot_password(
         # Generate secure reset token
         reset_token = secrets.token_urlsafe(32)
 
-        # Set token expiration (1 hour from now)
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        # Set token expiration (1 hour from now) - use timezone-aware datetime
+        from datetime import timezone
+
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
         # Create password reset token record
         reset_token_record = PasswordResetToken(
@@ -1157,10 +1159,8 @@ async def forgot_password(
         db.add(reset_token_record)
         await db.commit()
 
-        # Generate reset link
-        reset_link = (
-            f"{settings.frontend_app_url}/auth/reset-password?token={reset_token}"
-        )
+        # Generate reset link with correct format: /reset-password?token={token}
+        reset_link = f"{settings.frontend_app_url}/reset-password?token={reset_token}"
 
         # Send password reset email
         try:
@@ -1236,8 +1236,11 @@ async def reset_password(
                 detail="Invalid or expired reset token",
             )
 
-        # Check if token is expired
-        if datetime.utcnow() > reset_token_record.expires_at:
+        # Check if token is expired (use timezone-aware datetime)
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
+        if now > reset_token_record.expires_at:
             logger.warning(f"Expired reset token attempted: {request_data.token}")
             # Mark token as used to prevent reuse
             reset_token_record.used = True
@@ -1264,11 +1267,11 @@ async def reset_password(
 
         # Update user password
         user.password_hash = new_password_hash
-        user.updated_at = datetime.utcnow()
+        user.updated_at = now
 
         # Mark token as used
         reset_token_record.used = True
-        reset_token_record.updated_at = datetime.utcnow()
+        reset_token_record.updated_at = now
 
         # Commit changes
         await db.commit()

@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware  # ← NEW
 
+from app.api.http import llm_chat
 from app.api.http.router import (
     router as api_router,  # includes users, groups, health, etc.
 )
@@ -66,6 +67,7 @@ app.include_router(
 app.include_router(
     api_router, prefix="/api"
 )  # /api/groups, /api/users, /api/students, /api/supervisors, /api/admins, /health
+app.include_router(llm_chat.router, prefix="/llm")
 
 # Global exception handlers
 register_exception_handlers(app)

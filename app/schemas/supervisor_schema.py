@@ -15,7 +15,7 @@ class ProjectType(str, Enum):
 
     RESEARCH = "research"
     PRODUCT = "product"
-    BOTH = "both"
+    PRODUCT_AND_RESEARCH = "product and research"
 
 
 class SupervisorProfileBase(BaseModel):

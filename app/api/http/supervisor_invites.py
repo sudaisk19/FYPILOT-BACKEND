@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,10 @@ from app.schemas.invite_schema import (
     SentRequestsResponse,
     StudentDetail,
     SupervisorRequestDetailResponse,
+)
+from app.services.mailer import (
+    send_supervisor_accepted_email,
+    send_supervisor_rejected_email,
 )
 
 router = APIRouter(prefix="/invites", tags=["supervisor-invites"])
@@ -309,8 +313,9 @@ async def list_pending_invites_for_supervisor(
 @router.post("/supervisor/{request_id}/accept")
 async def accept_supervisor_request(
     request_id: UUID = Path(...),
-    current_user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    background_tasks: BackgroundTasks = None,
 ):
     if current_user.role != "supervisor":
         raise HTTPException(
@@ -333,6 +338,15 @@ async def accept_supervisor_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Request not found or already processed",
         )
+
+    # Get group and supervisor info for email
+    group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
+    group = group_result.scalars().first()
+    role = (
+        "supervisor"
+        if req.request_type == RequestTypeEnum.supervisor
+        else "cosupervisor"
+    )
 
     # Supervisor role logic
     if req.request_type == RequestTypeEnum.supervisor:
@@ -383,14 +397,34 @@ async def accept_supervisor_request(
         )
     )
     await db.commit()
+
+    # Send acceptance emails to all group members
+    if group:
+        members_result = await db.execute(
+            select(GroupMember, User)
+            .join(User, User.user_id == GroupMember.student_id)
+            .where(GroupMember.group_id == req.group_id)
+        )
+        members = members_result.all()
+
+        for member, user in members:
+            background_tasks.add_task(
+                send_supervisor_accepted_email,
+                user.email,
+                group.name,
+                current_user.full_name,
+                role,
+            )
+
     return {"message": "Request accepted"}
 
 
 @router.post("/supervisor/{request_id}/reject")
 async def reject_invite(
     request_id: UUID = Path(...),
-    current_user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    background_tasks: BackgroundTasks = None,
 ):
     if current_user.role != "supervisor":
         raise HTTPException(
@@ -414,6 +448,15 @@ async def reject_invite(
             detail="Request not found or already processed",
         )
 
+    # Get group and supervisor info for email
+    group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
+    group = group_result.scalars().first()
+    role = (
+        "supervisor"
+        if req.request_type == RequestTypeEnum.supervisor
+        else "cosupervisor"
+    )
+
     await db.execute(
         update(Request)
         .where(Request.request_id == request_id)
@@ -424,6 +467,24 @@ async def reject_invite(
         )
     )
     await db.commit()
+
+    # Send rejection emails to all group members
+    if group:
+        members_result = await db.execute(
+            select(GroupMember, User)
+            .join(User, User.user_id == GroupMember.student_id)
+            .where(GroupMember.group_id == req.group_id)
+        )
+        members = members_result.all()
+
+        for member, user in members:
+            background_tasks.add_task(
+                send_supervisor_rejected_email,
+                user.email,
+                group.name,
+                current_user.full_name,
+                role,
+            )
 
     return {"message": "Request rejected"}
 
@@ -633,14 +694,10 @@ async def get_request_details_for_supervisor(
                             )
                         )
 
-        # Get skills_levels from JSONB field
+        # Get skills_levels from JSONB field - use normalized version for consistency
         # skills_levels is a JSONB dict mapping skill names to levels (1-5)
-        # Fill missing skills with default level 1
-        skills_levels = student.skills_levels if student.skills_levels else {}
-        if student.skills:
-            for skill in student.skills:
-                if skill not in skills_levels:
-                    skills_levels[skill] = 1  # Default level for missing skills
+        # The normalized property ensures all skills have a level (default 1 if missing)
+        skills_levels = student.skills_levels_normalized
 
         students.append(
             StudentDetail(

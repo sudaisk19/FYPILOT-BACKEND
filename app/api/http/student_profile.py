@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.group import GroupMember
+from app.models.group import Group, GroupMember
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.profile_schema import (
@@ -71,7 +71,11 @@ async def get_student_profile(
     # Fetch user with student profile and group information
     result = await db.execute(
         select(User)
-        .options(selectinload(User.student_profile).selectinload(Student.groups))
+        .options(
+            selectinload(User.student_profile)
+            .selectinload(Student.groups)
+            .selectinload(Group.project)
+        )
         .where(User.user_id == current_user.user_id)
     )
     user = result.scalar_one_or_none()
@@ -170,7 +174,11 @@ async def get_student_profile(
             max_members=group.max_members,
             supervisor_name=supervisor_name,
             cosupervisor_name=cosupervisor_name,
-            project_name=None,  # TODO: Add project information when Project model is available
+            project_name=(
+                group.project[0].name
+                if group.project and len(group.project) > 0
+                else None
+            ),
             members=members,
         )
 
@@ -192,7 +200,7 @@ async def get_student_profile(
         experience=user.student_profile.experience,
         portfolio_projects=user.student_profile.portfolio_projects,
         skills=user.student_profile.skills or [],
-        skills_levels=user.student_profile.skills_levels or {},
+        skills_levels=user.student_profile.skills_levels_normalized,
         # Group information
         group=group_info,
     )
@@ -231,11 +239,16 @@ async def complete_student_wizard_profile(
             user_updates["full_name"] = profile_data.full_name.strip()
         if profile_data.email is not None and profile_data.email.strip():
             user_updates["email"] = profile_data.email.strip()
-        if (
-            profile_data.profile_avatar is not None
-            and profile_data.profile_avatar.strip()
-        ):
-            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+        # Handle profile_avatar: allow explicit null to clear avatar
+        if "profile_avatar" in profile_data.__fields_set__:
+            if (
+                profile_data.profile_avatar is not None
+                and profile_data.profile_avatar.strip()
+            ):
+                user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+            else:
+                # Explicitly set to None to clear avatar
+                user_updates["profile_avatar"] = None
 
         # Update user table if there are changes
         if user_updates:
@@ -291,10 +304,25 @@ async def complete_student_wizard_profile(
 
             # Create new student profile with all provided data
             student_profile = Student(user_id=current_user.user_id, **student_updates)
+            # Normalize skills_levels before saving to ensure all skills have default level 1
+            student_profile.normalize_skills_levels_for_save()
             db.add(student_profile)
         else:
             # Update existing student profile if there are changes
             if student_updates:
+                # Ensure skills_levels is normalized before updating
+                if "skills" in student_updates or "skills_levels" in student_updates:
+                    # Create temporary object to normalize
+                    temp_student = Student()
+                    temp_student.skills = student_updates.get(
+                        "skills", student_profile.skills
+                    )
+                    temp_student.skills_levels = student_updates.get(
+                        "skills_levels", student_profile.skills_levels
+                    )
+                    temp_student.normalize_skills_levels_for_save()
+                    student_updates["skills_levels"] = temp_student.skills_levels
+
                 await db.execute(
                     update(Student)
                     .where(Student.user_id == current_user.user_id)
@@ -404,11 +432,16 @@ async def update_student_profile(
             user_updates["full_name"] = profile_data.full_name.strip()
         if profile_data.email is not None and profile_data.email.strip():
             user_updates["email"] = profile_data.email.strip()
-        if (
-            profile_data.profile_avatar is not None
-            and profile_data.profile_avatar.strip()
-        ):
-            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+        # Handle profile_avatar: allow explicit null to clear avatar
+        if "profile_avatar" in profile_data.__fields_set__:
+            if (
+                profile_data.profile_avatar is not None
+                and profile_data.profile_avatar.strip()
+            ):
+                user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+            else:
+                # Explicitly set to None to clear avatar
+                user_updates["profile_avatar"] = None
 
         # Update user table if there are changes
         if user_updates:
@@ -460,6 +493,19 @@ async def update_student_profile(
 
         # Update student table if there are changes
         if student_updates:
+            # Ensure skills_levels is normalized before updating
+            if "skills" in student_updates or "skills_levels" in student_updates:
+                # Create temporary object to normalize
+                temp_student = Student()
+                temp_student.skills = student_updates.get(
+                    "skills", student_profile.skills
+                )
+                temp_student.skills_levels = student_updates.get(
+                    "skills_levels", student_profile.skills_levels
+                )
+                temp_student.normalize_skills_levels_for_save()
+                student_updates["skills_levels"] = temp_student.skills_levels
+
             await db.execute(
                 update(Student)
                 .where(Student.user_id == current_user.user_id)
@@ -495,7 +541,7 @@ async def update_student_profile(
             experience=updated_user.student_profile.experience,
             portfolio_projects=updated_user.student_profile.portfolio_projects,
             skills=updated_user.student_profile.skills or [],
-            skills_levels=updated_user.student_profile.skills_levels or {},
+            skills_levels=updated_user.student_profile.skills_levels_normalized,
             # Group information (will be None if not in a group)
             group=None,
         )

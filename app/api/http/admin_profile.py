@@ -226,11 +226,16 @@ async def update_admin_profile(
             user_updates["full_name"] = profile_data.full_name.strip()
         if profile_data.email is not None and profile_data.email.strip():
             user_updates["email"] = profile_data.email.strip()
-        if (
-            profile_data.profile_avatar is not None
-            and profile_data.profile_avatar.strip()
-        ):
-            user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+        # Handle profile_avatar: allow explicit null to clear avatar
+        if "profile_avatar" in profile_data.__fields_set__:
+            if (
+                profile_data.profile_avatar is not None
+                and profile_data.profile_avatar.strip()
+            ):
+                user_updates["profile_avatar"] = profile_data.profile_avatar.strip()
+            else:
+                # Explicitly set to None to clear avatar
+                user_updates["profile_avatar"] = None
 
         # Update user table if there are changes
         if user_updates:

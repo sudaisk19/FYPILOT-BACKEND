@@ -1,15 +1,12 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, Enum, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
 from app.db import Base
-from app.models.project import ProjectTypeEnum
 
 
 class Supervisor(Base):
@@ -52,10 +49,15 @@ class Supervisor(Base):
         default=list,  # Initialize as empty list
     )
 
-    project_types = Column(
-        ARRAY(SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False)),
-        nullable=False,  # Must have at least empty array
-        default=list,  # Initialize as empty list
+    project_type = Column(
+        Enum(
+            "research",
+            "product",
+            "product and research",
+            name="project_type_enum",
+            native_enum=False,
+        ),
+        nullable=False,
     )
 
     # Capacity Management

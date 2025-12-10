@@ -24,6 +24,24 @@ class SupervisorBasicInfo(BaseModel):
         from_attributes = True
 
 
+# Domain info with id and name
+class DomainInfo(BaseModel):
+    domain_id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+# Industry info with id and name
+class IndustryInfo(BaseModel):
+    industry_id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 # Detailed supervisor info for individual view
 class SupervisorDetailedInfo(BaseModel):
     # User fields
@@ -43,6 +61,14 @@ class SupervisorDetailedInfo(BaseModel):
     capacity_max: int = 8
     capacity_filled: int = 0
     available_slots: int = Field(description="Available supervision slots")
+
+    # Expertise and preferences
+    domains: List[DomainInfo] = Field(
+        default_factory=list, description="Areas of expertise (domains)"
+    )
+    industries: List[IndustryInfo] = Field(
+        default_factory=list, description="Industries of interest"
+    )
 
     # Additional computed fields
     current_groups: int = Field(description="Number of groups currently supervising")
@@ -65,12 +91,15 @@ class PaginatedSupervisorResponse(BaseModel):
 
 # Query parameters for filtering
 class SupervisorFilters(BaseModel):
-    department: Optional[str] = Field(None, description="Filter by department")
+    department: Optional[str] = Field(
+        None,
+        description="Filter by department (e.g., Software Engineering, SE, Computer Science, CS)",
+    )
     designation: Optional[str] = Field(
         None, description="Filter by designation (Professor, Associate Professor, etc.)"
     )
-    project_type: Optional[str] = Field(
-        None, description="Filter by project type (web, mobile, ai, etc.)"
+    domain: Optional[str] = Field(
+        None, description="Filter by domain expertise (e.g., Web, Mobile, AI, etc.)"
     )
     search: Optional[str] = Field(None, description="Search by name or email")
     page: int = Field(1, ge=1, description="Page number")

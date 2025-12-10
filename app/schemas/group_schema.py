@@ -49,6 +49,33 @@ class SupervisorInfo(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class PendingInviteInfo(BaseModel):
+    """Info about a pending invite (invitee data)"""
+
+    invite_id: str = Field(..., description="UUID of the invite as string")
+    invitee_id: str = Field(..., description="UUID of the invitee as string")
+    invitee_full_name: str = Field(
+        ..., description="Full name of the user who was invited"
+    )
+    invitee_email: str = Field(..., description="Email of the user who was invited")
+    invitee_avatar: Optional[str] = Field(None, description="Avatar URL of the invitee")
+    created_at: str = Field(
+        ..., description="ISO format datetime string when invite was created"
+    )
+    expires_at: str = Field(
+        ..., description="ISO format datetime string when invite expires"
+    )
+
+
+class GroupInvitesInfo(BaseModel):
+    """Information about group invites"""
+
+    pending_count: int = Field(..., description="Number of pending invites")
+    pending: List[PendingInviteInfo] = Field(
+        default_factory=list, description="List of pending invites with inviter details"
+    )
+
+
 class DomainInfo(BaseModel):
     domain_id: UUID
     name: str
@@ -69,7 +96,7 @@ class ProjectInfo(BaseModel):
     industry: Optional[IndustryInfo] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    project_type: Optional[str] = None
+    project_type: str
     repo_links: Optional[List[str]] = Field(default_factory=list)
     updated_at: datetime
 
@@ -81,16 +108,14 @@ class GroupProfileResponse(BaseModel):
         default_factory=lambda: {"primary": None, "co_supervisor": None}
     )
     project: Optional[ProjectInfo] = None
-    invites: Dict[str, int] = Field(default_factory=lambda: {"pending_count": 0})
+    invites: GroupInvitesInfo = Field(
+        ..., description="Pending invites with inviter details"
+    )
 
 
 # PATCH Request Schemas
 class GroupUpdateData(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    fyp_stage: Optional[str] = Field(
-        None,
-        pattern="^(ideation|proposal|approval|implementation|evaluation|completed)$",
-    )
     fyp_cycle: Optional[str] = Field(None, pattern="^(fyp1|fyp2)$")
     cohort_year: Optional[int] = Field(None, ge=2020, le=2030)
     supervisor_id: Optional[UUID] = None
@@ -106,7 +131,9 @@ class ProjectUpdateData(BaseModel):
     industry_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    project_type: Optional[str] = Field(None, pattern="^(research|product|both)$")
+    project_type: Optional[str] = Field(
+        None, pattern="^(research|product|product and research)$"
+    )
     repo_links: Optional[List[str]] = Field(None, max_items=10)
 
 
