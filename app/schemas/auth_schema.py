@@ -117,6 +117,19 @@ class ResetPasswordResponse(BaseModel):
 
 
 # Role-specific schemas for /auth/me endpoint
+class StudentInfo(BaseModel):
+    """Student profile information"""
+
+    roll_number: str
+    department: Optional[str] = None
+    cgpa: Optional[float] = None
+    interests: Optional[List[str]] = None
+    experience: Optional[str] = None
+    portfolio_projects: Optional[dict] = None
+    skills: Optional[List[str]] = None
+    skills_levels: Optional[dict] = None
+
+
 class GroupInfo(BaseModel):
     group_id: Optional[UUID] = None
     group_name: Optional[str] = None
@@ -182,6 +195,7 @@ class UserProfileResponse(BaseModel):
     profile_avatar: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    student_info: Optional[StudentInfo] = None  # Student profile data
     group_info: Optional[GroupInfo] = None  # For students
     supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
     admin_info: Optional[AdminInfo] = None  # For admins
