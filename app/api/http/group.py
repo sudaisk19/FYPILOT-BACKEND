@@ -41,7 +41,7 @@ from app.schemas.group_schema import (
     ProjectInfo,
     SupervisorInfo,
 )
-from app.services.mailer import get_mailer
+from app.services.mailer import send_group_invitation_email
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -214,18 +214,23 @@ async def send_invite(
     db.add(invite)
     await db.commit()
 
-    # Send the email
-    link = f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
-    html = (
-        f"<p>Hi {invitee.full_name},</p>"
-        f"<p>{current_user.full_name} invited you to join the group.</p>"
-        f"<p><a href='{link}'>Accept invite</a> (expires in 7 days)</p>"
+    # Send the email with proper template
+    accept_link = (
+        f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/accept"
+    )
+    reject_link = (
+        f"{settings.frontend_app_url}/groups/{group_id}/invites/{token}/reject"
     )
     background_tasks.add_task(
-        get_mailer().send, invitee.email, "FYP Group Invitation", html
+        send_group_invitation_email,
+        invitee.email,
+        invitee.full_name,
+        current_user.full_name,
+        accept_link,
+        reject_link,
     )
 
-    return {"message": "Invitation sent; check Ethereal preview URL"}
+    return {"message": "Invitation sent successfully"}
 
 
 @router.post(
@@ -310,6 +315,66 @@ async def accept_invite(
 
     await db.commit()
     return {"message": "You've joined the group!"}
+
+
+@router.post(
+    "/invites/{token}/reject",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def reject_invite(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reject a pending group invite.
+
+    Only the invitee can reject an invite. The invite will be marked as 'declined'
+    and removed from pending list.
+
+    Args:
+        token (str): Token of the invite to reject (URL-safe string)
+        db (AsyncSession): Database session
+        current_user (User): Current authenticated user (must be the invitee)
+
+    Returns:
+        MessageResponse: Confirmation of rejection
+
+    Raises:
+        HTTPException(404): Invite not found or not pending
+        HTTPException(403): User is not the intended recipient of the invite
+    """
+    from datetime import timezone
+
+    # Fetch & validate
+    invite = (
+        (await db.execute(select(GroupInvite).where(GroupInvite.token == token)))
+        .scalars()
+        .first()
+    )
+
+    now = datetime.now(timezone.utc)
+    if (
+        not invite
+        or invite.status != InviteStatusEnum.pending
+        or invite.expires_at < now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invite"
+        )
+
+    # Only the intended recipient can reject
+    if invite.invitee_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="This invite isn't for you"
+        )
+
+    # Mark as declined (not deleted, just status change)
+    invite.status = InviteStatusEnum.declined
+    await db.commit()
+
+    return {"message": "You have declined the invite"}
 
 
 @router.delete(
