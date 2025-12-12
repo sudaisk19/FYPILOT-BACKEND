@@ -306,6 +306,9 @@ async def complete_supervisor_wizard_profile(
                 else None
             ),
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bf50275 (bugs fixing)
             requirements=(
                 updated_user.supervisor_profile.requirements
                 if updated_user.supervisor_profile
@@ -646,15 +649,21 @@ async def update_supervisor_profile(
                 else None
             ),
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bf50275 (bugs fixing)
             requirements=(
                 updated_user.supervisor_profile.requirements
                 if updated_user.supervisor_profile
                 else []
             )
             or [],
+<<<<<<< HEAD
 =======
             requirements=updated_user.supervisor_profile.requirements or [],
 >>>>>>> bf3f867 (bugs fixing)
+=======
+>>>>>>> bf50275 (bugs fixing)
             project_type=project_type,
             capacity_max=(
                 updated_user.supervisor_profile.capacity_max
