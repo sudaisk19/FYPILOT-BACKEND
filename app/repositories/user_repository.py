@@ -23,7 +23,13 @@ class UserRepository(BaseRepository[User]):
     def __init__(self):
         super().__init__(User)
 
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
+=======
+    async def get_by_id(
+        self, db: AsyncSession, user_id: UUID
+    ) -> Optional[User]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get user by ID.
 
@@ -36,7 +42,13 @@ class UserRepository(BaseRepository[User]):
         """
         return await super().get_by_id(db, user_id, "user_id")
 
+<<<<<<< HEAD
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
+=======
+    async def get_by_email(
+        self, db: AsyncSession, email: str
+    ) -> Optional[User]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get user by email address.
 
@@ -101,7 +113,13 @@ class UserRepository(BaseRepository[User]):
         result = await db.execute(query)
         return result.scalars().first()
 
+<<<<<<< HEAD
     async def exists_by_email(self, db: AsyncSession, email: str) -> bool:
+=======
+    async def exists_by_email(
+        self, db: AsyncSession, email: str
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Check if a user with the given email exists.
 
@@ -186,7 +204,16 @@ class UserRepository(BaseRepository[User]):
         Returns:
             List of User instances
         """
+<<<<<<< HEAD
         query = select(User).where(User.role == role).offset(skip).limit(limit)
+=======
+        query = (
+            select(User)
+            .where(User.role == role)
+            .offset(skip)
+            .limit(limit)
+        )
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         result = await db.execute(query)
         return list(result.scalars().all())
 

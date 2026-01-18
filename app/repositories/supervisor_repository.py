@@ -9,7 +9,11 @@ including complex queries with joins for domains and industries.
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+<<<<<<< HEAD
 from sqlalchemy import and_, func, or_, select
+=======
+from sqlalchemy import and_, case, func, or_, select
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -103,7 +107,14 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         Returns:
             List of (Supervisor, User) tuples
         """
+<<<<<<< HEAD
         query = select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
+=======
+        query = (
+            select(Supervisor, User)
+            .join(User, Supervisor.user_id == User.user_id)
+        )
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         result = await db.execute(query)
         return list(result.all())
 
@@ -233,9 +244,13 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         if requirements is not None:
             supervisor_data["requirements"] = requirements
         if project_type is not None:
+<<<<<<< HEAD
             from app.models.project import parse_project_type
 
             supervisor_data["project_type"] = parse_project_type(project_type)
+=======
+            supervisor_data["project_type"] = project_type
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 
         return await super().create(db, supervisor_data)
 
@@ -259,6 +274,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         supervisor = await self.get_by_user_id(db, user_id)
         if not supervisor:
             return None
+<<<<<<< HEAD
         # Normalize project_type if present in updates
         if "project_type" in updates and updates["project_type"] is not None:
             from app.models.project import parse_project_type
@@ -267,6 +283,13 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         return await super().update(db, supervisor, updates)
 
     async def get_domains(self, db: AsyncSession, supervisor_id: UUID) -> List[Domain]:
+=======
+        return await super().update(db, supervisor, updates)
+
+    async def get_domains(
+        self, db: AsyncSession, supervisor_id: UUID
+    ) -> List[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get all domains for a supervisor.
 
@@ -415,6 +438,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             await db.flush()
         return supervisor
 
+<<<<<<< HEAD
     async def get_full_profile(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
         """Fetch supervisor with user, domains, industries, and supervised projects."""
         from app.models.group import Group
@@ -441,6 +465,8 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
+=======
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 
 # Singleton instance for convenience
 supervisor_repository = SupervisorRepository()

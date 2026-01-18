@@ -414,6 +414,7 @@ async def get_supervisor_details(
         )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # Fetch supervisor with user details using repository
     row = await supervisor_repository.get_with_user(db, supervisor_id)
 =======
@@ -430,6 +431,10 @@ async def get_supervisor_details(
 
     row = result.first()
 >>>>>>> bc07630 (bugs fixing)
+=======
+    # Fetch supervisor with user details using repository
+    row = await supervisor_repository.get_with_user(db, supervisor_id)
+>>>>>>> 1706dee (refactored: repository pattern implementation)
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Supervisor not found"
@@ -458,6 +463,7 @@ async def get_supervisor_details(
     total_supervised = current_groups
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # Extract domains with id and name using repository data
     domains = [
         DomainInfo(domain_id=domain.domain_id, name=domain.name)
@@ -470,16 +476,23 @@ async def get_supervisor_details(
         for industry in industries_list
 =======
     # Extract domains with id and name
+=======
+    # Extract domains with id and name using repository data
+>>>>>>> 1706dee (refactored: repository pattern implementation)
     domains = [
         DomainInfo(domain_id=domain.domain_id, name=domain.name)
-        for domain in supervisor.domains
+        for domain in domains_list
     ]
 
-    # Extract industries with id and name
+    # Extract industries with id and name using repository data
     industries = [
         IndustryInfo(industry_id=industry.industry_id, name=industry.name)
+<<<<<<< HEAD
         for industry in supervisor.industries
 >>>>>>> bc07630 (bugs fixing)
+=======
+        for industry in industries_list
+>>>>>>> 1706dee (refactored: repository pattern implementation)
     ]
 
     return SupervisorDetailedInfo(

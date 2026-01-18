@@ -113,7 +113,13 @@ class BaseRepository(Generic[ModelType]):
         await db.flush()
         return db_obj
 
+<<<<<<< HEAD
     async def delete(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
+=======
+    async def delete(
+        self, db: AsyncSession, id: UUID, id_field: str = "id"
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Delete a record by its primary key.
 
@@ -132,7 +138,13 @@ class BaseRepository(Generic[ModelType]):
             return True
         return False
 
+<<<<<<< HEAD
     async def exists(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
+=======
+    async def exists(
+        self, db: AsyncSession, id: UUID, id_field: str = "id"
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Check if a record exists by its primary key.
 

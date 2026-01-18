@@ -26,7 +26,13 @@ class GroupRepository(BaseRepository[Group]):
     def __init__(self):
         super().__init__(Group)
 
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, group_id: UUID) -> Optional[Group]:
+=======
+    async def get_by_id(
+        self, db: AsyncSession, group_id: UUID
+    ) -> Optional[Group]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get group by ID.
 
@@ -150,7 +156,13 @@ class GroupRepository(BaseRepository[Group]):
             return None
         return await super().update(db, group, updates)
 
+<<<<<<< HEAD
     async def delete(self, db: AsyncSession, group_id: UUID) -> bool:
+=======
+    async def delete(
+        self, db: AsyncSession, group_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Delete a group.
 
@@ -165,7 +177,13 @@ class GroupRepository(BaseRepository[Group]):
 
     # --- Membership operations ---
 
+<<<<<<< HEAD
     async def get_members(self, db: AsyncSession, group_id: UUID) -> List[GroupMember]:
+=======
+    async def get_members(
+        self, db: AsyncSession, group_id: UUID
+    ) -> List[GroupMember]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get all members of a group.
 
@@ -280,7 +298,13 @@ class GroupRepository(BaseRepository[Group]):
         result = await db.execute(query)
         return result.scalars().first() is not None
 
+<<<<<<< HEAD
     async def count_members(self, db: AsyncSession, group_id: UUID) -> int:
+=======
+    async def count_members(
+        self, db: AsyncSession, group_id: UUID
+    ) -> int:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Count members in a group.
 
@@ -337,7 +361,13 @@ class GroupRepository(BaseRepository[Group]):
         result = await db.execute(query)
         return result.scalars().first()
 
+<<<<<<< HEAD
     async def is_student_in_any_group(self, db: AsyncSession, student_id: UUID) -> bool:
+=======
+    async def is_student_in_any_group(
+        self, db: AsyncSession, student_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Check if a student is in any group.
 

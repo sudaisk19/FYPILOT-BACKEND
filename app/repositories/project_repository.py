@@ -24,7 +24,13 @@ class ProjectRepository(BaseRepository[Project]):
     def __init__(self):
         super().__init__(Project)
 
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, project_id: UUID) -> Optional[Project]:
+=======
+    async def get_by_id(
+        self, db: AsyncSession, project_id: UUID
+    ) -> Optional[Project]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get project by ID.
 
@@ -137,6 +143,7 @@ class ProjectRepository(BaseRepository[Project]):
         project = await self.get_by_id(db, project_id)
         if not project:
             return None
+<<<<<<< HEAD
         
         if "project_type" in updates and updates["project_type"] is not None:
          from app.models.project import parse_project_type
@@ -145,6 +152,13 @@ class ProjectRepository(BaseRepository[Project]):
         return await super().update(db, project, updates)
 
     async def delete(self, db: AsyncSession, project_id: UUID) -> bool:
+=======
+        return await super().update(db, project, updates)
+
+    async def delete(
+        self, db: AsyncSession, project_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Delete a project.
 
@@ -159,7 +173,13 @@ class ProjectRepository(BaseRepository[Project]):
 
     # --- Domain operations ---
 
+<<<<<<< HEAD
     async def get_domains(self, db: AsyncSession, project_id: UUID) -> List[Domain]:
+=======
+    async def get_domains(
+        self, db: AsyncSession, project_id: UUID
+    ) -> List[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get all domains for a project.
 

@@ -1,5 +1,6 @@
 # app/services/recommendation_service.py
 """
+<<<<<<< HEAD
 Supervisor Recommendation Service - Refactored to use External AI Microservice.
 
 This service acts as a bridge between the main backend API and the external
@@ -13,11 +14,23 @@ Features:
 - Response caching to reduce AI service load
 - Circuit breaker for fault tolerance
 - Request deduplication
+=======
+AI-Powered Supervisor Recommendation Service - Refactored to use Repository Pattern
+
+This service provides intelligent supervisor recommendations for student groups
+using semantic search, heuristic scoring, and LLM-generated explanations.
+
+REFACTORED:
+- initialize_index() uses supervisor_repository.list_all_with_users()
+  and supervisor_repository.get_domains/get_industries()
+- recommend_supervisors() uses group_repository.get_with_members()
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
+<<<<<<< HEAD
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.ai_recommender import (
@@ -30,6 +43,22 @@ from app.services.ai_recommender import (
     AIRecommenderServiceError,
     ai_recommender_client,
 )
+=======
+import numpy as np
+
+# Import repositories instead of direct models
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# AI libraries
+try:
+    import faiss
+    import ollama
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    logging.warning("AI libraries not installed. Recommendation service will not work.")
+
+from app.repositories import group_repository, supervisor_repository
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 
 logger = logging.getLogger(__name__)
 
@@ -61,34 +90,20 @@ class RecommendationService:
 
         logger.info("Building FAISS index for supervisors...")
 
-        # Fetch all supervisors
-        result = await db.execute(
-            select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
-        )
-        rows = result.all()
+        # Fetch all supervisors using repository
+        rows = await supervisor_repository.list_all_with_users(db)
 
         supervisors_data = []
         supervisors_list = []
 
         for supervisor, user in rows:
-            # Fetch domains for this supervisor
-            domains_result = await db.execute(
-                select(Domain)
-                .join(SupervisorDomain, Domain.domain_id == SupervisorDomain.domain_id)
-                .where(SupervisorDomain.supervisor_id == supervisor.user_id)
-            )
-            domains = [d.name for d in domains_result.scalars().all()]
+            # Fetch domains for this supervisor using repository
+            domains_list = await supervisor_repository.get_domains(db, supervisor.user_id)
+            domains = [d.name for d in domains_list]
 
-            # Fetch industries for this supervisor
-            industries_result = await db.execute(
-                select(Industry)
-                .join(
-                    SupervisorIndustry,
-                    Industry.industry_id == SupervisorIndustry.industry_id,
-                )
-                .where(SupervisorIndustry.supervisor_id == supervisor.user_id)
-            )
-            [i.name for i in industries_result.scalars().all()]
+            # Fetch industries for this supervisor using repository
+            industries_list = await supervisor_repository.get_industries(db, supervisor.user_id)
+            [i.name for i in industries_list]
 
             # Build descriptive text for this supervisor
             domains_str = ", ".join(domains) if domains else "General"
@@ -180,6 +195,7 @@ class RecommendationService:
         # 1. Check circuit breaker
         self._circuit.check_and_raise()
 
+<<<<<<< HEAD
         # 2. Check cache first
         cached_recommendations = await self._cache.get(
             group_id=group_id,
@@ -188,6 +204,10 @@ class RecommendationService:
             idea_industry=idea_industry,
             project_type=project_type,
         )
+=======
+        # Fetch group with members using repository
+        group = await group_repository.get_with_members(db, group_id)
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 
         if cached_recommendations is not None:
             logger.info(f"Returning cached recommendations for group {group_id}")

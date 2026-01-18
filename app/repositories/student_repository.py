@@ -41,7 +41,13 @@ class StudentRepository(BaseRepository[Student]):
         result = await db.execute(query)
         return result.scalars().first()
 
+<<<<<<< HEAD
     async def get_with_user(self, db: AsyncSession, user_id: UUID) -> Optional[Student]:
+=======
+    async def get_with_user(
+        self, db: AsyncSession, user_id: UUID
+    ) -> Optional[Student]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get student profile with user relationship loaded.
 
@@ -75,7 +81,13 @@ class StudentRepository(BaseRepository[Student]):
         """
         query = (
             select(Student)
+<<<<<<< HEAD
             .options(selectinload(Student.groups).selectinload(Group.project))
+=======
+            .options(
+                selectinload(Student.groups).selectinload(Group.project)
+            )
+>>>>>>> 1706dee (refactored: repository pattern implementation)
             .where(Student.user_id == user_id)
         )
         result = await db.execute(query)
@@ -155,7 +167,13 @@ class StudentRepository(BaseRepository[Student]):
             return None
         return await super().update(db, student, updates)
 
+<<<<<<< HEAD
     async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
+=======
+    async def exists(
+        self, db: AsyncSession, user_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Check if a student profile exists for the given user.
 
@@ -169,7 +187,13 @@ class StudentRepository(BaseRepository[Student]):
         student = await self.get_by_user_id(db, user_id)
         return student is not None
 
+<<<<<<< HEAD
     async def has_roll_number(self, db: AsyncSession, user_id: UUID) -> bool:
+=======
+    async def has_roll_number(
+        self, db: AsyncSession, user_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Check if student has a roll number set.
 

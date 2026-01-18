@@ -6,7 +6,11 @@ Handles all database operations for the Request model (supervisor invites/reques
 """
 
 from datetime import datetime
+<<<<<<< HEAD
 from typing import List, Optional, Tuple
+=======
+from typing import Any, Dict, List, Optional, Tuple
+>>>>>>> 1706dee (refactored: repository pattern implementation)
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
@@ -26,7 +30,13 @@ class RequestRepository(BaseRepository[Request]):
     def __init__(self):
         super().__init__(Request)
 
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, request_id: UUID) -> Optional[Request]:
+=======
+    async def get_by_id(
+        self, db: AsyncSession, request_id: UUID
+    ) -> Optional[Request]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get request by ID.
 
@@ -205,7 +215,13 @@ class RequestRepository(BaseRepository[Request]):
         await db.flush()
         return request
 
+<<<<<<< HEAD
     async def delete(self, db: AsyncSession, request_id: UUID) -> bool:
+=======
+    async def delete(
+        self, db: AsyncSession, request_id: UUID
+    ) -> bool:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Delete a request.
 

@@ -22,7 +22,13 @@ class DomainRepository(BaseRepository[Domain]):
     def __init__(self):
         super().__init__(Domain)
 
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, domain_id: UUID) -> Optional[Domain]:
+=======
+    async def get_by_id(
+        self, db: AsyncSession, domain_id: UUID
+    ) -> Optional[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get domain by ID.
 
@@ -35,7 +41,13 @@ class DomainRepository(BaseRepository[Domain]):
         """
         return await super().get_by_id(db, domain_id, "domain_id")
 
+<<<<<<< HEAD
     async def get_by_name(self, db: AsyncSession, name: str) -> Optional[Domain]:
+=======
+    async def get_by_name(
+        self, db: AsyncSession, name: str
+    ) -> Optional[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get domain by name.
 
@@ -50,7 +62,13 @@ class DomainRepository(BaseRepository[Domain]):
         result = await db.execute(query)
         return result.scalars().first()
 
+<<<<<<< HEAD
     async def get_all(self, db: AsyncSession) -> List[Domain]:
+=======
+    async def get_all(
+        self, db: AsyncSession
+    ) -> List[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Get all domains.
 
@@ -84,7 +102,13 @@ class DomainRepository(BaseRepository[Domain]):
         result = await db.execute(query)
         return list(result.scalars().all())
 
+<<<<<<< HEAD
     async def search_by_name(self, db: AsyncSession, search_term: str) -> List[Domain]:
+=======
+    async def search_by_name(
+        self, db: AsyncSession, search_term: str
+    ) -> List[Domain]:
+>>>>>>> 1706dee (refactored: repository pattern implementation)
         """
         Search domains by name (case-insensitive partial match).
 
