@@ -114,12 +114,16 @@ class BaseRepository(Generic[ModelType]):
         return db_obj
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def delete(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
 =======
     async def delete(
         self, db: AsyncSession, id: UUID, id_field: str = "id"
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def delete(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Delete a record by its primary key.
 
@@ -139,12 +143,16 @@ class BaseRepository(Generic[ModelType]):
         return False
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def exists(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
 =======
     async def exists(
         self, db: AsyncSession, id: UUID, id_field: str = "id"
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def exists(self, db: AsyncSession, id: UUID, id_field: str = "id") -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Check if a record exists by its primary key.
 

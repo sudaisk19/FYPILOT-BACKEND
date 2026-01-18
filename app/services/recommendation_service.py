@@ -98,11 +98,15 @@ class RecommendationService:
 
         for supervisor, user in rows:
             # Fetch domains for this supervisor using repository
-            domains_list = await supervisor_repository.get_domains(db, supervisor.user_id)
+            domains_list = await supervisor_repository.get_domains(
+                db, supervisor.user_id
+            )
             domains = [d.name for d in domains_list]
 
             # Fetch industries for this supervisor using repository
-            industries_list = await supervisor_repository.get_industries(db, supervisor.user_id)
+            industries_list = await supervisor_repository.get_industries(
+                db, supervisor.user_id
+            )
             [i.name for i in industries_list]
 
             # Build descriptive text for this supervisor

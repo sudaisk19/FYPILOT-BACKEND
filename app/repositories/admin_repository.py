@@ -27,12 +27,16 @@ class AdminRepository(BaseRepository[Admin]):
         super().__init__(Admin)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def get_by_user_id(self, db: AsyncSession, user_id: UUID) -> Optional[Admin]:
 =======
     async def get_by_user_id(
         self, db: AsyncSession, user_id: UUID
     ) -> Optional[Admin]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_by_user_id(self, db: AsyncSession, user_id: UUID) -> Optional[Admin]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get admin profile by user ID.
 
@@ -98,12 +102,16 @@ class AdminRepository(BaseRepository[Admin]):
         return await super().update(db, admin, updates)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
 =======
     async def exists(
         self, db: AsyncSession, user_id: UUID
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Check if an admin profile exists for the given user.
 
@@ -120,12 +128,16 @@ class AdminRepository(BaseRepository[Admin]):
     # --- System Statistics ---
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def get_system_stats(self, db: AsyncSession) -> Dict[str, int]:
 =======
     async def get_system_stats(
         self, db: AsyncSession
     ) -> Dict[str, int]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_system_stats(self, db: AsyncSession) -> Dict[str, int]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get system-wide statistics for admin dashboard.
 
@@ -138,12 +150,16 @@ class AdminRepository(BaseRepository[Admin]):
         try:
             # Count students
 <<<<<<< HEAD
+<<<<<<< HEAD
             students_count = await db.execute(select(func.count()).select_from(Student))
 =======
             students_count = await db.execute(
                 select(func.count()).select_from(Student)
             )
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+            students_count = await db.execute(select(func.count()).select_from(Student))
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
             total_students = students_count.scalar_one()
 
             # Count supervisors
@@ -153,6 +169,7 @@ class AdminRepository(BaseRepository[Admin]):
             total_supervisors = supervisors_count.scalar_one()
 
             # Count groups
+<<<<<<< HEAD
 <<<<<<< HEAD
             groups_count = await db.execute(select(func.count()).select_from(Group))
             total_groups = groups_count.scalar_one()
@@ -170,6 +187,13 @@ class AdminRepository(BaseRepository[Admin]):
                 select(func.count()).select_from(Project)
             )
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+            groups_count = await db.execute(select(func.count()).select_from(Group))
+            total_groups = groups_count.scalar_one()
+
+            # Count projects
+            projects_count = await db.execute(select(func.count()).select_from(Project))
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
             total_projects = projects_count.scalar_one()
 
             # Count pending invites using raw SQL to avoid enum constraint issues

@@ -24,12 +24,16 @@ class UserRepository(BaseRepository[User]):
         super().__init__(User)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def get_by_id(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
 =======
     async def get_by_id(
         self, db: AsyncSession, user_id: UUID
     ) -> Optional[User]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_by_id(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get user by ID.
 
@@ -43,12 +47,16 @@ class UserRepository(BaseRepository[User]):
         return await super().get_by_id(db, user_id, "user_id")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
 =======
     async def get_by_email(
         self, db: AsyncSession, email: str
     ) -> Optional[User]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get user by email address.
 
@@ -114,12 +122,16 @@ class UserRepository(BaseRepository[User]):
         return result.scalars().first()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def exists_by_email(self, db: AsyncSession, email: str) -> bool:
 =======
     async def exists_by_email(
         self, db: AsyncSession, email: str
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def exists_by_email(self, db: AsyncSession, email: str) -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Check if a user with the given email exists.
 
@@ -205,6 +217,7 @@ class UserRepository(BaseRepository[User]):
             List of User instances
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
         query = select(User).where(User.role == role).offset(skip).limit(limit)
 =======
         query = (
@@ -214,6 +227,9 @@ class UserRepository(BaseRepository[User]):
             .limit(limit)
         )
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+        query = select(User).where(User.role == role).offset(skip).limit(limit)
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         result = await db.execute(query)
         return list(result.scalars().all())
 

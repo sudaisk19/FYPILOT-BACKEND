@@ -42,12 +42,16 @@ class StudentRepository(BaseRepository[Student]):
         return result.scalars().first()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def get_with_user(self, db: AsyncSession, user_id: UUID) -> Optional[Student]:
 =======
     async def get_with_user(
         self, db: AsyncSession, user_id: UUID
     ) -> Optional[Student]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_with_user(self, db: AsyncSession, user_id: UUID) -> Optional[Student]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get student profile with user relationship loaded.
 
@@ -82,12 +86,16 @@ class StudentRepository(BaseRepository[Student]):
         query = (
             select(Student)
 <<<<<<< HEAD
+<<<<<<< HEAD
             .options(selectinload(Student.groups).selectinload(Group.project))
 =======
             .options(
                 selectinload(Student.groups).selectinload(Group.project)
             )
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+            .options(selectinload(Student.groups).selectinload(Group.project))
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
             .where(Student.user_id == user_id)
         )
         result = await db.execute(query)
@@ -168,12 +176,16 @@ class StudentRepository(BaseRepository[Student]):
         return await super().update(db, student, updates)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
 =======
     async def exists(
         self, db: AsyncSession, user_id: UUID
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Check if a student profile exists for the given user.
 
@@ -188,12 +200,16 @@ class StudentRepository(BaseRepository[Student]):
         return student is not None
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     async def has_roll_number(self, db: AsyncSession, user_id: UUID) -> bool:
 =======
     async def has_roll_number(
         self, db: AsyncSession, user_id: UUID
     ) -> bool:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def has_roll_number(self, db: AsyncSession, user_id: UUID) -> bool:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Check if student has a roll number set.
 

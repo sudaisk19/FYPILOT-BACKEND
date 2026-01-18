@@ -20,6 +20,7 @@ Usage:
 """
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Repository classes
 from .admin_repository import AdminRepository, admin_repository
 
@@ -32,6 +33,13 @@ from .base import BaseRepository
 # Repository classes
 from .admin_repository import AdminRepository, admin_repository
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+# Repository classes
+from .admin_repository import AdminRepository, admin_repository
+
+# Base repository
+from .base import BaseRepository
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
 from .domain_repository import DomainRepository, domain_repository
 from .group_repository import GroupRepository, group_repository
 from .project_repository import ProjectRepository, project_repository

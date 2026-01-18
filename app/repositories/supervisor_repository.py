@@ -10,10 +10,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 from sqlalchemy import and_, func, or_, select
 =======
 from sqlalchemy import and_, case, func, or_, select
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+from sqlalchemy import and_, func, or_, select
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -108,6 +112,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             List of (Supervisor, User) tuples
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
         query = select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
 =======
         query = (
@@ -115,6 +120,9 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             .join(User, Supervisor.user_id == User.user_id)
         )
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+        query = select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         result = await db.execute(query)
         return list(result.all())
 
@@ -286,10 +294,14 @@ class SupervisorRepository(BaseRepository[Supervisor]):
 =======
         return await super().update(db, supervisor, updates)
 
+<<<<<<< HEAD
     async def get_domains(
         self, db: AsyncSession, supervisor_id: UUID
     ) -> List[Domain]:
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+    async def get_domains(self, db: AsyncSession, supervisor_id: UUID) -> List[Domain]:
+>>>>>>> 1d2f81f (refactored: repository pattern implementation)
         """
         Get all domains for a supervisor.
 
