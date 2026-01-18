@@ -24,9 +24,7 @@ class ProjectRepository(BaseRepository[Project]):
     def __init__(self):
         super().__init__(Project)
 
-    async def get_by_id(
-        self, db: AsyncSession, project_id: UUID
-    ) -> Optional[Project]:
+    async def get_by_id(self, db: AsyncSession, project_id: UUID) -> Optional[Project]:
         """
         Get project by ID.
 
@@ -141,9 +139,7 @@ class ProjectRepository(BaseRepository[Project]):
             return None
         return await super().update(db, project, updates)
 
-    async def delete(
-        self, db: AsyncSession, project_id: UUID
-    ) -> bool:
+    async def delete(self, db: AsyncSession, project_id: UUID) -> bool:
         """
         Delete a project.
 
@@ -158,9 +154,7 @@ class ProjectRepository(BaseRepository[Project]):
 
     # --- Domain operations ---
 
-    async def get_domains(
-        self, db: AsyncSession, project_id: UUID
-    ) -> List[Domain]:
+    async def get_domains(self, db: AsyncSession, project_id: UUID) -> List[Domain]:
         """
         Get all domains for a project.
 

@@ -19,11 +19,11 @@ Usage:
     group = await group_repository.get_by_id(db, group_id)
 """
 
-# Base repository
-from .base import BaseRepository
-
 # Repository classes
 from .admin_repository import AdminRepository, admin_repository
+
+# Base repository
+from .base import BaseRepository
 from .domain_repository import DomainRepository, domain_repository
 from .group_repository import GroupRepository, group_repository
 from .project_repository import ProjectRepository, project_repository

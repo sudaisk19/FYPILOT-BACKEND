@@ -26,9 +26,7 @@ class AdminRepository(BaseRepository[Admin]):
     def __init__(self):
         super().__init__(Admin)
 
-    async def get_by_user_id(
-        self, db: AsyncSession, user_id: UUID
-    ) -> Optional[Admin]:
+    async def get_by_user_id(self, db: AsyncSession, user_id: UUID) -> Optional[Admin]:
         """
         Get admin profile by user ID.
 
@@ -93,9 +91,7 @@ class AdminRepository(BaseRepository[Admin]):
             return None
         return await super().update(db, admin, updates)
 
-    async def exists(
-        self, db: AsyncSession, user_id: UUID
-    ) -> bool:
+    async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
         """
         Check if an admin profile exists for the given user.
 
@@ -111,9 +107,7 @@ class AdminRepository(BaseRepository[Admin]):
 
     # --- System Statistics ---
 
-    async def get_system_stats(
-        self, db: AsyncSession
-    ) -> Dict[str, int]:
+    async def get_system_stats(self, db: AsyncSession) -> Dict[str, int]:
         """
         Get system-wide statistics for admin dashboard.
 
@@ -125,9 +119,7 @@ class AdminRepository(BaseRepository[Admin]):
         """
         try:
             # Count students
-            students_count = await db.execute(
-                select(func.count()).select_from(Student)
-            )
+            students_count = await db.execute(select(func.count()).select_from(Student))
             total_students = students_count.scalar_one()
 
             # Count supervisors
@@ -137,15 +129,11 @@ class AdminRepository(BaseRepository[Admin]):
             total_supervisors = supervisors_count.scalar_one()
 
             # Count groups
-            groups_count = await db.execute(
-                select(func.count()).select_from(Group)
-            )
+            groups_count = await db.execute(select(func.count()).select_from(Group))
             total_groups = groups_count.scalar_one()
 
             # Count projects
-            projects_count = await db.execute(
-                select(func.count()).select_from(Project)
-            )
+            projects_count = await db.execute(select(func.count()).select_from(Project))
             total_projects = projects_count.scalar_one()
 
             # Count pending invites using raw SQL to avoid enum constraint issues

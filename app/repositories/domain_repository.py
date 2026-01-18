@@ -22,9 +22,7 @@ class DomainRepository(BaseRepository[Domain]):
     def __init__(self):
         super().__init__(Domain)
 
-    async def get_by_id(
-        self, db: AsyncSession, domain_id: UUID
-    ) -> Optional[Domain]:
+    async def get_by_id(self, db: AsyncSession, domain_id: UUID) -> Optional[Domain]:
         """
         Get domain by ID.
 
@@ -37,9 +35,7 @@ class DomainRepository(BaseRepository[Domain]):
         """
         return await super().get_by_id(db, domain_id, "domain_id")
 
-    async def get_by_name(
-        self, db: AsyncSession, name: str
-    ) -> Optional[Domain]:
+    async def get_by_name(self, db: AsyncSession, name: str) -> Optional[Domain]:
         """
         Get domain by name.
 
@@ -54,9 +50,7 @@ class DomainRepository(BaseRepository[Domain]):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def get_all(
-        self, db: AsyncSession
-    ) -> List[Domain]:
+    async def get_all(self, db: AsyncSession) -> List[Domain]:
         """
         Get all domains.
 
@@ -90,9 +84,7 @@ class DomainRepository(BaseRepository[Domain]):
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def search_by_name(
-        self, db: AsyncSession, search_term: str
-    ) -> List[Domain]:
+    async def search_by_name(self, db: AsyncSession, search_term: str) -> List[Domain]:
         """
         Search domains by name (case-insensitive partial match).
 

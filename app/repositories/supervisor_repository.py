@@ -9,7 +9,7 @@ including complex queries with joins for domains and industries.
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -103,10 +103,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         Returns:
             List of (Supervisor, User) tuples
         """
-        query = (
-            select(Supervisor, User)
-            .join(User, Supervisor.user_id == User.user_id)
-        )
+        query = select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
         result = await db.execute(query)
         return list(result.all())
 
@@ -262,9 +259,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             return None
         return await super().update(db, supervisor, updates)
 
-    async def get_domains(
-        self, db: AsyncSession, supervisor_id: UUID
-    ) -> List[Domain]:
+    async def get_domains(self, db: AsyncSession, supervisor_id: UUID) -> List[Domain]:
         """
         Get all domains for a supervisor.
 

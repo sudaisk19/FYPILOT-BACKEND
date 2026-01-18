@@ -41,9 +41,7 @@ class StudentRepository(BaseRepository[Student]):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def get_with_user(
-        self, db: AsyncSession, user_id: UUID
-    ) -> Optional[Student]:
+    async def get_with_user(self, db: AsyncSession, user_id: UUID) -> Optional[Student]:
         """
         Get student profile with user relationship loaded.
 
@@ -77,9 +75,7 @@ class StudentRepository(BaseRepository[Student]):
         """
         query = (
             select(Student)
-            .options(
-                selectinload(Student.groups).selectinload(Group.project)
-            )
+            .options(selectinload(Student.groups).selectinload(Group.project))
             .where(Student.user_id == user_id)
         )
         result = await db.execute(query)
@@ -159,9 +155,7 @@ class StudentRepository(BaseRepository[Student]):
             return None
         return await super().update(db, student, updates)
 
-    async def exists(
-        self, db: AsyncSession, user_id: UUID
-    ) -> bool:
+    async def exists(self, db: AsyncSession, user_id: UUID) -> bool:
         """
         Check if a student profile exists for the given user.
 
@@ -175,9 +169,7 @@ class StudentRepository(BaseRepository[Student]):
         student = await self.get_by_user_id(db, user_id)
         return student is not None
 
-    async def has_roll_number(
-        self, db: AsyncSession, user_id: UUID
-    ) -> bool:
+    async def has_roll_number(self, db: AsyncSession, user_id: UUID) -> bool:
         """
         Check if student has a roll number set.
 

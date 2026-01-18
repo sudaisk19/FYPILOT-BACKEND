@@ -169,9 +169,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def count_by_group(
-        self, db: AsyncSession, group_id: UUID
-    ) -> int:
+    async def count_by_group(self, db: AsyncSession, group_id: UUID) -> int:
         """
         Count shortlisted supervisors for a group.
 
@@ -192,9 +190,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         result = await db.execute(query)
         return result.scalar_one()
 
-    async def clear_group_shortlist(
-        self, db: AsyncSession, group_id: UUID
-    ) -> int:
+    async def clear_group_shortlist(self, db: AsyncSession, group_id: UUID) -> int:
         """
         Remove all shortlisted supervisors for a group.
 
