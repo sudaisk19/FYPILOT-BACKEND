@@ -1,9 +1,14 @@
 # app/services/recommendation_service.py
 """
-AI-Powered Supervisor Recommendation Service
+AI-Powered Supervisor Recommendation Service - Refactored to use Repository Pattern
 
 This service provides intelligent supervisor recommendations for student groups
 using semantic search, heuristic scoring, and LLM-generated explanations.
+
+REFACTORED:
+- initialize_index() uses supervisor_repository.list_all_with_users()
+  and supervisor_repository.get_domains/get_industries()
+- recommend_supervisors() uses group_repository.get_with_members()
 """
 
 import logging
@@ -11,10 +16,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-# Import your existing models
-from sqlalchemy import select
+# Import repositories instead of direct models
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 # AI libraries
 try:
@@ -24,14 +27,7 @@ try:
 except ImportError:
     logging.warning("AI libraries not installed. Recommendation service will not work.")
 
-from app.models.domain import Domain
-from app.models.group import Group, GroupMember
-from app.models.industry import Industry
-from app.models.student import Student
-from app.models.supervisor import Supervisor
-from app.models.supervisor_domain import SupervisorDomain
-from app.models.supervisor_industry import SupervisorIndustry
-from app.models.user import User
+from app.repositories import group_repository, supervisor_repository
 
 logger = logging.getLogger(__name__)
 
@@ -61,34 +57,20 @@ class RecommendationService:
 
         logger.info("Building FAISS index for supervisors...")
 
-        # Fetch all supervisors
-        result = await db.execute(
-            select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
-        )
-        rows = result.all()
+        # Fetch all supervisors using repository
+        rows = await supervisor_repository.list_all_with_users(db)
 
         supervisors_data = []
         supervisors_list = []
 
         for supervisor, user in rows:
-            # Fetch domains for this supervisor
-            domains_result = await db.execute(
-                select(Domain)
-                .join(SupervisorDomain, Domain.domain_id == SupervisorDomain.domain_id)
-                .where(SupervisorDomain.supervisor_id == supervisor.user_id)
-            )
-            domains = [d.name for d in domains_result.scalars().all()]
+            # Fetch domains for this supervisor using repository
+            domains_list = await supervisor_repository.get_domains(db, supervisor.user_id)
+            domains = [d.name for d in domains_list]
 
-            # Fetch industries for this supervisor
-            industries_result = await db.execute(
-                select(Industry)
-                .join(
-                    SupervisorIndustry,
-                    Industry.industry_id == SupervisorIndustry.industry_id,
-                )
-                .where(SupervisorIndustry.supervisor_id == supervisor.user_id)
-            )
-            [i.name for i in industries_result.scalars().all()]
+            # Fetch industries for this supervisor using repository
+            industries_list = await supervisor_repository.get_industries(db, supervisor.user_id)
+            [i.name for i in industries_list]
 
             # Build descriptive text for this supervisor
             domains_str = ", ".join(domains) if domains else "General"
@@ -169,17 +151,8 @@ class RecommendationService:
         # Ensure index is initialized
         await self.initialize_index(db)
 
-        # Fetch group with members and their student profiles
-        result = await db.execute(
-            select(Group)
-            .options(
-                selectinload(Group.members)
-                .selectinload(GroupMember.student)
-                .selectinload(Student.user)
-            )
-            .where(Group.group_id == group_id)
-        )
-        group = result.scalar_one_or_none()
+        # Fetch group with members using repository
+        group = await group_repository.get_with_members(db, group_id)
 
         if not group:
             raise ValueError("Group not found")

@@ -1,5 +1,18 @@
 # app/api/http/supervisor_explore.py
+"""
+Supervisor Explore API Module - Partially Refactored to use Repository Pattern
 
+This module handles supervisor browsing and search operations.
+
+REFACTORED:
+- get_supervisor_details() uses supervisor_repository.get_with_user()
+  and supervisor_repository.get_domains/get_industries()
+
+NOT REFACTORED (complex relevance scoring logic):
+- explore_supervisors() - keeps direct SQLAlchemy for relevance scoring
+  The repository search() method doesn't support relevance scoring which
+  is critical for this endpoint's UX.
+"""
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,6 +26,7 @@ from app.models.domain import Domain
 from app.models.supervisor import Supervisor
 from app.models.supervisor_domain import SupervisorDomain
 from app.models.user import User
+from app.repositories import supervisor_repository
 from app.schemas.supervisor_explore_schema import (
     DomainInfo,
     IndustryInfo,
@@ -376,24 +390,18 @@ async def get_supervisor_details(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Fetch supervisor with user details, domains and industries eagerly loaded
-    result = await db.execute(
-        select(User, Supervisor)
-        .options(
-            selectinload(Supervisor.domains),
-            selectinload(Supervisor.industries),
-        )
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .where(User.user_id == supervisor_id, User.role == "supervisor")
-    )
-
-    row = result.first()
+    # Fetch supervisor with user details using repository
+    row = await supervisor_repository.get_with_user(db, supervisor_id)
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Supervisor not found"
         )
 
     user, supervisor = row
+
+    # Fetch domains and industries using repository
+    domains_list = await supervisor_repository.get_domains(db, supervisor_id)
+    industries_list = await supervisor_repository.get_industries(db, supervisor_id)
 
     # Calculate available slots
     available_slots = supervisor.capacity_max - supervisor.capacity_filled
@@ -411,16 +419,16 @@ async def get_supervisor_details(
     # For now, we'll use current_groups as a placeholder
     total_supervised = current_groups
 
-    # Extract domains with id and name
+    # Extract domains with id and name using repository data
     domains = [
         DomainInfo(domain_id=domain.domain_id, name=domain.name)
-        for domain in supervisor.domains
+        for domain in domains_list
     ]
 
-    # Extract industries with id and name
+    # Extract industries with id and name using repository data
     industries = [
         IndustryInfo(industry_id=industry.industry_id, name=industry.name)
-        for industry in supervisor.industries
+        for industry in industries_list
     ]
 
     return SupervisorDetailedInfo(
