@@ -84,24 +84,27 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        errors = []
-
         if len(v) < 8:
-            errors.append("Password must be at least 8 characters long")
-
-        if not any(c.isupper() for c in v):
-            errors.append("Password must contain at least one uppercase letter (A-Z)")
-        if not any(c.islower() for c in v):
-            errors.append("Password must contain at least one lowercase letter (a-z)")
-        if not any(c.isdigit() for c in v):
-            errors.append("Password must contain at least one number (0-9)")
-        if not any(c in cls.SPECIAL_CHARS for c in v):
-            errors.append(
-                f"Password must contain at least one special character from: {cls.SPECIAL_CHARS}"
+            raise ValueError(
+                "Password must be at least 8 characters (e.g., SecureP@ss123)"
             )
 
-        if errors:
-            raise ValueError("\n".join(errors))
+        if not any(c.isupper() for c in v):
+            raise ValueError(
+                "Password must contain at least one uppercase letter (e.g., SecureP@ss123)"
+            )
+        if not any(c.islower() for c in v):
+            raise ValueError(
+                "Password must contain at least one lowercase letter (e.g., SecureP@ss123)"
+            )
+        if not any(c.isdigit() for c in v):
+            raise ValueError(
+                "Password must contain at least one number (e.g., SecureP@ss123)"
+            )
+        if not any(c in cls.SPECIAL_CHARS for c in v):
+            raise ValueError(
+                f"Password must contain a special character like !@#$%^&* (e.g., SecureP@ss123)"
+            )
 
         return v
 
@@ -117,6 +120,19 @@ class ResetPasswordResponse(BaseModel):
 
 
 # Role-specific schemas for /auth/me endpoint
+class StudentInfo(BaseModel):
+    """Student profile information"""
+
+    roll_number: str
+    department: Optional[str] = None
+    cgpa: Optional[float] = None
+    interests: Optional[List[str]] = None
+    experience: Optional[str] = None
+    portfolio_projects: Optional[dict] = None
+    skills: Optional[List[str]] = None
+    skills_levels: Optional[dict] = None
+
+
 class GroupInfo(BaseModel):
     group_id: Optional[UUID] = None
     group_name: Optional[str] = None
@@ -182,6 +198,7 @@ class UserProfileResponse(BaseModel):
     profile_avatar: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    student_info: Optional[StudentInfo] = None  # Student profile data
     group_info: Optional[GroupInfo] = None  # For students
     supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
     admin_info: Optional[AdminInfo] = None  # For admins

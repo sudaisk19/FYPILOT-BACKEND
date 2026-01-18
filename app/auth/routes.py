@@ -73,6 +73,7 @@ from app.schemas.auth_schema import (
     RoleUpdateRequest,
     RoleUpdateResponse,
     SignupResponse,
+    StudentInfo,
     SupervisedGroup,
     SupervisorInfo,
     SystemStats,
@@ -352,9 +353,11 @@ async def get_user_profile(
     group_info = None
     supervisor_info = None
     admin_info = None
+    student_info = None
 
     try:
         if role == "student":
+            student_info = await get_student_info(current_user.user_id, db)
             group_info = await get_student_group_info(current_user.user_id, db)
         elif role == "supervisor":
             supervisor_info = await get_supervisor_info(current_user.user_id, db)
@@ -374,6 +377,7 @@ async def get_user_profile(
         profile_avatar=current_user.profile_avatar,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
+        student_info=student_info,
         group_info=group_info,
         supervisor_info=supervisor_info,
         admin_info=admin_info,
@@ -386,6 +390,33 @@ async def get_user_profile(
 
 
 # Helper functions for role-specific data fetching
+async def get_student_info(user_id: UUID, db: AsyncSession) -> Optional[StudentInfo]:
+    """Get student profile information"""
+    try:
+        # Get student profile
+        student_result = await db.execute(
+            select(Student).where(Student.user_id == user_id)
+        )
+        student = student_result.scalar_one_or_none()
+
+        if not student:
+            return None
+
+        return StudentInfo(
+            roll_number=student.roll_number,
+            department=student.department,
+            cgpa=float(student.cgpa) if student.cgpa else None,
+            interests=student.interests,
+            experience=student.experience,
+            portfolio_projects=student.portfolio_projects,
+            skills=student.skills,
+            skills_levels=student.skills_levels_normalized,
+        )
+    except Exception as e:
+        logger.error(f"Error fetching student info for user {user_id}: {e}")
+        return None
+
+
 async def get_student_group_info(
     user_id: UUID, db: AsyncSession
 ) -> Optional[GroupInfo]:

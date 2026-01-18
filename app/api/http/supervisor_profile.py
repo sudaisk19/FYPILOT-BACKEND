@@ -250,7 +250,12 @@ async def complete_supervisor_wizard_profile(
                 if updated_user.supervisor_profile
                 else None
             ),
-            requirements=updated_user.supervisor_profile.requirements or [],
+            requirements=(
+                updated_user.supervisor_profile.requirements
+                if updated_user.supervisor_profile
+                else []
+            )
+            or [],
             project_type=project_type,
             capacity_max=(
                 updated_user.supervisor_profile.capacity_max
@@ -469,7 +474,12 @@ async def update_supervisor_profile(
                 if updated_user.supervisor_profile
                 else None
             ),
-            requirements=updated_user.supervisor_profile.requirements or [],
+            requirements=(
+                updated_user.supervisor_profile.requirements
+                if updated_user.supervisor_profile
+                else []
+            )
+            or [],
             project_type=project_type,
             capacity_max=(
                 updated_user.supervisor_profile.capacity_max
