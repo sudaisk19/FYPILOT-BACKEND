@@ -35,15 +35,22 @@ from app.api.http.supervisor_recommendation import (
 )
 from app.api.http.users import router as user_router
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
+=======
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 # Import admin router
 from app.api.http.admin_students import router as admin_students_router
 from app.api.http.admin_groups import router as admin_groups_router
 from app.api.http.admin_supervisors import router as admin_supervisors_router
+<<<<<<< HEAD
 from app.api.http.admin_submissions import router as admin_submissions_router
 
 >>>>>>> Stashed changes
+=======
+
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 # Create a "master" router that mounts all HTTP routers
 router = APIRouter()
 
@@ -83,6 +90,7 @@ router.include_router(supervisor_groups_router)
 router.include_router(profile_status_router, tags=["profile-status"])
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Mount admin routers
 router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
 
@@ -106,3 +114,14 @@ router.include_router(
 router.include_router(admin_submissions_router)
 =======
 >>>>>>> 2021c1d (integration of recom & batch reisgtration api)
+=======
+# Mount admin routers
+router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
+
+router.include_router(admin_students_router,prefix="/admin",tags=["admin-students"])
+
+router.include_router(admin_supervisors_router, prefix="/admin", tags=["admin-supervisors"])
+
+router.include_router(admin_groups_router)
+
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)

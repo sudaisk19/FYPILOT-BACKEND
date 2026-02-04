@@ -27,6 +27,7 @@ from app.models.supervisor import Supervisor
 from app.models.supervisor_domain import SupervisorDomain
 from app.models.supervisor_industry import SupervisorIndustry
 from app.models.user import User
+from app.models.project import parse_project_type
 
 from .base import BaseRepository
 
@@ -253,12 +254,18 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             supervisor_data["requirements"] = requirements
         if project_type is not None:
 <<<<<<< HEAD
+<<<<<<< HEAD
             from app.models.project import parse_project_type
 
             supervisor_data["project_type"] = parse_project_type(project_type)
 =======
             supervisor_data["project_type"] = project_type
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+            from app.models.project import parse_project_type
+
+            supervisor_data["project_type"] = parse_project_type(project_type)
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
         return await super().create(db, supervisor_data)
 
@@ -283,6 +290,9 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         if not supervisor:
             return None
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         # Normalize project_type if present in updates
         if "project_type" in updates and updates["project_type"] is not None:
             from app.models.project import parse_project_type
@@ -449,6 +459,26 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             supervisor.capacity_filled -= 1
             await db.flush()
         return supervisor
+    
+    async def get_full_profile(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
+        """Fetch supervisor with user, domains, industries, and supervised projects."""
+        from app.models.group import Group
+        from app.models.project import Project
+
+        query = (
+            select(User)
+            .options(
+                selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
+                selectinload(User.supervisor_profile).selectinload(Supervisor.industries),
+                selectinload(User.supervisor_profile)
+                    .selectinload(Supervisor.supervised_groups)
+                    .selectinload(Group.project)
+                    .selectinload(Project.domains)
+            )
+            .where(User.user_id == user_id)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
 
 <<<<<<< HEAD
     async def get_full_profile(self, db: AsyncSession, user_id: UUID) -> Optional[User]:

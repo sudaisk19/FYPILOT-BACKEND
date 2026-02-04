@@ -77,8 +77,13 @@ class Group(Base):
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
+<<<<<<< HEAD
 
     # Access students through members relationship
+=======
+    
+    # Access students through members relationship instead of direct relationship
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     students = relationship(
         "Student",
         secondary="group_members",
@@ -89,6 +94,7 @@ class Group(Base):
     )
     supervisor = relationship(
         "Supervisor",
+<<<<<<< HEAD
         foreign_keys=[supervisor_id],
     )
 
@@ -101,6 +107,18 @@ class Group(Base):
 
     project = relationship("Project", back_populates="group", uselist=False)
     submissions = relationship("Submission", back_populates="group", cascade="all, delete-orphan")
+=======
+        foreign_keys=[supervisor_id], # Connects the group back to the supervisor
+    )
+    
+    
+
+    project = relationship(
+        "Project", 
+        back_populates="group", 
+        uselist=False # Har group ka ek hi project hota hai
+    )
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
 
 class GroupMember(Base):
@@ -164,3 +182,5 @@ class GroupInvite(Base):
     )
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
+    
+    

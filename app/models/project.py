@@ -20,6 +20,9 @@ class ProjectTypeEnum(str, Enum):
     product = "product"
     product_and_research = "product and research"
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     
 def parse_project_type(value):
     """Normalize input and return ProjectTypeEnum.
@@ -50,8 +53,11 @@ def project_type_value(pt):
         return parse_project_type(pt).value
     except ValueError:
         return str(pt)
+<<<<<<< HEAD
 =======
 >>>>>>> bf3f867 (bugs fixing)
+=======
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
 
 class Project(Base):
@@ -75,6 +81,7 @@ class Project(Base):
 <<<<<<< HEAD
 <<<<<<< HEAD
     project_type = Column(
+<<<<<<< HEAD
         SQLEnum(
             "research",
             "product",
@@ -84,6 +91,11 @@ class Project(Base):
         ),
         nullable=False,
         default="research",
+=======
+    SQLEnum("research", "product", "product and research", name="project_type_enum", create_type=False),
+    nullable=False,
+    default="research",
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     )
 =======
     project_type = Column(Text, nullable=False, default=ProjectTypeEnum.research.value)

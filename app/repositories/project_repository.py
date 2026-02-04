@@ -148,6 +148,9 @@ class ProjectRepository(BaseRepository[Project]):
         if not project:
             return None
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         
         if "project_type" in updates and updates["project_type"] is not None:
          from app.models.project import parse_project_type

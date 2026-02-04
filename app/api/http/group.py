@@ -1009,6 +1009,7 @@ async def get_group_profile(
 
             # Handle project_type - convert to string and validate
 <<<<<<< HEAD
+<<<<<<< HEAD
             project_type = project_type_value(project_data.project_type) or "capstone"
 =======
             project_type = (
@@ -1017,6 +1018,9 @@ async def get_group_profile(
                 else "capstone"
             )
 >>>>>>> bf3f867 (bugs fixing)
+=======
+            project_type = project_type_value(project_data.project_type) or "capstone"
+>>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
