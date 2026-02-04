@@ -19,6 +19,36 @@ class ProjectTypeEnum(str, Enum):
     research = "research"
     product = "product"
     product_and_research = "product and research"
+    
+def parse_project_type(value):
+    """Normalize input and return ProjectTypeEnum.
+
+    Accepts enum member, the member name (e.g. 'product_and_research'),
+    or the member value (e.g. 'product and research'), case-insensitively.
+    Raises ValueError for unknown values.
+    """
+    if value is None:
+        raise ValueError("project type is None")
+    if isinstance(value, ProjectTypeEnum):
+        return value
+    s = str(value).strip().lower()
+    s_norm = s.replace("_", " ").replace("-", " ")
+    for member in ProjectTypeEnum:
+        if s_norm == member.value.lower() or s_norm == member.name.lower():
+            return member
+    raise ValueError(f"Unknown project type: {value}")
+
+
+def project_type_value(pt):
+    """Return the user-facing string (enum.value) or None."""
+    if pt is None:
+        return None
+    if isinstance(pt, ProjectTypeEnum):
+        return pt.value
+    try:
+        return parse_project_type(pt).value
+    except ValueError:
+        return str(pt)
 
 
 class Project(Base):
@@ -40,9 +70,9 @@ class Project(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     project_type = Column(
-        SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False),
-        nullable=False,
-        default=ProjectTypeEnum.research,
+    SQLEnum("research", "product", "product and research", name="project_type_enum", create_type=False),
+    nullable=False,
+    default="research",
     )
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
@@ -52,7 +82,7 @@ class Project(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    group = relationship("Group", backref="project")
+    group = relationship("Group", back_populates="project")
     industry = relationship("Industry", back_populates="projects")
     domains = relationship(
         "Domain", secondary="project_domains", back_populates="projects"

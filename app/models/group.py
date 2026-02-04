@@ -74,6 +74,7 @@ class Group(Base):
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
+    
     # Access students through members relationship instead of direct relationship
     students = relationship(
         "Student",
@@ -82,6 +83,18 @@ class Group(Base):
         viewonly=True,
         primaryjoin="Group.group_id == group_members.c.group_id",
         secondaryjoin="group_members.c.student_id == Student.user_id",
+    )
+    supervisor = relationship(
+        "Supervisor",
+        foreign_keys=[supervisor_id], # Connects the group back to the supervisor
+    )
+    
+    
+
+    project = relationship(
+        "Project", 
+        back_populates="group", 
+        uselist=False # Har group ka ek hi project hota hai
     )
 
 
@@ -135,3 +148,5 @@ class GroupInvite(Base):
     )
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
+    
+    

@@ -24,6 +24,7 @@ from app.models.project import Project, ProjectDomain, ProjectTypeEnum
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
+from app.models.project import project_type_value
 from app.schemas.group_schema import (
     CreateGroupRequest,
     DeleteGroupResponse,
@@ -821,11 +822,7 @@ async def get_group_profile(
                     )
 
             # Handle project_type - convert to string and validate
-            project_type = (
-                str(project_data.project_type)
-                if project_data.project_type
-                else "capstone"
-            )
+            project_type = project_type_value(project_data.project_type) or "capstone"
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
