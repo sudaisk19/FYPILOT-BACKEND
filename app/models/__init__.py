@@ -5,6 +5,15 @@
 
 from .admin import Admin
 
+# Bulk import models
+from .bulk_import import (
+    BulkImportItem,
+    BulkImportJob,
+    BulkItemStatus,
+    BulkJobStatus,
+    TargetRoleEnum,
+)
+
 # Domain and Industry models (base models)
 from .domain import Domain
 
@@ -53,4 +62,10 @@ __all__ = [
     "SupervisorDomain",
     "SupervisorIndustry",
     "PasswordResetToken",
+    # Bulk import models
+    "BulkImportJob",
+    "BulkImportItem",
+    "BulkJobStatus",
+    "BulkItemStatus",
+    "TargetRoleEnum",
 ]

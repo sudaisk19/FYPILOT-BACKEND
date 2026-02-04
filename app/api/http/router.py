@@ -2,6 +2,9 @@
 from fastapi import APIRouter
 
 from app.api.http.admin_profile import router as admin_profile_router
+
+# Import bulk import router
+from app.api.http.bulk_import import router as bulk_import_router
 from app.api.http.group import router as group_router
 
 # Import each feature's router
@@ -57,3 +60,8 @@ router.include_router(invites_router)
 
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
+
+# Mount bulk import router (admin only)
+router.include_router(
+    bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
+)

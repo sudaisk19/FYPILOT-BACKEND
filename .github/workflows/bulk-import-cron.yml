@@ -1,0 +1,32 @@
+name: Bulk Import Processor
+
+on:
+  schedule:
+    # Runs every 5 minutes
+    - cron: '*/5 * * * *'
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  process-bulk-imports:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Bulk Import Processor
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "X-CRON-TOKEN: ${{ secrets.CRON_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.CRON_PROCESSOR_URL }}")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+          
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Bulk import processor completed successfully"
+          else
+            echo "❌ Bulk import processor failed with status $http_code"
+            exit 1
+          fi

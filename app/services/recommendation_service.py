@@ -1,131 +1,57 @@
 # app/services/recommendation_service.py
 """
-AI-Powered Supervisor Recommendation Service - Refactored to use Repository Pattern
+Supervisor Recommendation Service - Refactored to use External AI Microservice.
 
-This service provides intelligent supervisor recommendations for student groups
-using semantic search, heuristic scoring, and LLM-generated explanations.
+This service acts as a bridge between the main backend API and the external
+AI Recommender microservice. It:
+1. Fetches group and member data from the database
+2. Transforms the data into the format expected by the AI service
+3. Calls the external AI service for recommendations (with caching & circuit breaker)
+4. Returns the results to the API layer
 
-REFACTORED:
-- initialize_index() uses supervisor_repository.list_all_with_users()
-  and supervisor_repository.get_domains/get_industries()
-- recommend_supervisors() uses group_repository.get_with_members()
+Features:
+- Response caching to reduce AI service load
+- Circuit breaker for fault tolerance
+- Request deduplication
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-
-# Import repositories instead of direct models
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# AI libraries
-try:
-    import faiss
-    import ollama
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    logging.warning("AI libraries not installed. Recommendation service will not work.")
-
-from app.repositories import group_repository, supervisor_repository
+from app.middleware.ai_recommender import (
+    ai_recommender_circuit,
+    recommendation_cache,
+    request_deduplicator,
+)
+from app.repositories import group_repository
+from app.services.ai_recommender import (
+    AIRecommenderServiceError,
+    ai_recommender_client,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class RecommendationService:
-    """Service for generating AI-powered supervisor recommendations."""
+    """Service for generating supervisor recommendations via external AI service."""
 
     def __init__(self):
-        """Initialize the recommendation service with AI models."""
-        # Model will be loaded lazily on first use
-        self._model = None
-        self._index = None
-        self._supervisors_cache = None
+        """Initialize the recommendation service."""
+        self._ai_client = ai_recommender_client
+        self._cache = recommendation_cache
+        self._circuit = ai_recommender_circuit
+        self._deduplicator = request_deduplicator
 
-    @property
-    def model(self) -> SentenceTransformer:
-        """Lazy load the sentence transformer model."""
-        if self._model is None:
-            logger.info("Loading SentenceTransformer model...")
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
-        return self._model
+    async def health_check(self) -> bool:
+        """
+        Check if the AI Recommender service is available.
 
-    async def initialize_index(self, db: AsyncSession):
-        """Build and cache the FAISS index for supervisor embeddings."""
-        if self._index is not None:
-            return
-
-        logger.info("Building FAISS index for supervisors...")
-
-        # Fetch all supervisors using repository
-        rows = await supervisor_repository.list_all_with_users(db)
-
-        supervisors_data = []
-        supervisors_list = []
-
-        for supervisor, user in rows:
-            # Fetch domains for this supervisor using repository
-            domains_list = await supervisor_repository.get_domains(
-                db, supervisor.user_id
-            )
-            domains = [d.name for d in domains_list]
-
-            # Fetch industries for this supervisor using repository
-            industries_list = await supervisor_repository.get_industries(
-                db, supervisor.user_id
-            )
-            [i.name for i in industries_list]
-
-            # Build descriptive text for this supervisor
-            domains_str = ", ".join(domains) if domains else "General"
-            requirements_str = (
-                ", ".join(supervisor.requirements)
-                if supervisor.requirements
-                else "None specified"
-            )
-            project_types_str = (
-                supervisor.project_type if supervisor.project_type else "Any"
-            )
-
-            sup_text = (
-                f"Name: {user.full_name}. "
-                f"Department: {supervisor.department or 'N/A'}. "
-                f"Domains: {domains_str}. "
-                f"Requirements: {requirements_str}. "
-                f"Project Types: {project_types_str}."
-            )
-
-            supervisors_data.append(
-                {"supervisor": supervisor, "user": user, "text": sup_text}
-            )
-            supervisors_list.append(
-                {
-                    "name": user.full_name,
-                    "department": supervisor.department,
-                    "domains": domains,
-                    "requirements": supervisor.requirements or [],
-                    "project_types": (
-                        [supervisor.project_type] if supervisor.project_type else []
-                    ),
-                    "user_id": str(user.user_id),
-                    "profile_avatar": user.profile_avatar,
-                }
-            )
-
-        # Generate embeddings
-        texts = [item["text"] for item in supervisors_data]
-        embeddings = self.model.encode(texts, convert_to_numpy=True)
-        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-
-        # Build FAISS index
-        dimension = embeddings.shape[1]
-        self._index = faiss.IndexFlatIP(dimension)
-        self._index.add(embeddings)
-
-        # Cache supervisor data
-        self._supervisors_cache = supervisors_list
-
-        logger.info(f"Index built with {len(supervisors_list)} supervisors")
+        Returns:
+            bool: True if service is healthy, False otherwise.
+        """
+        return await self._ai_client.health_check()
 
     async def recommend_supervisors(
         self,
@@ -137,7 +63,14 @@ class RecommendationService:
         project_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Generate AI-powered supervisor recommendations for a student group.
+        Generate supervisor recommendations for a student group.
+
+        This method:
+        1. Checks the circuit breaker status
+        2. Looks for cached recommendations
+        3. Fetches group/member data from DB if cache miss
+        4. Sends data to AI Recommender service
+        5. Caches and returns the results
 
         Args:
             db: Database session
@@ -146,246 +79,261 @@ class RecommendationService:
             idea_description: Project description
             idea_industry: Target industry
             project_type: Type of project (research/product)
-            page: Page number for pagination
-            per_page: Items per page
 
         Returns:
-            Tuple of (List of recommended supervisors with scores and AI-generated reasons, total count)
+            List of recommended supervisors with scores and AI-generated reasons.
+
+        Raises:
+            ValueError: If the group is not found.
+            AIRecommenderServiceError: If the AI service fails.
+            HTTPException: If circuit breaker is open.
         """
-        # Ensure index is initialized
-        await self.initialize_index(db)
+        # 1. Check circuit breaker
+        self._circuit.check_and_raise()
 
-        # Fetch group with members using repository
-        group = await group_repository.get_with_members(db, group_id)
+        # 2. Check cache first
+        cached_recommendations = await self._cache.get(
+            group_id=group_id,
+            idea_domain=idea_domain,
+            idea_description=idea_description,
+            idea_industry=idea_industry,
+            project_type=project_type,
+        )
 
-        if not group:
-            raise ValueError("Group not found")
+        if cached_recommendations is not None:
+            logger.info(f"Returning cached recommendations for group {group_id}")
+            return cached_recommendations
 
-        # Build group profile from members
-        group_skills = []
-        group_interests = []
+        # 3. Try to acquire deduplication lock
+        lock_acquired, lock_key = await self._deduplicator.acquire(
+            group_id=group_id,
+            idea_domain=idea_domain,
+            idea_description=idea_description,
+            idea_industry=idea_industry,
+            project_type=project_type,
+        )
 
-        for member in group.members:
+        if not lock_acquired:
+            # Another request is in progress, wait a bit and check cache
+            import asyncio
+
+            await asyncio.sleep(1)
+
+            cached = await self._cache.get(
+                group_id=group_id,
+                idea_domain=idea_domain,
+                idea_description=idea_description,
+                idea_industry=idea_industry,
+                project_type=project_type,
+            )
+
+            if cached is not None:
+                return cached
+
+            # Still no cache, allow this request through
+            lock_acquired = True
+            lock_key = ""
+
+        try:
+            # 4. Fetch group with members using repository
+            group = await group_repository.get_with_members(db, group_id)
+
+            if not group:
+                raise ValueError(f"Group not found: {group_id}")
+
+            # 5. Transform group members into AI service format
+            members_data = self._transform_members(group.members)
+
+            logger.info(
+                f"Requesting recommendations for group {group_id} with {len(members_data)} members"
+            )
+
+            # 6. Call the external AI Recommender service
+            result = await self._ai_client.get_recommendations(
+                project_domain=idea_domain or "",
+                description=idea_description or "",
+                members=members_data,
+                industry=idea_industry,
+                project_type=project_type,
+            )
+
+            # 7. Record success with circuit breaker
+            self._circuit.record_success()
+
+            # 8. Transform the response
+            recommendations = self._transform_recommendations(result)
+
+            # 9. Cache the results
+            await self._cache.set(
+                recommendations=recommendations,
+                group_id=group_id,
+                idea_domain=idea_domain,
+                idea_description=idea_description,
+                idea_industry=idea_industry,
+                project_type=project_type,
+            )
+
+            logger.info(
+                f"Received {len(recommendations)} recommendations for group {group_id}"
+            )
+
+            return recommendations
+
+        except AIRecommenderServiceError as e:
+            # Record failure with circuit breaker
+            self._circuit.record_failure()
+            logger.error(
+                f"AI Recommender service error for group {group_id}: {e.message}"
+            )
+            raise
+
+        finally:
+            # Release deduplication lock
+            if lock_acquired and lock_key:
+                await self._deduplicator.release(lock_key)
+
+    def _transform_members(self, members) -> List[Dict[str, Any]]:
+        """
+        Transform group members into the format expected by the AI service.
+
+        Expected format for each member:
+        {
+            "skills": {"Python": "advanced", "ML": "intermediate"},
+            "cgpa": 3.5,
+            "past_projects": ["Project 1", "Project 2"]
+        }
+
+        Args:
+            members: List of GroupMember objects from the database.
+
+        Returns:
+            List of member dictionaries in the AI service format.
+        """
+        members_data = []
+
+        for member in members:
             student = member.student
-            if student.skills:
-                group_skills.extend(student.skills)
-            if student.interests:
-                group_interests.extend(student.interests)
 
-            # Add skills from portfolio projects
+            # Transform skills from list to dict format
+            # The AI service expects skills as {"skill_name": "level"}
+            # Our DB stores skills as a list, so we'll default to "intermediate"
+            skills_dict = {}
+            if student.skills:
+                for skill in student.skills:
+                    if isinstance(skill, str):
+                        skills_dict[skill] = "intermediate"
+                    elif isinstance(skill, dict):
+                        # If skills are already stored as dicts
+                        skills_dict.update(skill)
+
+            # Extract past project names from portfolio
+            past_projects = []
             if student.portfolio_projects:
                 if isinstance(student.portfolio_projects, list):
                     for project in student.portfolio_projects:
-                        if isinstance(project, dict) and "tech_stack" in project:
-                            if isinstance(project["tech_stack"], list):
-                                group_skills.extend(project["tech_stack"])
+                        if isinstance(project, dict):
+                            # Get project title/name
+                            title = project.get("title") or project.get("name", "")
+                            if title:
+                                past_projects.append(title)
+                            # Also add tech stack as skills if not already present
+                            tech_stack = project.get("tech_stack", [])
+                            if isinstance(tech_stack, list):
+                                for tech in tech_stack:
+                                    if tech not in skills_dict:
+                                        skills_dict[tech] = "intermediate"
 
-        # Build semantic query
-        query_text = (
-            f"Domain: {idea_domain or ''}. "
-            f"Industry: {idea_industry or ''}. "
-            f"Project Type: {project_type or ''}. "
-            f"Description: {idea_description or ''}. "
-            f"Skills: {', '.join(group_skills[:10])}. "
-            f"Interests: {', '.join(group_interests[:10])}."
-        )
+            member_data = {
+                "skills": skills_dict,
+                "cgpa": float(student.cgpa) if student.cgpa else 0.0,
+                "past_projects": past_projects,
+            }
 
-        # Semantic search - get all supervisors for pagination
-        q_embedding = self.model.encode([query_text], convert_to_numpy=True)
-        q_embedding = q_embedding / np.linalg.norm(q_embedding, axis=1, keepdims=True)
+            members_data.append(member_data)
 
-        # Search all supervisors (not just 10)
-        search_k = min(50, len(self._supervisors_cache))
-        distances, indices = self._index.search(q_embedding, search_k)
-        similarities = np.clip(distances[0], 0.0, 1.0)
+        return members_data
 
-        # Score candidates
-        candidates = []
-        for rank, (idx, similarity) in enumerate(zip(indices[0], similarities)):
-            sup = self._supervisors_cache[idx]
+    def _transform_recommendations(
+        self, ai_response: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Transform AI service response to match our API response format.
 
-            # Jaccard similarity for skills and domains
-            skills_j = self._jaccard_similarity(group_skills, sup["requirements"])
-            interests_j = self._jaccard_similarity(group_interests, sup["domains"])
-
-            # Project type bonus
-            type_bonus = 0.05 if project_type in sup["project_types"] else 0.0
-
-            # Weighted score
-            raw_score = (
-                0.50 * similarity + 0.35 * skills_j + 0.10 * interests_j + type_bonus
-            ) * 100
-
-            candidates.append(
+        The AI service returns:
+        {
+            "results": [
                 {
-                    "name": sup["name"],
-                    "department": sup["department"],
-                    "domains": sup["domains"],
-                    "requirements": sup["requirements"],
-                    "project_type": sup["project_types"],
-                    "user_id": sup["user_id"],
-                    "profile_avatar": sup["profile_avatar"],
-                    "similarity": float(similarity),
-                    "skills_match": float(skills_j),
-                    "interests_match": float(interests_j),
-                    "raw_score": float(raw_score),
+                    "supervisor_id": "...",
+                    "name": "...",
+                    "department": "...",
+                    "score": 0.89,
+                    "reason": "...",
+                    "domains": [...],
+                    "requirements": [...],
+                    "project_type": [...],
+                    "user_id": "...",
+                    "profile_avatar": "..."
                 }
-            )
-
-        # Normalize scores
-        max_score = max(c["raw_score"] for c in candidates) if candidates else 1
-        for c in candidates:
-            c["score"] = round((c["raw_score"] / max_score) * 100, 2)
-
-        # Sort and get top 5 unique candidates
-        candidates.sort(key=lambda x: x["score"], reverse=True)
-        unique_candidates = self._deduplicate(candidates)[:5]  # Only take top 5
-
-        # Generate AI reasons for all 5 candidates
-        try:
-            reasons = await self._generate_reasons(
-                group,
-                unique_candidates,
-                idea_domain,
-                idea_description,
-                idea_industry,
-                project_type,
-            )
-
-            # Merge reasons with candidates
-            result = []
-            for sup, reason in zip(unique_candidates, reasons):
-                result.append(
-                    {
-                        "name": sup["name"],
-                        "department": sup["department"],
-                        "domains": sup["domains"],
-                        "requirements": sup["requirements"],
-                        "project_type": sup["project_type"],
-                        "user_id": sup["user_id"],
-                        "profile_avatar": sup["profile_avatar"],
-                        "score": sup["score"],
-                        "reason": (
-                            reason
-                            if reason
-                            else "Based on matching domains and requirements."
-                        ),
-                    }
-                )
-
-            # Add generic reasons for any remaining candidates
-            for sup in unique_candidates[len(reasons) :]:
-                result.append(
-                    {
-                        "name": sup["name"],
-                        "department": sup["department"],
-                        "domains": sup["domains"],
-                        "requirements": sup["requirements"],
-                        "project_type": sup["project_type"],
-                        "user_id": sup["user_id"],
-                        "profile_avatar": sup["profile_avatar"],
-                        "score": sup["score"],
-                        "reason": "Based on matching domains and requirements.",
-                    }
-                )
-
-            return result
-        except Exception as e:
-            logger.error(f"Error generating AI reasons: {e}")
-            # Return without reasons if LLM fails
-            result = [
-                {
-                    "name": sup["name"],
-                    "department": sup["department"],
-                    "domains": sup["domains"],
-                    "requirements": sup["requirements"],
-                    "project_type": sup["project_type"],
-                    "user_id": sup["user_id"],
-                    "profile_avatar": sup["profile_avatar"],
-                    "score": sup["score"],
-                    "reason": "Based on matching domains and requirements.",
-                }
-                for sup in unique_candidates
             ]
+        }
 
-            return result
+        Our API expects:
+        [
+            {
+                "name": "...",
+                "department": "...",
+                "domains": [...],
+                "requirements": [...],
+                "project_type": [...],
+                "user_id": "...",
+                "profile_avatar": "...",
+                "score": 89.0,
+                "reason": "..."
+            }
+        ]
+        """
+        results = ai_response.get("results", [])
+        recommendations = []
 
-    async def _generate_reasons(
-        self, group, candidates, domain, description, industry, project_type
-    ) -> List[str]:
-        """Generate AI explanations for recommendations."""
-        member_text = "\n".join(
-            [
-                f"- {member.student.user.full_name if member.student.user else 'Member'} "
-                f"(CGPA {member.student.cgpa or 'N/A'})"
-                for member in group.members
-            ]
-        )
+        for result in results:
+            # Convert score from 0-1 to 0-100 if needed
+            score = result.get("score", 0)
+            if score <= 1:
+                score = round(score * 100, 2)
 
-        supervisors_text = "\n".join(
-            [
-                f"{i + 1}. {s['name']} "
-                f"(Domains: {', '.join(s['domains'])}, "
-                f"Requirements: {', '.join(s['requirements'])}, "
-                f"Project Types: {', '.join(s['project_type'])})"
-                for i, s in enumerate(candidates)
-            ]
-        )
+            recommendation = {
+                "name": result.get("name", ""),
+                "department": result.get("department"),
+                "domains": result.get("domains", []),
+                "requirements": result.get("requirements", []),
+                "project_type": result.get("project_type", []),
+                "user_id": result.get("user_id", ""),
+                "profile_avatar": result.get("profile_avatar"),
+                "score": score,
+                "reason": result.get(
+                    "reason", "Based on matching domains and requirements."
+                ),
+            }
 
-        prompt = f"""You are assisting with supervisor recommendations.
+            recommendations.append(recommendation)
 
-STUDENT GROUP
-{member_text}
+        return recommendations
 
-FYP IDEA
-- Domain: {domain or 'N/A'}
-- Industry: {industry or 'N/A'}
-- Project Type: {project_type or 'N/A'}
-- Description: {description or 'N/A'}
+    async def refresh_supervisor_index(
+        self, webhook_secret: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Trigger a refresh of supervisor embeddings in the AI service.
 
-TOP 5 SUPERVISORS
-{supervisors_text}
+        This should be called when supervisor data is updated in the database.
 
-TASK
-For each supervisor (in the same order), write exactly ONE reason (20-25 words) 
-explaining why they fit the group, based ONLY on their domains, requirements, and project type.
+        Args:
+            webhook_secret: Optional webhook secret for authentication.
 
-Return exactly 5 bullet points. Do not repeat names or scores.
-"""
-
-        response = ollama.chat(
-            model="phi3",
-            messages=[{"role": "user", "content": prompt}],
-            options={
-                "temperature": 0.1,
-                "top_p": 0.9,
-            },
-        )
-
-        reasons = response["message"]["content"].strip().split("\n")
-        reasons = [r.strip("-•12345. ") for r in reasons if r.strip()]
-        return reasons[:5]
-
-    @staticmethod
-    def _jaccard_similarity(a, b):
-        """Calculate Jaccard similarity between two sets."""
-        if not a and not b:
-            return 0.0
-        set_a, set_b = set(a), set(b)
-        intersection = len(set_a & set_b)
-        union = len(set_a | set_b)
-        return intersection / union if union else 0.0
-
-    @staticmethod
-    def _deduplicate(candidates):
-        """Remove duplicate candidates by name."""
-        seen = set()
-        unique = []
-        for c in candidates:
-            if c["name"] not in seen:
-                seen.add(c["name"])
-                unique.append(c)
-        return unique
+        Returns:
+            Dict containing the refresh status.
+        """
+        return await self._ai_client.refresh_supervisors(webhook_secret)
 
 
 # Global instance

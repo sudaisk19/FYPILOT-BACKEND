@@ -13,7 +13,7 @@ Authentication Flow:
 - Sign up: Create new user account
 - Login: Authenticate and receive JWT
 - OAuth: Social login with external providers
-- Me: Get current user profile
+- Me: Get current user profil
 - Logout: Invalidate current session
 
 Security Features:
