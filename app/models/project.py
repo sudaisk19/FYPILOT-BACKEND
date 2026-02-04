@@ -90,9 +90,15 @@ class Project(Base):
 >>>>>>> bf3f867 (bugs fixing)
 =======
     project_type = Column(
-        SQLEnum(ProjectTypeEnum, name="project_type_enum", create_type=False),
+        SQLEnum(
+            "research",
+            "product",
+            "product and research",
+            name="project_type_enum",
+            create_type=False,
+        ),
         nullable=False,
-        default=ProjectTypeEnum.research,
+        default="research",
     )
 >>>>>>> 08bb45f (bugs fixing)
     industry_id = Column(

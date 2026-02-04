@@ -1,6 +1,7 @@
 # app/services/recommendation_service.py
 """
 <<<<<<< HEAD
+<<<<<<< HEAD
 Supervisor Recommendation Service - Refactored to use External AI Microservice.
 
 This service acts as a bridge between the main backend API and the external
@@ -16,20 +17,35 @@ Features:
 - Request deduplication
 =======
 AI-Powered Supervisor Recommendation Service - Refactored to use Repository Pattern
+=======
+Supervisor Recommendation Service - Refactored to use External AI Microservice.
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 
-This service provides intelligent supervisor recommendations for student groups
-using semantic search, heuristic scoring, and LLM-generated explanations.
+This service acts as a bridge between the main backend API and the external
+AI Recommender microservice. It:
+1. Fetches group and member data from the database
+2. Transforms the data into the format expected by the AI service
+3. Calls the external AI service for recommendations (with caching & circuit breaker)
+4. Returns the results to the API layer
 
+<<<<<<< HEAD
 REFACTORED:
 - initialize_index() uses supervisor_repository.list_all_with_users()
   and supervisor_repository.get_domains/get_industries()
 - recommend_supervisors() uses group_repository.get_with_members()
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+Features:
+- Response caching to reduce AI service load
+- Circuit breaker for fault tolerance
+- Request deduplication
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,6 +75,20 @@ except ImportError:
 
 from app.repositories import group_repository, supervisor_repository
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.middleware.ai_recommender import (
+    ai_recommender_circuit,
+    recommendation_cache,
+    request_deduplicator,
+)
+from app.repositories import group_repository
+from app.services.ai_recommender import (
+    AIRecommenderServiceError,
+    ai_recommender_client,
+)
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +108,14 @@ class RecommendationService:
         Check if the AI Recommender service is available.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
         Returns:
             bool: True if service is healthy, False otherwise.
         """
         return await self._ai_client.health_check()
+<<<<<<< HEAD
 =======
     async def initialize_index(self, db: AsyncSession):
         """Build and cache the FAISS index for supervisor embeddings."""
@@ -160,6 +194,8 @@ class RecommendationService:
 
         logger.info(f"Index built with {len(supervisors_list)} supervisors")
 >>>>>>> d174ec0 (feat: bugs fixing v3)
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 
     async def recommend_supervisors(
         self,
@@ -190,6 +226,7 @@ class RecommendationService:
 
         Returns:
             List of recommended supervisors with scores and AI-generated reasons.
+<<<<<<< HEAD
 
         Raises:
             ValueError: If the group is not found.
@@ -200,6 +237,17 @@ class RecommendationService:
         self._circuit.check_and_raise()
 
 <<<<<<< HEAD
+=======
+
+        Raises:
+            ValueError: If the group is not found.
+            AIRecommenderServiceError: If the AI service fails.
+            HTTPException: If circuit breaker is open.
+        """
+        # 1. Check circuit breaker
+        self._circuit.check_and_raise()
+
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
         # 2. Check cache first
         cached_recommendations = await self._cache.get(
             group_id=group_id,
@@ -208,10 +256,13 @@ class RecommendationService:
             idea_industry=idea_industry,
             project_type=project_type,
         )
+<<<<<<< HEAD
 =======
         # Fetch group with members using repository
         group = await group_repository.get_with_members(db, group_id)
 >>>>>>> 1706dee (refactored: repository pattern implementation)
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 
         if cached_recommendations is not None:
             logger.info(f"Returning cached recommendations for group {group_id}")

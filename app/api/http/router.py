@@ -4,10 +4,13 @@ from fastapi import APIRouter
 from app.api.http.admin_groups import router as admin_groups_router
 from app.api.http.admin_profile import router as admin_profile_router
 
+<<<<<<< HEAD
 # Import admin router
 from app.api.http.admin_students import router as admin_students_router
 from app.api.http.admin_supervisors import router as admin_supervisors_router
 
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 # Import bulk import router
 from app.api.http.bulk_import import router as bulk_import_router
 from app.api.http.group import router as group_router
@@ -79,6 +82,7 @@ router.include_router(supervisor_groups_router)
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
 
+<<<<<<< HEAD
 # Mount admin routers
 router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
 
@@ -90,10 +94,15 @@ router.include_router(
 
 router.include_router(admin_groups_router)
 
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 # Mount bulk import router (admin only)
 router.include_router(
     bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
 )
+<<<<<<< HEAD
 
 # Mount admin submissions router
 router.include_router(admin_submissions_router)
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)

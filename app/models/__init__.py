@@ -5,6 +5,7 @@
 
 from .admin import Admin
 
+<<<<<<< HEAD
 # Announcement and Submission models
 from .announcement import (
     Announcement,
@@ -15,6 +16,8 @@ from .announcement import (
     TargetRoleEnum as AnnouncementTargetRoleEnum,
 )
 
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
 # Bulk import models
 from .bulk_import import (
     BulkImportItem,
@@ -73,6 +76,7 @@ __all__ = [
     "SupervisorDomain",
     "SupervisorIndustry",
     "PasswordResetToken",
+<<<<<<< HEAD
     # Announcement models
     "Announcement",
     "AnnouncementTarget",
@@ -85,6 +89,8 @@ __all__ = [
     "SubmissionFile",
     "SubmissionTypeEnum",
     "SubmissionStatusEnum",
+=======
+>>>>>>> 2021c1d (integration of recom & batch reisgtration api)
     # Bulk import models
     "BulkImportJob",
     "BulkImportItem",
