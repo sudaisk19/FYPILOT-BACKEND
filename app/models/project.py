@@ -70,9 +70,15 @@ class Project(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     project_type = Column(
-    SQLEnum("research", "product", "product and research", name="project_type_enum", create_type=False),
-    nullable=False,
-    default="research",
+        SQLEnum(
+            "research",
+            "product",
+            "product and research",
+            name="project_type_enum",
+            create_type=False,
+        ),
+        nullable=False,
+        default="research",
     )
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True

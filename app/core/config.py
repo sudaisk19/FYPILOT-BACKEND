@@ -65,6 +65,57 @@ class Settings(BaseSettings):
     )
     enable_sessions: bool = Field(default=False, validation_alias="ENABLE_SESSIONS")
 
+    # ─── AI Recommender Service ─────────────────────────────
+    ai_recommender_url: str = Field(
+        default="http://localhost:8001",
+        validation_alias="AI_RECOMMENDER_URL",
+        description="URL of the AI Recommender microservice",
+    )
+    ai_recommender_timeout: float = Field(
+        default=30.0,
+        validation_alias="AI_RECOMMENDER_TIMEOUT",
+        description="HTTP timeout for AI Recommender service calls (seconds)",
+    )
+
+    # AI Recommender Middleware Settings
+    ai_rate_limit_requests: int = Field(
+        default=10,
+        validation_alias="AI_RATE_LIMIT_REQUESTS",
+        description="Max recommendation requests per user per minute",
+    )
+    ai_rate_limit_window: int = Field(
+        default=60,
+        validation_alias="AI_RATE_LIMIT_WINDOW",
+        description="Rate limit window in seconds",
+    )
+    ai_cache_ttl: int = Field(
+        default=300,
+        validation_alias="AI_CACHE_TTL",
+        description="Recommendation cache TTL in seconds (default: 5 minutes)",
+    )
+    ai_circuit_failure_threshold: int = Field(
+        default=5,
+        validation_alias="AI_CIRCUIT_FAILURE_THRESHOLD",
+        description="Number of failures before opening circuit breaker",
+    )
+    ai_circuit_recovery_timeout: int = Field(
+        default=30,
+        validation_alias="AI_CIRCUIT_RECOVERY_TIMEOUT",
+        description="Seconds before circuit breaker tries recovery",
+    )
+
+    # ─── Bulk Import Settings ───────────────────────────────
+    cron_token: str | None = Field(default=None, validation_alias="CRON_TOKEN")
+    app_encryption_key: str | None = Field(
+        default=None, validation_alias="APP_ENCRYPTION_KEY"
+    )
+    bulk_import_batch_size: int = Field(
+        default=50, validation_alias="BULK_IMPORT_BATCH_SIZE"
+    )
+    temp_password_ttl_hours: int = Field(
+        default=24, validation_alias="TEMP_PASSWORD_TTL_HOURS"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
