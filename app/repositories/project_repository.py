@@ -137,6 +137,11 @@ class ProjectRepository(BaseRepository[Project]):
         project = await self.get_by_id(db, project_id)
         if not project:
             return None
+        
+        if "project_type" in updates and updates["project_type"] is not None:
+         from app.models.project import parse_project_type
+
+        updates["project_type"] = parse_project_type(updates["project_type"])
         return await super().update(db, project, updates)
 
     async def delete(self, db: AsyncSession, project_id: UUID) -> bool:

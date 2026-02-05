@@ -16,6 +16,7 @@ from app.models.request import Request, RequestTypeEnum
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
+from app.models.project import project_type_value
 from app.schemas.invite_schema import (
     PendingInviteItem,
     PendingInvitesResponse,
@@ -246,9 +247,8 @@ async def list_pending_invites_for_supervisor(
 
             if project:
                 project_name = project.name
-                project_type = (
-                    str(project.project_type) if project.project_type else None
-                )
+                project_type = project_type_value(project.project_type)
+            
 
                 # Fetch project domains
                 domains_result = await db.execute(
@@ -653,9 +653,7 @@ async def get_request_details_for_supervisor(
         repo_links = (
             project_data.repo_links if isinstance(project_data.repo_links, list) else []
         )
-        project_type = (
-            str(project_data.project_type) if project_data.project_type else None
-        )
+        project_type = project_type_value(project_data.project_type) or None
 
         project_brief = project_data.description
         project_detail = ProjectDetail(
