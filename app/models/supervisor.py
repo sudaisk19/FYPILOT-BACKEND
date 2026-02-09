@@ -1,12 +1,12 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column,  ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
-from app.models.project import ProjectTypeEnum
 
 from app.db import Base
 
@@ -52,9 +52,15 @@ class Supervisor(Base):
     )
 
     project_type = Column(
-    SQLEnum("research", "product", "product and research", name="project_type_enum", create_type=False),
-    nullable=False,
-    default="research",
+        SQLEnum(
+            "research",
+            "product",
+            "product and research",
+            name="project_type_enum",
+            create_type=False,
+        ),
+        nullable=False,
+        default="research",
     )
     # Capacity Management
     capacity_max = Column(
@@ -89,9 +95,9 @@ class Supervisor(Base):
     industries = relationship(
         "Industry", secondary="supervisor_industries", back_populates="supervisors"
     )
-    
+
     supervised_groups = relationship(
         "Group",
-        foreign_keys="[Group.supervisor_id]", # Explicitly link to the main supervisor field
+        foreign_keys="[Group.supervisor_id]",  # Explicitly link to the main supervisor field
         back_populates="supervisor",
     )

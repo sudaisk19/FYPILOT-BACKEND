@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -52,14 +53,16 @@ class Group(Base):
     milestone_template_id = Column(
         PGUUID(as_uuid=True),
         nullable=True,
-        # Note: Foreign key to milestone_templates.template_id removed
-        # until MilestoneTemplate model is implemented
     )
     supervisor_id = Column(
         PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
     )
-    cosupervisor_id = Column(
-        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+    # Multiple co-supervisors as ARRAY of UUIDs
+    cosupervisor_ids = Column(
+        ARRAY(PGUUID(as_uuid=True)),
+        nullable=True,
+        default=[],
+        comment="Array of co-supervisor user IDs",
     )
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -74,8 +77,8 @@ class Group(Base):
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
-    
-    # Access students through members relationship instead of direct relationship
+
+    # Access students through members relationship
     students = relationship(
         "Student",
         secondary="group_members",
@@ -86,16 +89,10 @@ class Group(Base):
     )
     supervisor = relationship(
         "Supervisor",
-        foreign_keys=[supervisor_id], # Connects the group back to the supervisor
+        foreign_keys=[supervisor_id],
     )
-    
-    
 
-    project = relationship(
-        "Project", 
-        back_populates="group", 
-        uselist=False # Har group ka ek hi project hota hai
-    )
+    project = relationship("Project", back_populates="group", uselist=False)
 
 
 class GroupMember(Base):
@@ -148,5 +145,3 @@ class GroupInvite(Base):
     )
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
-    
-    
