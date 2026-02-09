@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
@@ -30,38 +29,6 @@ from app.schemas.group_schema import (
     SupervisorInfo,
 )
 
-=======
-from typing import Optional, Literal, List
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased , selectinload  
-from datetime import datetime
-from app.auth.supabase_auth import get_current_user
-from app.db import get_db
-
-from app.models.user import User, RoleEnum
-from app.models.group import Group, GroupMember, FYPCycleEnum
-from app.models.project import Project
-from app.models.domain import Domain
-from app.models.project import ProjectDomain
-from app.models.student import Student 
-from app.models.supervisor import Supervisor 
-from app.schemas.admin_groups_schema import (
-    PaginatedGroupResponse, 
-    GroupCardInfo, 
-    AdminGroupProfileResponse, 
-    AdminGroupMemberInfo,
-    
-)
-from app.schemas.group_schema import (
-    SupervisorInfo, ProjectInfo, DomainInfo, IndustryInfo
-)
-
-from app.schemas.admin_groups_schema import PaginatedGroupResponse, GroupCardInfo
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 router = APIRouter(prefix="/admin", tags=["admin-groups"])
 
 
@@ -86,11 +53,7 @@ async def list_groups(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     sup_user = aliased(User)
-<<<<<<< HEAD
     aliased(User)
-=======
-    cosup_user = aliased(User)
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
     # Subquery: members count per group
     member_counts_sq = (
@@ -109,7 +72,6 @@ async def list_groups(
             Group.fyp_cycle,
             Group.fyp_stage,
             Group.cohort_year,
-<<<<<<< HEAD
             func.coalesce(member_counts_sq.c.members_count, 0).label("members_count"),
             Project.name.label("project_name"),
             Project.description.label("project_description"),
@@ -119,49 +81,21 @@ async def list_groups(
             # Since it's an array now, we'd need complex aggregation
             literal(None).label("cosupervisor_name"),
             func.array_agg(func.distinct(Domain.name)).label("domains"),
-=======
-
-            func.coalesce(member_counts_sq.c.members_count, 0).label("members_count"),
-
-            Project.name.label("project_name"),
-            Project.description.label("project_description"),
-            Project.tech_stack.label("tech_stack"),
-
-            sup_user.full_name.label("supervisor_name"),
-            cosup_user.full_name.label("cosupervisor_name"),
-
-            func.array_agg(func.distinct(Domain.name)).label("domains")
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         )
         .select_from(Group)
         .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
         .outerjoin(Project, Project.group_id == Group.group_id)
-<<<<<<< HEAD
         .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
         # .outerjoin(cosup_user) <--- Removed broken join
         .outerjoin(ProjectDomain, ProjectDomain.project_id == Project.project_id)
         .outerjoin(Domain, Domain.domain_id == ProjectDomain.domain_id)
-=======
-
-        .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
-        .outerjoin(cosup_user, cosup_user.user_id == Group.cosupervisor_id)
-
-        .outerjoin(ProjectDomain, ProjectDomain.project_id == Project.project_id)
-        .outerjoin(Domain, Domain.domain_id == ProjectDomain.domain_id)
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         .group_by(
             Group.group_id,
             Project.name,
             Project.description,
             Project.tech_stack,
             sup_user.full_name,
-<<<<<<< HEAD
             # cosup_user.full_name, <--- Removed
-=======
-            cosup_user.full_name,
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
             member_counts_sq.c.members_count,
         )
     )
@@ -196,13 +130,8 @@ async def list_groups(
             or_(
                 Project.name.ilike(s),
                 sup_user.full_name.ilike(s),
-<<<<<<< HEAD
                 # cosup_user.full_name.ilike(s), <--- Removed search on co-supervisor name
                 Group.name.ilike(s),
-=======
-                cosup_user.full_name.ilike(s),
-                Group.name.ilike(s),  # optional; even if you won't show it
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
             )
         )
 
@@ -216,10 +145,6 @@ async def list_groups(
         .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
         .outerjoin(Project, Project.group_id == Group.group_id)
         .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
-<<<<<<< HEAD
-=======
-        .outerjoin(cosup_user, cosup_user.user_id == Group.cosupervisor_id)
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         .outerjoin(ProjectDomain, ProjectDomain.project_id == Project.project_id)
         .outerjoin(Domain, Domain.domain_id == ProjectDomain.domain_id)
     )
@@ -285,35 +210,22 @@ async def list_groups(
         has_prev=page > 1,
     )
 
-<<<<<<< HEAD
 
 # app/api/http/admin_groups.py
 
 
-=======
-# app/api/http/admin_groups.py
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 @router.get("/groups/{group_id}", response_model=AdminGroupProfileResponse)
 async def get_admin_group_profile(
     group_id: UUID,
     db: AsyncSession = Depends(get_db),
-<<<<<<< HEAD
     current_user: User = Depends(get_current_user),
-=======
-    current_user: User = Depends(get_current_user)
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 ):
     """Admin-only: Fetches group profile with detailed student academic info."""
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
     # 1. Initialize variables early taake 'not defined' error na aaye
-<<<<<<< HEAD
     supervisors = {"primary": None, "co_supervisors": []}
-=======
-    supervisors = {"primary": None, "co_supervisor": None}
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     project_info = None
     formatted_members = []
 
@@ -323,7 +235,6 @@ async def get_admin_group_profile(
         .options(
             selectinload(Group.project).selectinload(Project.domains),
             selectinload(Group.project).selectinload(Project.industry),
-<<<<<<< HEAD
             selectinload(Group.members)
             .joinedload(GroupMember.student)
             .joinedload(Student.user),
@@ -333,15 +244,6 @@ async def get_admin_group_profile(
         .where(Group.group_id == group_id)
     )
 
-=======
-            selectinload(Group.members).joinedload(GroupMember.student).joinedload(Student.user),
-            selectinload(Group.supervisor).joinedload(Supervisor.user)
-           
-        )
-        .where(Group.group_id == group_id)
-    )
-    
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     result = await db.execute(query)
     group = result.scalars().first()
 
@@ -364,11 +266,7 @@ async def get_admin_group_profile(
                 cgpa=s.cgpa or 0.0,
                 experience=s.experience,
                 skills=s.skills or [],
-<<<<<<< HEAD
                 portfolio_projects=s.portfolio_projects or [],
-=======
-                portfolio_projects=s.portfolio_projects or []
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
             )
         )
 
@@ -381,7 +279,6 @@ async def get_admin_group_profile(
             email=sup_u.email,
             designation=group.supervisor.designation,
             department=group.supervisor.department,
-<<<<<<< HEAD
             avatar_url=sup_u.profile_avatar,
         )
 
@@ -400,10 +297,6 @@ async def get_admin_group_profile(
                         avatar_url=co_sup_u.profile_avatar,
                     )
                 )
-=======
-            avatar_url=sup_u.profile_avatar
-        )        
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
     # 5. Format Project details
     if group.project:
@@ -418,15 +311,11 @@ async def get_admin_group_profile(
             repo_links=p.repo_links or [],
             updated_at=p.updated_at,
             domains=[DomainInfo(domain_id=d.domain_id, name=d.name) for d in p.domains],
-<<<<<<< HEAD
             industry=(
                 IndustryInfo(industry_id=p.industry.industry_id, name=p.industry.name)
                 if p.industry
                 else None
             ),
-=======
-            industry=IndustryInfo(industry_id=p.industry.industry_id, name=p.industry.name) if p.industry else None
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         )
 
     # Ab ye variables 100% defined hain!
@@ -436,16 +325,11 @@ async def get_admin_group_profile(
             "name": group.name,
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle.value if group.fyp_cycle else None,
-<<<<<<< HEAD
             "cohort_year": group.cohort_year,
-=======
-            "cohort_year": group.cohort_year
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         },
         members=formatted_members,
         supervisors=supervisors,
         project=project_info,
-<<<<<<< HEAD
         invites={"pending_count": 0, "pending": []},
     )
 
@@ -754,8 +638,3 @@ async def remove_cosupervisor_from_group(
         "group_id": str(group_id),
         "removed_supervisor_id": str(supervisor_id),
     }
-=======
-        invites={"pending_count": 0, "pending": []} 
-    )
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)

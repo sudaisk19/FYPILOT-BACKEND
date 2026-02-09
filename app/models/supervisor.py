@@ -1,12 +1,12 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column,  ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
-from app.models.project import ProjectTypeEnum
 
 from app.db import Base
 
@@ -55,20 +55,27 @@ class Supervisor(Base):
 <<<<<<< HEAD
     project_type = Column(
         SQLEnum(
+<<<<<<< HEAD
 =======
     project_type = Column(
 <<<<<<< HEAD
         Enum(
 >>>>>>> 4c72848 (chore: bugs fixing)
+=======
+>>>>>>> 5147cec (supervisor assignment with searcing dropdown api)
             "research",
             "product",
             "product and research",
             name="project_type_enum",
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5147cec (supervisor assignment with searcing dropdown api)
             create_type=False,
         ),
         nullable=False,
         default="research",
+<<<<<<< HEAD
     )
 =======
     project_type = Column(Text, nullable=False)
@@ -84,6 +91,8 @@ class Supervisor(Base):
     SQLEnum("research", "product", "product and research", name="project_type_enum", create_type=False),
     nullable=False,
     default="research",
+=======
+>>>>>>> 5147cec (supervisor assignment with searcing dropdown api)
     )
 >>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     # Capacity Management
@@ -120,6 +129,7 @@ class Supervisor(Base):
         "Industry", secondary="supervisor_industries", back_populates="supervisors"
     )
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     supervised_groups = relationship(
         "Group",
@@ -136,9 +146,12 @@ class Supervisor(Base):
     )
 =======
     
+=======
+
+>>>>>>> 5147cec (supervisor assignment with searcing dropdown api)
     supervised_groups = relationship(
         "Group",
-        foreign_keys="[Group.supervisor_id]", # Explicitly link to the main supervisor field
+        foreign_keys="[Group.supervisor_id]",  # Explicitly link to the main supervisor field
         back_populates="supervisor",
     )
 >>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)

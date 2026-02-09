@@ -1,16 +1,9 @@
-<<<<<<< HEAD
 from typing import List, Optional
 from uuid import UUID  # <--- THIS FIXES YOUR ERROR
 
 from pydantic import BaseModel, Field
 
 
-=======
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from uuid import UUID  # <--- THIS FIXES YOUR ERROR
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 # Mirroring your Student pagination style
 class SupervisorCardInfo(BaseModel):
     user_id: str
@@ -22,12 +15,8 @@ class SupervisorCardInfo(BaseModel):
     capacity_max: int
     capacity_filled: int
     free_slots: int
-<<<<<<< HEAD
     status: str
 
-=======
-    status: str 
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
 class PaginatedSupervisorResponse(BaseModel):
     supervisors: List[SupervisorCardInfo]
@@ -37,12 +26,8 @@ class PaginatedSupervisorResponse(BaseModel):
     total_pages: int
     has_next: bool
     has_prev: bool
-<<<<<<< HEAD
 
 
-=======
-    
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 # Projects listed inside the supervisor profile
 class SupervisedProjectInfo(BaseModel):
     project_id: UUID
@@ -52,10 +37,7 @@ class SupervisedProjectInfo(BaseModel):
     fyp_stage: Optional[str]
     domains: List[str]
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 # Full Profile Response
 class AdminSupervisorProfileOut(BaseModel):
     user_id: UUID
@@ -73,7 +55,6 @@ class AdminSupervisorProfileOut(BaseModel):
     industries: List[str]
     projects: List[SupervisedProjectInfo]
 
-<<<<<<< HEAD
 
 # For the "Save" button on capacity
 class CapacityUpdateReq(BaseModel):
@@ -106,8 +87,3 @@ class SupervisorDropdownItem(BaseModel):
                 "is_available": True,
             }
         }
-=======
-# For the "Save" button on capacity
-class CapacityUpdateReq(BaseModel):
-    capacity_max: int = Field(...,ge=0, description="Maximum groups a supervisor can take")
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -125,32 +124,6 @@ async def get_supervisors_dropdown(
     return supervisors
 
 
-=======
-from typing import Optional, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import selectinload
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from uuid import UUID  
-
-from app.auth.supabase_auth import get_current_user
-from app.db import get_db  # <--- THIS FIXES YOUR IMPORT ERROR
-from app.models.user import User, RoleEnum
-from app.models.supervisor import Supervisor
-
-from app.repositories.supervisor_repository import supervisor_repository
-from app.schemas.admin_supervisors_schema import (
-    AdminSupervisorProfileOut, 
-    SupervisedProjectInfo, 
-    CapacityUpdateReq
-)
-
-from app.schemas.admin_supervisors_schema import PaginatedSupervisorResponse, SupervisorCardInfo
-
-router = APIRouter()
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 @router.get("/supervisors", response_model=PaginatedSupervisorResponse)
 async def list_supervisors(
     department: Optional[str] = Query(None),
@@ -168,22 +141,14 @@ async def list_supervisors(
     query = (
         select(User, Supervisor)
         .join(Supervisor, User.user_id == Supervisor.user_id)
-<<<<<<< HEAD
         .options(selectinload(Supervisor.domains))  # Pre-loads domains for the tags
-=======
-        .options(selectinload(Supervisor.domains)) # Pre-loads domains for the tags
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
         .where(User.role == RoleEnum.supervisor)
     )
 
     filters = []
     if department:
         filters.append(Supervisor.department.ilike(f"%{department}%"))
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     if availability == "available":
         filters.append(Supervisor.capacity_filled < Supervisor.capacity_max)
     elif availability == "full":
@@ -191,7 +156,6 @@ async def list_supervisors(
 
     if search:
         s = f"%{search}%"
-<<<<<<< HEAD
         filters.append(
             or_(
                 User.full_name.ilike(s),
@@ -199,19 +163,11 @@ async def list_supervisors(
                 Supervisor.department.ilike(s),
             )
         )
-=======
-        filters.append(or_(
-            User.full_name.ilike(s),
-            User.email.ilike(s),
-            Supervisor.department.ilike(s)
-        ))
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
     if filters:
         query = query.where(and_(*filters))
 
     # 2. Count Query (Pagination formula from your Student API)
-<<<<<<< HEAD
     count_query = (
         select(func.count(User.user_id))
         .join(Supervisor)
@@ -220,12 +176,6 @@ async def list_supervisors(
     if filters:
         count_query = count_query.where(and_(*filters))
 
-=======
-    count_query = select(func.count(User.user_id)).join(Supervisor).where(User.role == RoleEnum.supervisor)
-    if filters:
-        count_query = count_query.where(and_(*filters))
-    
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     total = (await db.execute(count_query)).scalar() or 0
     offset = (page - 1) * per_page
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
@@ -249,11 +199,7 @@ async def list_supervisors(
                 capacity_max=supervisor.capacity_max,
                 capacity_filled=supervisor.capacity_filled,
                 free_slots=free,
-<<<<<<< HEAD
                 status="AVAILABLE" if free > 0 else "FULL",
-=======
-                status="AVAILABLE" if free > 0 else "FULL"
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
             )
         )
 
@@ -266,24 +212,15 @@ async def list_supervisors(
         has_next=page < total_pages,
         has_prev=page > 1,
     )
-<<<<<<< HEAD
 
     # 1. GET Individual Profile
 
 
-=======
-    
-    # 1. GET Individual Profile
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 @router.get("/supervisors/{supervisor_id}", response_model=AdminSupervisorProfileOut)
 async def get_admin_supervisor_profile(
     supervisor_id: UUID,
     db: AsyncSession = Depends(get_db),
-<<<<<<< HEAD
     current_user: User = Depends(get_current_user),
-=======
-    current_user: User = Depends(get_current_user)
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
@@ -293,16 +230,11 @@ async def get_admin_supervisor_profile(
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
     sp = user.supervisor_profile
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
     # Format Projects list for UI
     projects_data = []
     for group in sp.supervised_groups:
         if group.project:
-<<<<<<< HEAD
             projects_data.append(
                 SupervisedProjectInfo(
                     project_id=group.project.project_id,
@@ -330,16 +262,6 @@ async def get_admin_supervisor_profile(
                         domains=[d.name for d in group.project.domains],
                     )
                 )
-=======
-            projects_data.append(SupervisedProjectInfo(
-                project_id=group.project.project_id,
-                name=group.project.name,
-                description=group.project.description,
-                fyp_cycle=group.fyp_cycle,
-                fyp_stage=group.fyp_stage,
-                domains=[d.name for d in group.project.domains]
-            ))
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 
     return AdminSupervisorProfileOut(
         user_id=user.user_id,
@@ -355,7 +277,6 @@ async def get_admin_supervisor_profile(
         capacity_filled=sp.capacity_filled,
         domains=[d.name for d in sp.domains],
         industries=[i.name for i in sp.industries],
-<<<<<<< HEAD
         projects=projects_data,
     )
 
@@ -364,24 +285,12 @@ async def get_admin_supervisor_profile(
 # app/api/http/admin_supervisors.py
 
 
-=======
-        projects=projects_data
-    )
-
-# 2. UPDATE Capacity (For the 'Save' button in screenshot)
-# app/api/http/admin_supervisors.py
-
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 @router.patch("/supervisors/{supervisor_id}/capacity")
 async def update_supervisor_capacity(
     supervisor_id: UUID,
     data: CapacityUpdateReq,
     db: AsyncSession = Depends(get_db),
-<<<<<<< HEAD
     current_user: User = Depends(get_current_user),
-=======
-    current_user: User = Depends(get_current_user)
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -397,7 +306,6 @@ async def update_supervisor_capacity(
     if data.capacity_max < sp.capacity_filled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-<<<<<<< HEAD
             detail=f"Cannot reduce capacity to {data.capacity_max}. Supervisor already has {sp.capacity_filled} assigned groups.",
         )
 
@@ -411,13 +319,3 @@ async def update_supervisor_capacity(
         "message": "Capacity updated successfully",
         "new_capacity": data.capacity_max,
     }
-=======
-            detail=f"Cannot reduce capacity to {data.capacity_max}. Supervisor already has {sp.capacity_filled} assigned groups."
-        )
-
-    # 3. Agar sab theek hai, toh update karein
-    await supervisor_repository.update(db, supervisor_id, {"capacity_max": data.capacity_max})
-    await db.commit()
-    
-    return {"message": "Capacity updated successfully", "new_capacity": data.capacity_max}
->>>>>>> 91164a0 (Admin: Implemented GET APIs for students, supervisors, and groups)

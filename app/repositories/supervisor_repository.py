@@ -27,7 +27,6 @@ from app.models.supervisor import Supervisor
 from app.models.supervisor_domain import SupervisorDomain
 from app.models.supervisor_industry import SupervisorIndustry
 from app.models.user import User
-from app.models.project import parse_project_type
 
 from .base import BaseRepository
 
@@ -459,7 +458,7 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             supervisor.capacity_filled -= 1
             await db.flush()
         return supervisor
-    
+
     async def get_full_profile(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
         """Fetch supervisor with user, domains, industries, and supervised projects."""
         from app.models.group import Group
@@ -469,11 +468,13 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             select(User)
             .options(
                 selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
-                selectinload(User.supervisor_profile).selectinload(Supervisor.industries),
+                selectinload(User.supervisor_profile).selectinload(
+                    Supervisor.industries
+                ),
                 selectinload(User.supervisor_profile)
-                    .selectinload(Supervisor.supervised_groups)
-                    .selectinload(Group.project)
-                    .selectinload(Project.domains)
+                .selectinload(Supervisor.supervised_groups)
+                .selectinload(Group.project)
+                .selectinload(Project.domains),
             )
             .where(User.user_id == user_id)
         )
