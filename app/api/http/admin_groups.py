@@ -225,7 +225,7 @@ async def get_admin_group_profile(
         raise HTTPException(status_code=403, detail="Admin only")
 
     # 1. Initialize variables early taake 'not defined' error na aaye
-    supervisors = {"primary": None, "co_supervisor": None}
+    supervisors = {"primary": None, "co_supervisors": []}
     project_info = None
     formatted_members = []
 
@@ -239,6 +239,7 @@ async def get_admin_group_profile(
             .joinedload(GroupMember.student)
             .joinedload(Student.user),
             selectinload(Group.supervisor).joinedload(Supervisor.user),
+            selectinload(Group.co_supervisors).joinedload(Supervisor.user),
         )
         .where(Group.group_id == group_id)
     )
@@ -280,6 +281,22 @@ async def get_admin_group_profile(
             department=group.supervisor.department,
             avatar_url=sup_u.profile_avatar,
         )
+
+    # 4b. Format Co-Supervisor details (List)
+    if group.co_supervisors:
+        for co_sup in group.co_supervisors:
+            if co_sup.user:
+                co_sup_u = co_sup.user
+                supervisors["co_supervisors"].append(
+                    SupervisorInfo(
+                        user_id=co_sup_u.user_id,
+                        full_name=co_sup_u.full_name,
+                        email=co_sup_u.email,
+                        designation=co_sup.designation,
+                        department=co_sup.department,
+                        avatar_url=co_sup_u.profile_avatar,
+                    )
+                )
 
     # 5. Format Project details
     if group.project:

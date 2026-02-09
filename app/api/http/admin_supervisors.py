@@ -231,6 +231,23 @@ async def get_admin_supervisor_profile(
                 )
             )
 
+    # 2. Add Co-Supervised Projects
+    if hasattr(sp, "co_supervised_groups"):
+        for group in sp.co_supervised_groups:
+            if group.project:
+                projects_data.append(
+                    SupervisedProjectInfo(
+                        project_id=group.project.project_id,
+                        name=f"{group.project.name} (Co-Supervisor)",
+                        description=group.project.description,
+                        fyp_cycle=(
+                            group.fyp_cycle.value if group.fyp_cycle else "Unknown"
+                        ),
+                        fyp_stage=group.fyp_stage,
+                        domains=[d.name for d in group.project.domains],
+                    )
+                )
+
     return AdminSupervisorProfileOut(
         user_id=user.user_id,
         full_name=user.full_name,

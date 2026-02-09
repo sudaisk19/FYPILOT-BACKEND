@@ -92,6 +92,13 @@ class Group(Base):
         foreign_keys=[supervisor_id],
     )
 
+    # Added relationship for Co-Supervisors (using Array containment)
+    co_supervisors = relationship(
+        "Supervisor",
+        primaryjoin="foreign(Supervisor.user_id) == func.any(Group.cosupervisor_ids)",
+        viewonly=True,
+    )
+
     project = relationship("Project", back_populates="group", uselist=False)
 
 

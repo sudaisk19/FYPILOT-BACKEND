@@ -50,7 +50,7 @@ class AdminGroupProfileResponse(BaseModel):
 
     group: dict = Field(..., description="Group metadata")
     members: List[AdminGroupMemberInfo]
-    supervisors: Dict[str, Optional[gs.SupervisorInfo]]
+    supervisors: Dict[str, Any]
     project: Optional[gs.ProjectInfo] = None
     # If invites info is causing issues, we can use a simple dict here too
     invites: Optional[dict] = None
