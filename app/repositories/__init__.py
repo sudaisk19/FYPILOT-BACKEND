@@ -23,6 +23,7 @@ Usage:
 from .admin_repository import AdminRepository, admin_repository
 
 # Base repository
+from .announcement_repository import AnnouncementRepository, announcement_repository
 from .base import BaseRepository
 from .domain_repository import DomainRepository, domain_repository
 from .group_repository import GroupRepository, group_repository
@@ -37,6 +38,7 @@ __all__ = [
     # Base
     "BaseRepository",
     # Classes (for type hints and custom instantiation)
+    "AnnouncementRepository",
     "UserRepository",
     "StudentRepository",
     "SupervisorRepository",
@@ -47,6 +49,7 @@ __all__ = [
     "DomainRepository",
     "AdminRepository",
     # Singleton instances (for convenience)
+    "announcement_repository",
     "user_repository",
     "student_repository",
     "supervisor_repository",

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
-from app.db import get_db  # <--- THIS FIXES YOUR IMPORT ERROR
+from app.db import get_db  
 from app.models.supervisor import Supervisor
 from app.models.user import RoleEnum, User
 from app.repositories.supervisor_repository import supervisor_repository
