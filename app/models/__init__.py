@@ -5,6 +5,16 @@
 
 from .admin import Admin
 
+# Announcement and Submission models
+from .announcement import (
+    Announcement,
+    AnnouncementFile,
+    AnnouncementRoleEnum,
+    AnnouncementTarget,
+    FileTypeEnum,
+    TargetRoleEnum as AnnouncementTargetRoleEnum,
+)
+
 # Bulk import models
 from .bulk_import import (
     BulkImportItem,
@@ -33,6 +43,7 @@ from .shortlisted_supervisor import ShortlistedSupervisor
 
 # Profile models (depend on User)
 from .student import Student
+from .submission import Submission, SubmissionFile, SubmissionStatusEnum, SubmissionTypeEnum
 from .supervisor import Supervisor
 
 # Supervisor relationship models (junction tables)
@@ -62,6 +73,18 @@ __all__ = [
     "SupervisorDomain",
     "SupervisorIndustry",
     "PasswordResetToken",
+    # Announcement models
+    "Announcement",
+    "AnnouncementTarget",
+    "AnnouncementFile",
+    "AnnouncementRoleEnum",
+    "AnnouncementTargetRoleEnum",
+    "FileTypeEnum",
+    # Submission models
+    "Submission",
+    "SubmissionFile",
+    "SubmissionTypeEnum",
+    "SubmissionStatusEnum",
     # Bulk import models
     "BulkImportJob",
     "BulkImportItem",

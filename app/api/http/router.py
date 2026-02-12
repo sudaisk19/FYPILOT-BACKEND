@@ -32,6 +32,15 @@ from app.api.http.supervisor_recommendation import (
 )
 from app.api.http.users import router as user_router
 
+<<<<<<< Updated upstream
+=======
+# Import admin router
+from app.api.http.admin_students import router as admin_students_router
+from app.api.http.admin_groups import router as admin_groups_router
+from app.api.http.admin_supervisors import router as admin_supervisors_router
+from app.api.http.admin_submissions import router as admin_submissions_router
+
+>>>>>>> Stashed changes
 # Create a "master" router that mounts all HTTP routers
 router = APIRouter()
 
@@ -85,3 +94,6 @@ router.include_router(admin_groups_router)
 router.include_router(
     bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
 )
+
+# Mount admin submissions router
+router.include_router(admin_submissions_router)

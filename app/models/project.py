@@ -84,6 +84,7 @@ class Project(Base):
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
     )
     repo_links = Column(JSONB, nullable=False, default=list)
+    fyp_id = Column(Text, unique=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
