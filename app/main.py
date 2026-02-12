@@ -85,7 +85,11 @@ async def on_startup():
     # If Redis fails, app will continue without cache
     try:
         # Add 3 second timeout to prevent blocking startup
-        await asyncio.wait_for(cache.connect(), timeout=3.0)
+        redis_ok = await asyncio.wait_for(cache.connect(), timeout=3.0)
+        if redis_ok:
+            logger.info("✅ Redis cache connected and ready.")
+        else:
+            logger.warning("⚠️ Redis not available. App will run without caching.")
     except asyncio.TimeoutError:
         logger.warning(
             "Redis connection timed out during startup. "
