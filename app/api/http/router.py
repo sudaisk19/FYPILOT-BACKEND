@@ -21,6 +21,7 @@ from app.api.http.shortlist import router as shortlist_router
 
 # Import profile routers
 from app.api.http.student_profile import router as student_profile_router
+from app.api.http.submissions import router as submissions_router
 
 # Import explore routers
 from app.api.http.supervisor_explore import router as supervisor_explore_router
@@ -66,6 +67,9 @@ router.include_router(invites_router)
 
 # Mount supervisor groups directory router
 router.include_router(supervisor_groups_router)
+
+# Mount submissions router
+router.include_router(submissions_router)
 
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])

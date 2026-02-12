@@ -101,6 +101,10 @@ class Group(Base):
 
     project = relationship("Project", back_populates="group", uselist=False)
 
+    submissions = relationship(
+        "Submission", back_populates="group", cascade="all, delete-orphan"
+    )
+
 
 class GroupMember(Base):
     __tablename__ = "group_members"
