@@ -137,6 +137,14 @@ async def list_supervisors(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
+    # ── 1. Check Redis Cache ──────────────────────────────────────────────
+    cache_key = (
+        f"admin:supervisors:{department}:{availability}:" f"{search}:{page}:{per_page}"
+    )
+    cached = await cache.get_json(cache_key)
+    if cached:
+        return cached
+
     # 1. Base Query using your exact models
     query = (
         select(User, Supervisor)
@@ -203,7 +211,7 @@ async def list_supervisors(
             )
         )
 
-    return PaginatedSupervisorResponse(
+    response = PaginatedSupervisorResponse(
         supervisors=supervisors_out,
         total=total,
         page=page,
@@ -212,6 +220,11 @@ async def list_supervisors(
         has_next=page < total_pages,
         has_prev=page > 1,
     )
+
+    # ── Cache Result (TTL 300s / 5 mins) ──────────────────────────────────
+    await cache.set_json(cache_key, response.model_dump(), ttl_seconds=300)
+
+    return response
 
     # 1. GET Individual Profile
 

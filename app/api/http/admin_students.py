@@ -1,19 +1,17 @@
 # app/api/http/admin_students.py
-#this api is displaying all the stidents to the admin 
-from typing import Optional, Literal
+# this api is displaying all the stidents to the admin
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select, cast, String
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-
-from app.models.user import User, RoleEnum
-from app.models.student import Student
-from app.models.group import Group, GroupMember, FYPCycleEnum
+from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.project import Project
-
+from app.models.student import Student
+from app.models.user import RoleEnum, User
 from app.schemas.admin_students_schema import PaginatedStudentResponse, StudentCardInfo
 
 router = APIRouter()
@@ -33,6 +31,18 @@ async def list_students(
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    # ── 1. Check Redis Cache ──────────────────────────────────────────────
+    # Construct unique key based on ALL filters
+    cache_key = (
+        f"admin:students:{batch}:{cycle}:{group}:{department}:"
+        f"{search}:{page}:{per_page}"
+    )
+    from app.services.cache import cache
+
+    cached = await cache.get_json(cache_key)
+    if cached:
+        return cached
 
     # ✅ Select Project.name ONLY (not Project entity)
     query = (
@@ -75,7 +85,7 @@ async def list_students(
                 User.full_name.ilike(s),
                 User.email.ilike(s),
                 Student.roll_number.ilike(s),
-                Project.name.ilike(s),           # project name search
+                Project.name.ilike(s),  # project name search
                 cast(Group.cohort_year, String).ilike(s),
             )
         )
@@ -124,7 +134,7 @@ async def list_students(
             )
         )
 
-    return PaginatedStudentResponse(
+    response = PaginatedStudentResponse(
         students=students_out,
         total=total,
         page=page,
@@ -133,3 +143,8 @@ async def list_students(
         has_next=page < total_pages,
         has_prev=page > 1,
     )
+
+    # ── Cache Result (TTL 60s) ────────────────────────────────────────────
+    await cache.set_json(cache_key, response.model_dump(), ttl_seconds=60)
+
+    return response
