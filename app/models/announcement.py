@@ -1,3 +1,5 @@
+# app/models/announcement.py
+
 import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
@@ -33,6 +35,7 @@ class AnnouncementRoleEnum(str, enum.Enum):
 class TargetRoleEnum(str, enum.Enum):
     all_students = "all_students"
     all_supervisors = "all_supervisors"
+    both = "both"  # Added from sumaiya-dev to preserve functionality
 
 
 class FileTypeEnum(str, enum.Enum):

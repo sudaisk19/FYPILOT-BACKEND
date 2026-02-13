@@ -33,6 +33,9 @@ from app.api.http.supervisor_recommendation import (
 )
 from app.api.http.users import router as user_router
 
+# Import admin router 
+from app.api.http.admin_announcements import router as admin_announcements_router
+
 # Create a "master" router that mounts all HTTP routers
 router = APIRouter()
 
@@ -85,6 +88,7 @@ router.include_router(
 
 router.include_router(admin_groups_router)
 
+router.include_router(admin_announcements_router)
 # Mount bulk import router (admin only)
 router.include_router(
     bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
