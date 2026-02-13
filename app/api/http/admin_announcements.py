@@ -36,7 +36,7 @@ def _safe_filename(name: str) -> str:
 
 def _build_storage_key(user_id: UUID, filename: str) -> str:
     safe_name = _safe_filename(filename)
-    return f"announcements/{user_id}/{uuid4()}/{safe_name}"
+    return f"announcements/{safe_name}"
 
 
 router = APIRouter(prefix="/admin", tags=["admin-announcements"])
@@ -194,6 +194,11 @@ async def update_announcement(
             parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format")
+        
+    parsed_keep_ids = None
+    if keep_file_ids is not None:
+        id_list = [f.strip() for f in keep_file_ids.split(",") if f.strip()]
+        parsed_keep_ids = [UUID(fid) for fid in id_list]
 
     # 3. Update Text Fields (Using your consistent Repo function)
     await announcement_repository.update(
@@ -202,7 +207,8 @@ async def update_announcement(
         title=title.strip() if title else None,
         description=description.strip() if description else None,
         due_at=parsed_due_at,
-        total_marks=total_marks
+        total_marks=total_marks,
+        keep_file_ids=parsed_keep_ids
     )
 
     # 4. Target Role Update
@@ -211,6 +217,7 @@ async def update_announcement(
             target.target_role = target_type
 
     # 5. Robust UUID Parsing for File Sync
+    
     if keep_file_ids is not None:
         try:
             # Sirf un IDs ko uthayein jo khali nahi hain
@@ -233,7 +240,7 @@ async def update_announcement(
         for upload in files:
             if not upload.filename: continue
             
-            storage_key = _build_storage_key(current_user.user_id, upload.filename)
+            storage_key = f"announcements/{upload.filename}"
             size_bytes = await upload_file_to_supabase( supabase, bucket=ANNOUNCEMENTS_BUCKET,  storage_key=storage_key, upload=upload)
 
             announcement.files.append(
