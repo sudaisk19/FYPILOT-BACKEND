@@ -101,3 +101,11 @@ class Supervisor(Base):
         foreign_keys="[Group.supervisor_id]",  # Explicitly link to the main supervisor field
         back_populates="supervisor",
     )
+
+    # Added relationship for Co-Supervised Groups (using Array containment)
+    # Uses SQL: user_id = ANY(cosupervisor_ids)
+    co_supervised_groups = relationship(
+        "Group",
+        primaryjoin="Supervisor.user_id == func.any(foreign(Group.cosupervisor_ids))",
+        viewonly=True,
+    )

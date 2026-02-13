@@ -5,6 +5,14 @@
 
 from .admin import Admin
 
+# Submission and Announcement models
+from .announcement import (
+    Announcement,
+    AnnouncementFile,
+    AnnouncementRoleEnum,
+    AnnouncementTarget,
+)
+
 # Bulk import models
 from .bulk_import import (
     BulkImportItem,
@@ -33,6 +41,12 @@ from .shortlisted_supervisor import ShortlistedSupervisor
 
 # Profile models (depend on User)
 from .student import Student
+from .submission import (
+    Submission,
+    SubmissionFile,
+    SubmissionStatusEnum,
+    SubmissionTypeEnum,
+)
 from .supervisor import Supervisor
 
 # Supervisor relationship models (junction tables)
@@ -57,6 +71,16 @@ __all__ = [
     "ShortlistedSupervisor",
     "Project",
     "ProjectDomain",
+    "ProjectDomain",
+    # Submission and Announcement models
+    "Announcement",
+    "AnnouncementFile",
+    "AnnouncementTarget",
+    "AnnouncementRoleEnum",
+    "Submission",
+    "SubmissionFile",
+    "SubmissionTypeEnum",
+    "SubmissionStatusEnum",
     "Domain",
     "Industry",
     "SupervisorDomain",

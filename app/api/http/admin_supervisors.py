@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
-from app.db import get_db  
+from app.db import get_db
 from app.models.supervisor import Supervisor
 from app.models.user import RoleEnum, User
 from app.repositories.supervisor_repository import supervisor_repository
@@ -19,6 +19,7 @@ from app.schemas.admin_supervisors_schema import (
     SupervisorCardInfo,
     SupervisorDropdownItem,
 )
+from app.services.cache import cache
 
 router = APIRouter()
 
@@ -52,16 +53,26 @@ async def get_supervisors_dropdown(
 
     The frontend should use this with a searchable select component
     (e.g., React Select, MUI Autocomplete, Ant Design Select).
+
+    Optimizations:
+    - Returns max 15 results (frontend should debounce 300ms)
+    - Cached in Redis for 5 minutes per search term
+    - Uses Trigram GIN index for fast ILIKE matching
     """
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    # If no search term and not explicitly asking for all (optional), return empty
-    # This optimizes for "search-as-you-type" behavior where we don't load the full list initially
+    # If no search term, return empty (search-as-you-type optimization)
     if not search:
         return []
 
-    # Base query
+    # ── 1. Check Redis Cache ──────────────────────────────────────────────
+    cache_key = f"sup_dropdown:{search.lower().strip()}:{available_only}"
+    cached = await cache.get_json(cache_key)
+    if cached is not None:
+        return cached
+
+    # ── 2. Database Query (with LIMIT) ────────────────────────────────────
     query = (
         select(User, Supervisor)
         .join(Supervisor, User.user_id == Supervisor.user_id)
@@ -70,7 +81,7 @@ async def get_supervisors_dropdown(
 
     filters = []
 
-    # Search filter (optional - frontend can also filter client-side)
+    # Search filter
     if search:
         s = f"%{search}%"
         filters.append(
@@ -88,12 +99,12 @@ async def get_supervisors_dropdown(
     if filters:
         query = query.where(and_(*filters))
 
-    # Order by name for consistent display
-    query = query.order_by(User.full_name.asc())
+    # Order by name and LIMIT to 15 results for fast response
+    query = query.order_by(User.full_name.asc()).limit(15)
 
     rows = (await db.execute(query)).all()
 
-    # Build response - minimal fields for fast dropdown
+    # ── 3. Build Response ─────────────────────────────────────────────────
     supervisors = []
     for user, supervisor in rows:
         free_slots = supervisor.capacity_max - supervisor.capacity_filled
@@ -105,6 +116,10 @@ async def get_supervisors_dropdown(
                 is_available=free_slots > 0,
             )
         )
+
+    # ── 4. Cache in Redis (5 min TTL) ─────────────────────────────────────
+    result_dicts = [s.model_dump() for s in supervisors]
+    await cache.set_json(cache_key, result_dicts, ttl_seconds=300)
 
     return supervisors
 
@@ -121,6 +136,14 @@ async def list_supervisors(
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    # ── 1. Check Redis Cache ──────────────────────────────────────────────
+    cache_key = (
+        f"admin:supervisors:{department}:{availability}:" f"{search}:{page}:{per_page}"
+    )
+    cached = await cache.get_json(cache_key)
+    if cached:
+        return cached
 
     # 1. Base Query using your exact models
     query = (
@@ -188,7 +211,7 @@ async def list_supervisors(
             )
         )
 
-    return PaginatedSupervisorResponse(
+    response = PaginatedSupervisorResponse(
         supervisors=supervisors_out,
         total=total,
         page=page,
@@ -197,6 +220,11 @@ async def list_supervisors(
         has_next=page < total_pages,
         has_prev=page > 1,
     )
+
+    # ── Cache Result (TTL 300s / 5 mins) ──────────────────────────────────
+    await cache.set_json(cache_key, response.model_dump(), ttl_seconds=300)
+
+    return response
 
     # 1. GET Individual Profile
 
@@ -230,6 +258,23 @@ async def get_admin_supervisor_profile(
                     domains=[d.name for d in group.project.domains],
                 )
             )
+
+    # 2. Add Co-Supervised Projects
+    if hasattr(sp, "co_supervised_groups"):
+        for group in sp.co_supervised_groups:
+            if group.project:
+                projects_data.append(
+                    SupervisedProjectInfo(
+                        project_id=group.project.project_id,
+                        name=f"{group.project.name} (Co-Supervisor)",
+                        description=group.project.description,
+                        fyp_cycle=(
+                            group.fyp_cycle.value if group.fyp_cycle else "Unknown"
+                        ),
+                        fyp_stage=group.fyp_stage,
+                        domains=[d.name for d in group.project.domains],
+                    )
+                )
 
     return AdminSupervisorProfileOut(
         user_id=user.user_id,

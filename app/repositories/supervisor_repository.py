@@ -431,6 +431,10 @@ class SupervisorRepository(BaseRepository[Supervisor]):
                 .selectinload(Supervisor.supervised_groups)
                 .selectinload(Group.project)
                 .selectinload(Project.domains),
+                selectinload(User.supervisor_profile)
+                .selectinload(Supervisor.co_supervised_groups)
+                .selectinload(Group.project)
+                .selectinload(Project.domains),
             )
             .where(User.user_id == user_id)
         )

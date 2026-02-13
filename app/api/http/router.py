@@ -1,7 +1,12 @@
 # app/api/http/router.py
 from fastapi import APIRouter
 
+from app.api.http.admin_groups import router as admin_groups_router
 from app.api.http.admin_profile import router as admin_profile_router
+
+# Import admin router
+from app.api.http.admin_students import router as admin_students_router
+from app.api.http.admin_supervisors import router as admin_supervisors_router
 
 # Import bulk import router
 from app.api.http.bulk_import import router as bulk_import_router
@@ -16,9 +21,11 @@ from app.api.http.shortlist import router as shortlist_router
 
 # Import profile routers
 from app.api.http.student_profile import router as student_profile_router
+from app.api.http.submissions import router as submissions_router
 
 # Import explore routers
 from app.api.http.supervisor_explore import router as supervisor_explore_router
+from app.api.http.supervisor_groups import router as supervisor_groups_router
 from app.api.http.supervisor_invites import router as invites_router
 from app.api.http.supervisor_profile import router as supervisor_profile_router
 from app.api.http.supervisor_recommendation import (
@@ -26,10 +33,7 @@ from app.api.http.supervisor_recommendation import (
 )
 from app.api.http.users import router as user_router
 
-# Import admin router
-from app.api.http.admin_students import router as admin_students_router
-from app.api.http.admin_groups import router as admin_groups_router
-from app.api.http.admin_supervisors import router as admin_supervisors_router
+# Import admin router 
 from app.api.http.admin_announcements import router as admin_announcements_router
 
 # Create a "master" router that mounts all HTTP routers
@@ -64,15 +68,23 @@ router.include_router(shortlist_router)
 # Mount supervisor invites router
 router.include_router(invites_router)
 
+# Mount supervisor groups directory router
+router.include_router(supervisor_groups_router)
+
+# Mount submissions router
+router.include_router(submissions_router)
+
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
 
 # Mount admin routers
 router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
 
-router.include_router(admin_students_router,prefix="/admin",tags=["admin-students"])
+router.include_router(admin_students_router, prefix="/admin", tags=["admin-students"])
 
-router.include_router(admin_supervisors_router, prefix="/admin", tags=["admin-supervisors"])
+router.include_router(
+    admin_supervisors_router, prefix="/admin", tags=["admin-supervisors"]
+)
 
 router.include_router(admin_groups_router)
 
