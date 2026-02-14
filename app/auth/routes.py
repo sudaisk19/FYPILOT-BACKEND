@@ -461,7 +461,11 @@ async def get_student_group_info(
             ),
             cohort_year=group.cohort_year,
             supervisor_id=group.supervisor_id,
-            cosupervisor_id=group.cosupervisor_id,
+            cosupervisor_id=(
+                group.cosupervisor_ids[0]
+                if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0
+                else None
+            ),
             project_id=project.project_id if project else None,
         )
     except Exception as e:
@@ -486,7 +490,10 @@ async def get_supervisor_info(
         # Get supervised groups
         groups_result = await db.execute(
             select(Group).where(
-                or_(Group.supervisor_id == user_id, Group.cosupervisor_id == user_id)
+                or_(
+                    Group.supervisor_id == user_id,
+                    Group.cosupervisor_ids.contains([user_id]),
+                )
             )
         )
         groups = groups_result.scalars().all()

@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime
 from typing import List, Optional, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,7 +217,7 @@ async def update_announcement(
             parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format")
-        
+
     parsed_keep_ids = None
     if keep_file_ids is not None:
         id_list = [f.strip() for f in keep_file_ids.split(",") if f.strip()]
@@ -231,7 +231,7 @@ async def update_announcement(
         description=description.strip() if description else None,
         due_at=parsed_due_at,
         total_marks=total_marks,
-        keep_file_ids=parsed_keep_ids
+        keep_file_ids=parsed_keep_ids,
     )
 
     # 4. Target Role Update
@@ -240,7 +240,7 @@ async def update_announcement(
             target.target_role = target_type
 
     # 5. Robust UUID Parsing for File Sync
-    
+
     if keep_file_ids is not None:
         try:
             # Sirf un IDs ko uthayein jo khali nahi hain
@@ -266,10 +266,16 @@ async def update_announcement(
     # 6. Adding New Files
     if files:
         for upload in files:
-            if not upload.filename: continue
-            
+            if not upload.filename:
+                continue
+
             storage_key = f"announcements/{upload.filename}"
-            size_bytes = await upload_file_to_supabase( supabase, bucket=ANNOUNCEMENTS_BUCKET,  storage_key=storage_key, upload=upload)
+            size_bytes = await upload_file_to_supabase(
+                supabase,
+                bucket=ANNOUNCEMENTS_BUCKET,
+                storage_key=storage_key,
+                upload=upload,
+            )
 
             announcement.files.append(
                 AnnouncementFile(

@@ -20,11 +20,15 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain, ProjectTypeEnum
+from app.models.project import (
+    Project,
+    ProjectDomain,
+    ProjectTypeEnum,
+    project_type_value,
+)
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
-from app.models.project import project_type_value
 from app.schemas.group_schema import (
     CreateGroupRequest,
     DeleteGroupResponse,
@@ -724,11 +728,11 @@ async def get_group_profile(
                     avatar_url=supervisor_user.profile_avatar,
                 )
 
-        if group.cosupervisor_id:
+        if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
             cosupervisor_result = await db.execute(
                 select(Supervisor, User)
                 .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.cosupervisor_id)
+                .where(Supervisor.user_id == group.cosupervisor_ids[0])
             )
             cosupervisor_data = cosupervisor_result.first()
             if cosupervisor_data:
@@ -987,7 +991,7 @@ async def update_group_profile(
             if update_data.group.supervisor_id is not None:
                 group_updates["supervisor_id"] = update_data.group.supervisor_id
             if update_data.group.cosupervisor_id is not None:
-                group_updates["cosupervisor_id"] = update_data.group.cosupervisor_id
+                group_updates["cosupervisor_ids"] = [update_data.group.cosupervisor_id]
 
             if group_updates:
                 group_updates["updated_at"] = updated_at

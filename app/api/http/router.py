@@ -1,6 +1,8 @@
 # app/api/http/router.py
 from fastapi import APIRouter
 
+# Import admin router
+from app.api.http.admin_announcements import router as admin_announcements_router
 from app.api.http.admin_groups import router as admin_groups_router
 from app.api.http.admin_profile import router as admin_profile_router
 
@@ -32,9 +34,6 @@ from app.api.http.supervisor_recommendation import (
     router as supervisor_recommendation_router,
 )
 from app.api.http.users import router as user_router
-
-# Import admin router 
-from app.api.http.admin_announcements import router as admin_announcements_router
 
 # Create a "master" router that mounts all HTTP routers
 router = APIRouter()
@@ -78,7 +77,6 @@ router.include_router(submissions_router)
 router.include_router(profile_status_router, tags=["profile-status"])
 
 
-
 router.include_router(admin_students_router, prefix="/admin", tags=["admin-students"])
 
 router.include_router(
@@ -92,3 +90,7 @@ router.include_router(admin_announcements_router)
 router.include_router(
     bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
 )
+
+from app.api.http.admin_submissions import router as admin_submissions_router
+
+router.include_router(admin_submissions_router)
