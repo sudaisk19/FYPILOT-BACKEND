@@ -1,9 +1,8 @@
 import os
 import re
-import uuid
 from datetime import datetime
-from uuid import UUID, uuid4
 from typing import List, Optional, Tuple
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,8 +20,8 @@ from app.repositories import announcement_repository
 from app.schemas.admin_announcement_schema import PaginatedAnnouncements
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
-    upload_file_to_supabase,
     delete_file_from_supabase,
+    upload_file_to_supabase,
 )
 
 
@@ -41,12 +40,13 @@ def _build_storage_key(user_id: UUID, filename: str) -> str:
 
 router = APIRouter(prefix="/admin", tags=["admin-announcements"])
 
+
 @router.get("/announcements", response_model=PaginatedAnnouncements)
 async def get_all_announcements(
     page: int = Query(1, ge=1, description="Page number starting from 1"),
     per_page: int = Query(10, ge=1, description="Number of items per page"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -64,30 +64,43 @@ async def get_all_announcements(
         per_page=per_page,
     )
 
+
 @router.post("/announcements", status_code=201)
 async def post_announcement(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     target_type: TargetRoleEnum = Form(...),
-    due_at: Optional[str] = Form(None, description="ISO datetime; e.g. 2026-02-12T00:00:00Z"),
+    due_at: Optional[str] = Form(
+        None, description="ISO datetime; e.g. 2026-02-12T00:00:00Z"
+    ),
     total_marks: Optional[float] = Form(None),
     files: Optional[List[UploadFile]] = File(None),
-    file_types: Optional[str] = Form(None, description="Comma separated types matching files (Document/Template)"),
-    file_modules: Optional[str] = Form(None, description="Comma separated module names for template files"),
+    file_types: Optional[str] = Form(
+        None, description="Comma separated types matching files (Document/Template)"
+    ),
+    file_modules: Optional[str] = Form(
+        None, description="Comma separated module names for template files"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != RoleEnum.admin:
-        raise HTTPException(status_code=403, detail="Only admins can create announcements")
+        raise HTTPException(
+            status_code=403, detail="Only admins can create announcements"
+        )
 
     parsed_due_at = None
     if due_at:
         try:
             parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid due_at format; use ISO datetime")
+            raise HTTPException(
+                status_code=400, detail="Invalid due_at format; use ISO datetime"
+            )
 
-    file_payloads: List[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int], Optional[str]]] = []
+    file_payloads: List[
+        Tuple[str, str, FileTypeEnum, Optional[str], Optional[int], Optional[str]]
+    ] = []
     types_list = [t.strip() for t in file_types.split(",")] if file_types else []
     modules_list = [m.strip() for m in file_modules.split(",")] if file_modules else []
 
@@ -104,10 +117,18 @@ async def post_announcement(
             )
 
             ftype_raw = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = FileTypeEnum.Template if ftype_raw.lower() == "template" else FileTypeEnum.Document
+            ftype = (
+                FileTypeEnum.Template
+                if ftype_raw.lower() == "template"
+                else FileTypeEnum.Document
+            )
             module_val = None
             if ftype == FileTypeEnum.Template:
-                module_val = modules_list[idx] if idx < len(modules_list) and modules_list[idx] else None
+                module_val = (
+                    modules_list[idx]
+                    if idx < len(modules_list) and modules_list[idx]
+                    else None
+                )
 
             file_payloads.append(
                 (
@@ -149,7 +170,9 @@ async def delete_announcement(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != RoleEnum.admin:
-        raise HTTPException(status_code=403, detail="Only admins can delete announcements")
+        raise HTTPException(
+            status_code=403, detail="Only admins can delete announcements"
+        )
 
     announcement = await announcement_repository.get_by_id(db, announcement_id)
     if not announcement:
@@ -171,7 +194,7 @@ async def update_announcement(
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     # Dropdown ke liye Enum use karein taake 422 na aaye
-    target_type: Optional[TargetRoleEnum] = Form(None), 
+    target_type: Optional[TargetRoleEnum] = Form(None),
     due_at: Optional[str] = Form(None),
     total_marks: Optional[float] = Form(None),
     keep_file_ids: Optional[str] = Form(None),
@@ -223,17 +246,22 @@ async def update_announcement(
             # Sirf un IDs ko uthayein jo khali nahi hain
             id_list = [f.strip() for f in keep_file_ids.split(",") if f.strip()]
             keep_ids = {UUID(fid) for fid in id_list}
-            
+
             for existing_file in list(announcement.files):
                 if existing_file.file_id not in keep_ids:
                     # Cloud storage se delete karein
                     try:
-                        await delete_file_from_supabase(supabase, ANNOUNCEMENTS_BUCKET, existing_file.storage_key)
-                    except Exception: pass # Cloud failure should not block DB consistency
-                    
+                        await delete_file_from_supabase(
+                            supabase, ANNOUNCEMENTS_BUCKET, existing_file.storage_key
+                        )
+                    except Exception:
+                        pass  # Cloud failure should not block DB consistency
+
                     await db.delete(existing_file)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid UUID format in keep_file_ids")
+            raise HTTPException(
+                status_code=400, detail="Invalid UUID format in keep_file_ids"
+            )
 
     # 6. Adding New Files
     if files:
@@ -249,7 +277,7 @@ async def update_announcement(
                     storage_key=storage_key,
                     mime_type=upload.content_type,
                     size_bytes=size_bytes,
-                    file_type=FileTypeEnum.Document
+                    file_type=FileTypeEnum.Document,
                 )
             )
 
