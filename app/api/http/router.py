@@ -77,8 +77,7 @@ router.include_router(submissions_router)
 # Mount profile status router
 router.include_router(profile_status_router, tags=["profile-status"])
 
-# Mount admin routers
-router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
+
 
 router.include_router(admin_students_router, prefix="/admin", tags=["admin-students"])
 
