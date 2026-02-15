@@ -1,54 +1,87 @@
 # app/models/project.py
 import uuid
-from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, Date, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import CheckConstraint, Column, Date, DateTime
+from sqlalchemy import ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.db import Base
 
 
 class ProjectTypeEnum(str, Enum):
-    """Enum for project types"""
+    """Enum values as stored in Postgres.
+
+    The DB may contain either underscored ('product_and_research') or
+    legacy spaced ('product and research') forms.  Both map to the same
+    Python member.
+    """
 
     research = "research"
     product = "product"
-    product_and_research = "product and research"
-    
-def parse_project_type(value):
-    """Normalize input and return ProjectTypeEnum.
+    product_and_research = "product_and_research"
 
-    Accepts enum member, the member name (e.g. 'product_and_research'),
-    or the member value (e.g. 'product and research'), case-insensitively.
-    Raises ValueError for unknown values.
-    """
+
+# Mapping of legacy DB values (with spaces) → canonical enum value
+_LEGACY_PROJECT_TYPE_MAP = {
+    "product and research": "product_and_research",
+}
+
+
+class ProjectTypeColumn(TypeDecorator):
+    """A TypeDecorator that reads/writes ``project_type_enum`` while
+    transparently normalising legacy values that contain spaces."""
+
+    impl = String          # underlying DB type (Postgres enum stored as text)
+    cache_ok = True        # safe to cache compiled forms
+
+    def process_bind_param(self, value, dialect):
+        """Python → DB: send the canonical underscore form."""
+        if value is None:
+            return None
+        if isinstance(value, ProjectTypeEnum):
+            return value.value
+        normalised = _normalise_project_type(str(value))
+        return normalised
+
+    def process_result_value(self, value, dialect):
+        """DB → Python: convert any variant into ``ProjectTypeEnum``."""
+        if value is None:
+            return None
+        normalised = _normalise_project_type(str(value))
+        return ProjectTypeEnum(normalised)
+
+
+def _normalise_project_type(raw: str) -> str:
+    """Return the canonical enum value string for *raw*."""
+    stripped = raw.strip().lower()
+    if stripped in _LEGACY_PROJECT_TYPE_MAP:
+        return _LEGACY_PROJECT_TYPE_MAP[stripped]
+    underscored = stripped.replace(" ", "_")
+    for member in ProjectTypeEnum:
+        if underscored == member.value or stripped == member.name.lower():
+            return member.value
+    return stripped  # fall through – will raise on enum() if truly unknown
+
+
+def parse_project_type(value):
+    """Normalise any input to a ``ProjectTypeEnum`` member."""
     if value is None:
         raise ValueError("project type is None")
     if isinstance(value, ProjectTypeEnum):
         return value
-    s = str(value).strip().lower()
-    s_norm = s.replace("_", " ").replace("-", " ")
-    for member in ProjectTypeEnum:
-        if s_norm == member.value.lower() or s_norm == member.name.lower():
-            return member
-    raise ValueError(f"Unknown project type: {value}")
+    return ProjectTypeEnum(_normalise_project_type(str(value)))
 
 
 def project_type_value(pt):
-    """Return the user-facing string (enum.value) or None."""
+    """Return a user-facing string with spaces (e.g. 'product and research')."""
     if pt is None:
         return None
-    if isinstance(pt, ProjectTypeEnum):
-        return pt.value
-    try:
-        return parse_project_type(pt).value
-    except ValueError:
-        return str(pt)
+    member = parse_project_type(pt)
+    return member.value.replace("_", " ")
 
 
 class Project(Base):
@@ -63,6 +96,8 @@ class Project(Base):
         nullable=True,
     )
 
+    fyp_id = Column(Text, unique=True, nullable=True)
+
     name = Column(Text, nullable=False)
     description = Column(Text, nullable=True)
     objectives = Column(JSONB, nullable=True)
@@ -70,22 +105,33 @@ class Project(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     project_type = Column(
-        SQLEnum(
-            "research",
-            "product",
-            "product and research",
-            name="project_type_enum",
-            create_type=False,
-        ),
+        ProjectTypeColumn(),
         nullable=False,
-        default="research",
+        default=ProjectTypeEnum.research,
+        server_default=text("'research'::project_type_enum"),
     )
     industry_id = Column(
         PGUUID(as_uuid=True), ForeignKey("industries.industry_id"), nullable=True
     )
-    repo_links = Column(JSONB, nullable=False, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    repo_links = Column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "jsonb_typeof(repo_links) = 'array'",
+            name="ck_projects_repo_links_array",
+        ),
+    )
 
     # Relationships
     group = relationship("Group", back_populates="project")

@@ -758,9 +758,9 @@ async def get_group_profile(
                 raw_result = await db.execute(
                     text(
                         """
-                        SELECT project_id, group_id, name, description, objectives, 
+                           SELECT project_id, group_id, name, description, objectives, 
                                tech_stack, start_date, end_date, project_type, 
-                               industry_id, repo_links, created_at, updated_at
+                               industry_id, repo_links, created_at, updated_at, fyp_id
                         FROM projects 
                         WHERE group_id = :group_id
                     """
@@ -787,6 +787,7 @@ async def get_group_profile(
                             self.repo_links = data[10]
                             self.created_at = data[11]
                             self.updated_at = data[12]
+                            self.fyp_id = data[13]
 
                     project_data = MockProject(raw_data)
                 else:
@@ -826,6 +827,7 @@ async def get_group_profile(
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
+                fyp_id=getattr(project_data, "fyp_id", None),
                 name=project_data.name,
                 description=project_data.description,
                 objectives=project_data.objectives,

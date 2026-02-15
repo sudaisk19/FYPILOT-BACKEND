@@ -35,6 +35,7 @@ from app.api.http.users import router as user_router
 
 # Import admin router 
 from app.api.http.admin_announcements import router as admin_announcements_router
+from app.api.http.admin_submissions import router as admin_submissions_router
 
 # Create a "master" router that mounts all HTTP routers
 router = APIRouter()
@@ -93,3 +94,5 @@ router.include_router(admin_announcements_router)
 router.include_router(
     bulk_import_router, prefix="/admin/bulk-imports", tags=["admin-bulk-import"]
 )
+# Mount admin submissions router
+router.include_router(admin_submissions_router)
