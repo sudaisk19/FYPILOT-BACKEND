@@ -1,7 +1,7 @@
 # app/repositories/announcement_repository.py
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Iterable, Optional, Sequence, Tuple, List
 from datetime import datetime
 from uuid import UUID
 
@@ -125,6 +125,7 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         is_submission_request: Optional[bool] = None,
         due_at: Optional[datetime] = None,
         total_marks: Optional[float] = None,
+        keep_file_ids: Optional[List[UUID]] = None,
     ) -> Announcement:
         if title is not None:
             announcement.title = title
@@ -136,6 +137,22 @@ class AnnouncementRepository(BaseRepository[Announcement]):
             announcement.due_at = due_at
         if total_marks is not None:
             announcement.total_marks = total_marks
+        if keep_file_ids is not None:
+        # Loop through current files
+         for existing_file in list(announcement.files):
+            if existing_file.file_id not in keep_file_ids:
+                # A. Storage se mitaein
+                try:
+                    await delete_file_from_supabase(
+                        supabase, 
+                        bucket="announcement_files", 
+                        storage_key=existing_file.storage_key
+                    )
+                except Exception as e:
+                    print(f"PATCH Storage Error: {e}")
+
+                # B. Database se mitaein
+                await db.delete(existing_file)
         await db.flush()
         return announcement
 
@@ -144,6 +161,8 @@ class AnnouncementRepository(BaseRepository[Announcement]):
     # Agar announcement mein files hain, toh unpar loop chalayein
      if announcement.files:
         for file_record in announcement.files:
+           
+            
             try:
                 # Supabase Storage cleanup logic
                 await delete_file_from_supabase(

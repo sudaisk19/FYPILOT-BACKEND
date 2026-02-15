@@ -20,11 +20,15 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain, ProjectTypeEnum
+from app.models.project import (
+    Project,
+    ProjectDomain,
+    ProjectTypeEnum,
+    project_type_value,
+)
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
-from app.models.project import project_type_value
 from app.schemas.group_schema import (
     CreateGroupRequest,
     DeleteGroupResponse,
@@ -704,7 +708,7 @@ async def get_group_profile(
             )
 
         # Get supervisor information
-        supervisors = {"primary": None, "co_supervisor": None}
+        supervisors = {"primary": None, "co_supervisors": []}
 
         if group.supervisor_id:
             supervisor_result = await db.execute(
@@ -724,22 +728,24 @@ async def get_group_profile(
                     avatar_url=supervisor_user.profile_avatar,
                 )
 
-        if group.cosupervisor_id:
-            cosupervisor_result = await db.execute(
+        if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
+            cosupervisors_result = await db.execute(
                 select(Supervisor, User)
                 .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.cosupervisor_id)
+                .where(Supervisor.user_id.in_(group.cosupervisor_ids))
             )
-            cosupervisor_data = cosupervisor_result.first()
-            if cosupervisor_data:
-                cosupervisor, cosupervisor_user = cosupervisor_data
-                supervisors["co_supervisor"] = SupervisorInfo(
-                    user_id=cosupervisor_user.user_id,
-                    full_name=cosupervisor_user.full_name,
-                    department=cosupervisor.department,
-                    designation=cosupervisor.designation,
-                    email=cosupervisor_user.email,
-                    avatar_url=cosupervisor_user.profile_avatar,
+            cosupervisors_data = cosupervisors_result.all()
+
+            for cosupervisor, cosupervisor_user in cosupervisors_data:
+                supervisors["co_supervisors"].append(
+                    SupervisorInfo(
+                        user_id=cosupervisor_user.user_id,
+                        full_name=cosupervisor_user.full_name,
+                        department=cosupervisor.department,
+                        designation=cosupervisor.designation,
+                        email=cosupervisor_user.email,
+                        avatar_url=cosupervisor_user.profile_avatar,
+                    )
                 )
 
         # Get project information
@@ -989,7 +995,7 @@ async def update_group_profile(
             if update_data.group.supervisor_id is not None:
                 group_updates["supervisor_id"] = update_data.group.supervisor_id
             if update_data.group.cosupervisor_id is not None:
-                group_updates["cosupervisor_id"] = update_data.group.cosupervisor_id
+                group_updates["cosupervisor_ids"] = [update_data.group.cosupervisor_id]
 
             if group_updates:
                 group_updates["updated_at"] = updated_at

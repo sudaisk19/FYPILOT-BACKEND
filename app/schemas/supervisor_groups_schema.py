@@ -131,3 +131,21 @@ class SupervisorGroupProfileResponse(BaseModel):
     project: Optional[GroupProfileProject] = None
     members: List[GroupProfileMember] = Field(default_factory=list)
     supervisors: List[GroupProfileSupervisor] = Field(default_factory=list)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dropdown listing schemas (GET /supervisors/my-groups/dropdown)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class SupervisorGroupDropdownItem(BaseModel):
+    """Simple group item for dropdowns."""
+
+    group_id: str
+    name: str
+
+
+class SupervisorGroupDropdownResponse(BaseModel):
+    """Response for the dropdown listing."""
+
+    groups: List[SupervisorGroupDropdownItem] = Field(default_factory=list)

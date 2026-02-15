@@ -33,6 +33,7 @@ class FileOutput(BaseModel):
     name: str
     url: str
     type: str
+    module: Optional[str] = None
     mimeType: Optional[str] = None
     size: Optional[int] = None
 
@@ -46,6 +47,7 @@ class AttachmentInfo(BaseModel):
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
     file_type: str
+    module: Optional[str] = None
     uploaded_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

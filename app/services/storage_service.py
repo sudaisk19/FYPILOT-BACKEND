@@ -71,6 +71,7 @@ async def delete_file_from_supabase(
         return client.storage.from_(bucket).remove([storage_key])
 
     response = await run_in_threadpool(_delete)
+    print(f"DEBUG: Supabase Response for {storage_key}: {response}")
     error_message = _coerce_error(response)
     if error_message:
         raise HTTPException(
