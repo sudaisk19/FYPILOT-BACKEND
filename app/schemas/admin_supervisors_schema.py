@@ -31,6 +31,7 @@ class PaginatedSupervisorResponse(BaseModel):
 # Projects listed inside the supervisor profile
 class SupervisedProjectInfo(BaseModel):
     project_id: UUID
+    fyp_id: Optional[str] = None
     name: str
     description: Optional[str]
     fyp_cycle: str

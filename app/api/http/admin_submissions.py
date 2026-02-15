@@ -1,7 +1,9 @@
 import logging
+import os
+import re
 from datetime import datetime
 from typing import List, Optional, Set
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
@@ -19,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
-from app.db import get_db
+from app.db import get_db, supabase
 from app.models.announcement import (
     Announcement,
     AnnouncementFile,
@@ -28,8 +30,13 @@ from app.models.announcement import (
     FileTypeEnum,
     TargetRoleEnum,
 )
-from app.models.group import Group
-from app.models.submission import Submission, SubmissionFile, SubmissionStatusEnum
+from app.models.group import FYPCycleEnum, Group
+from app.models.submission import (
+    Submission,
+    SubmissionFile,
+    SubmissionStatusEnum,
+    SubmissionTypeEnum,
+)
 from app.models.user import RoleEnum, User
 from app.schemas.submission_schema import (
     AttachmentInfo,
@@ -45,27 +52,84 @@ from app.schemas.submission_schema import (
     SubmissionTaskInfo,
     UpdateAdminGradingRequest,
 )
-from app.services.file_service import FileService
+from app.services.storage_service import (
+    ANNOUNCEMENTS_BUCKET,
+    delete_file_from_supabase,
+    upload_file_to_supabase,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin-submissions"])
 logger = logging.getLogger(__name__)
 
 
+ASSIGNMENT_LABEL_TO_ROLES = {
+    "All Students": (TargetRoleEnum.all_students,),
+    "All Supervisors": (TargetRoleEnum.all_supervisors,),
+    "FYP-I Students": (TargetRoleEnum.fyp1_students,),
+    "FYP-II Students": (TargetRoleEnum.fyp2_students,),
+    "Both": (
+        TargetRoleEnum.all_students,
+        TargetRoleEnum.all_supervisors,
+    ),
+}
+
+ASSIGN_TO_CHOICES_DESC = (
+    "Students, Supervisors, FYP-I Students, FYP-II Students, or Both"
+)
+
+INVALID_ASSIGNTO_MESSAGE = (
+    f"Invalid assignTo option. Choose from {ASSIGN_TO_CHOICES_DESC}."
+)
+
+_ROLE_SET_TO_LABEL = {
+    frozenset(roles): label for label, roles in ASSIGNMENT_LABEL_TO_ROLES.items()
+}
+_ROLE_SET_TO_LABEL[frozenset({TargetRoleEnum.both})] = "Both"
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _safe_filename(name: str) -> str:
+    """Sanitize a filename for safe storage."""
+    base, ext = os.path.splitext(name)
+    safe_base = re.sub(r"[^A-Za-z0-9._-]", "_", base or "file")
+    safe_ext = re.sub(r"[^A-Za-z0-9._-]", "_", ext)
+    cleaned = f"{safe_base}{safe_ext}" if safe_ext else safe_base
+    return cleaned or "file"
+
+
+def _build_storage_key(user_id: UUID, filename: str) -> str:
+    """Build a unique storage key for a file."""
+    safe_name = _safe_filename(filename)
+    return f"announcements/{uuid4()}-{safe_name}"
 
 
 def _assign_to_label(targets: List[AnnouncementTarget]) -> Optional[str]:
     """Convert announcement targets into a human-readable label."""
-    roles: Set[TargetRoleEnum] = set()
-    for t in targets:
-        if t.target_role:
-            roles.add(t.target_role)
-    if TargetRoleEnum.all_students in roles and TargetRoleEnum.all_supervisors in roles:
+    role_set = frozenset(
+        t.target_role for t in targets if t.target_role is not None
+    )
+    if not role_set:
+        return None
+    if TargetRoleEnum.both in role_set:
         return "Both"
-    if TargetRoleEnum.all_students in roles:
+
+    mapped = _ROLE_SET_TO_LABEL.get(role_set)
+    if mapped:
+        return mapped
+
+    # Fallbacks for mixed legacy data
+    if TargetRoleEnum.all_students in role_set and TargetRoleEnum.all_supervisors in role_set:
+        return "Both"
+    if TargetRoleEnum.all_students in role_set:
         return "Students"
-    if TargetRoleEnum.all_supervisors in roles:
-        return "Supervisors"
+    if TargetRoleEnum.all_supervisors in role_set:
+        return "All Supervisors"
+    if TargetRoleEnum.fyp1_students in role_set:
+        return "FYP-I Students"
+    if TargetRoleEnum.fyp2_students in role_set:
+        return "FYP-II Students"
     return None
 
 
@@ -87,7 +151,6 @@ def _build_response(announcement: Announcement) -> SubmissionAnnouncementRespons
                 name=f.file_name,
                 url=f.storage_key,
                 type=f.file_type.value,
-                module=f.module,
                 mimeType=f.mime_type,
                 size=f.size_bytes,
             )
@@ -100,22 +163,82 @@ def _build_response(announcement: Announcement) -> SubmissionAnnouncementRespons
 
 def _build_targets(assign_to: str, announcement_id: UUID) -> List[AnnouncementTarget]:
     """Create AnnouncementTarget rows from an assignTo label."""
-    targets: List[AnnouncementTarget] = []
-    if assign_to in ("Students", "Both"):
-        targets.append(
-            AnnouncementTarget(
-                announcement_id=announcement_id,
-                target_role=TargetRoleEnum.all_students,
-            )
+    roles = ASSIGNMENT_LABEL_TO_ROLES.get(assign_to)
+    if not roles:
+        raise HTTPException(status_code=400, detail=INVALID_ASSIGNTO_MESSAGE)
+
+    return [
+        AnnouncementTarget(
+            announcement_id=announcement_id,
+            target_role=role,
         )
-    if assign_to in ("Supervisors", "Both"):
-        targets.append(
-            AnnouncementTarget(
-                announcement_id=announcement_id,
-                target_role=TargetRoleEnum.all_supervisors,
-            )
+        for role in roles
+    ]
+
+
+async def _create_placeholder_submissions_for_groups(
+    assign_to: str,
+    announcement: Announcement,
+    db: AsyncSession,
+):
+    """Pre-create pending submission rows for every targeted student group."""
+
+    # Only proceed for admin-created submission announcements
+    if (
+        announcement.created_by_role != AnnouncementRoleEnum.admin
+        or not announcement.is_submission_request
+    ):
+        return
+
+    roles = ASSIGNMENT_LABEL_TO_ROLES.get(assign_to)
+    if not roles:
+        return
+
+    include_all_students = TargetRoleEnum.all_students in roles
+    cycle_filters: Set[FYPCycleEnum] = set()
+    if TargetRoleEnum.fyp1_students in roles:
+        cycle_filters.add(FYPCycleEnum.fyp1)
+    if TargetRoleEnum.fyp2_students in roles:
+        cycle_filters.add(FYPCycleEnum.fyp2)
+
+    if not include_all_students and not cycle_filters:
+        # Target audience does not include student groups (e.g., supervisors only)
+        return
+
+    group_stmt = select(Group.group_id)
+    if not include_all_students:
+        group_stmt = group_stmt.where(Group.fyp_cycle.in_(tuple(cycle_filters)))
+
+    result = await db.execute(group_stmt)
+    group_ids = result.scalars().all()
+
+    if not group_ids:
+        logger.info(
+            "No groups matched assignTo=%s for announcement %s; skipping placeholder submissions",
+            assign_to,
+            announcement.announcement_id,
         )
-    return targets
+        return
+
+    submissions = [
+        Submission(
+            group_id=group_id,
+            created_by=announcement.created_by,
+            title=announcement.title,
+            note=announcement.description,
+            type=SubmissionTypeEnum.official,
+            status=SubmissionStatusEnum.pending,
+            linked_announcement_id=announcement.announcement_id,
+        )
+        for group_id in group_ids
+    ]
+
+    db.add_all(submissions)
+    logger.info(
+        "Created %d placeholder submission rows for announcement %s",
+        len(submissions),
+        announcement.announcement_id,
+    )
 
 
 @router.get(
@@ -143,7 +266,13 @@ async def download_announcement_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Download from storage
-    file_content = await FileService.download_file(file_record.storage_key)
+    try:
+        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(file_record.storage_key)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found or failed to download: {str(e)}"
+        )
 
     # Return as streaming response
     return StreamingResponse(
@@ -166,7 +295,8 @@ async def create_submission_announcement(
     request: Request,
     title: str = Form(..., description="Announcement title"),
     assignTo: str = Form(
-        ..., description="Target audience: Students, Supervisors, or Both"
+        ...,
+        description=f"Target audience: {ASSIGN_TO_CHOICES_DESC}",
     ),
     description: Optional[str] = Form(None, description="Announcement description"),
     dueDate: str = Form(
@@ -179,10 +309,6 @@ async def create_submission_announcement(
         None,
         description="Comma-separated file types for each uploaded file (Document or Template). E.g., 'Document,Template,Document'",
     ),
-    file_modules: Optional[str] = Form(
-        None,
-        description="Comma-separated module names for Template files (use empty string for Documents). E.g., ',Module A,' for 3 files where only 2nd is Template",
-    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -190,29 +316,26 @@ async def create_submission_announcement(
 
     Request Body (multipart/form-data):
     - title: **(Required)** Announcement title
-    - assignTo: **(Required)** Target audience (Students, Supervisors, or Both)
+    - assignTo: **(Required)** Target audience (Students, Supervisors, FYP1 Students, FYP2 Students, or Both)
     - description: (Optional) Announcement description
-    - dueDate: (Optional) Due date in ISO format (e.g., 2026-02-12T00:00:00Z)
+    - dueDate: **(Required)** Due date in ISO format (e.g., 2026-02-12T00:00:00Z)
     - total_marks: (Optional) Total marks for the submission
     - uploaded_files: (Optional) Attachment files
     - file_types: (Optional) Comma-separated types for each file: 'Document' or 'Template' (defaults to Document)
-    - file_modules: (Optional) Comma-separated module names for Template files (use empty for Documents)
     """
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # Parse due date if provided
-    due_date = None
-    if dueDate:
-        try:
-            from datetime import datetime as dt
+    try:
+        from datetime import datetime as dt
 
-            due_date = dt.fromisoformat(dueDate.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid dueDate format. Use ISO format: YYYY-MM-DDTHH:MM:SSZ",
-            )
+        due_date = dt.fromisoformat(dueDate.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid dueDate format. Use ISO format: YYYY-MM-DDTHH:MM:SSZ",
+        )
 
     # Create request object
     body = CreateSubmissionAnnouncementRequest(
@@ -241,32 +364,40 @@ async def create_submission_announcement(
     for target in _build_targets(body.assignTo, announcement.announcement_id):
         db.add(target)
 
-    # 3. Upload new files if provided (extract from request to handle empty strings)
+    # 3. Upload new files if provided
+    # Extract files manually from form data to avoid 422 when empty string is sent
     form = await request.form()
-    uploaded_files = form.getlist("uploaded_files")
-    valid_files = []
-    valid_file_indices = []
-    for idx, f in enumerate(uploaded_files):
-        if isinstance(f, UploadFile) and f.filename and f.size and f.size > 0:
-            valid_files.append(f)
-            valid_file_indices.append(idx)
+    incoming_files = [
+        v
+        for k, v in form.multi_items()
+        if k == "uploaded_files" and getattr(v, "filename", None)
+    ]
+    logger.info(f"Received {len(incoming_files)} files for upload")
 
-    # Parse file_types and file_modules lists
+    # Parse file_types list
     types_list = [t.strip() for t in file_types.split(",")] if file_types else []
-    modules_list = [m.strip() for m in file_modules.split(",")] if file_modules else []
+    logger.info(f"File types: {types_list}")
 
-    if valid_files:
-        uploaded_file_data = await FileService.upload_multiple_files(
-            valid_files, folder="announcements"
-        )
-        for i, f_data in enumerate(uploaded_file_data):
-            # Get original index to map to file_types/file_modules
-            original_idx = valid_file_indices[i] if i < len(valid_file_indices) else i
+    if incoming_files:
+        logger.info(f"Uploading {len(incoming_files)} files to storage...")
+
+        for idx, upload_file in enumerate(incoming_files):
+            # Build storage key
+            storage_key = _build_storage_key(current_user.user_id, upload_file.filename)
+
+            # Upload to Supabase
+            size_bytes = await upload_file_to_supabase(
+                supabase,
+                bucket=ANNOUNCEMENTS_BUCKET,
+                storage_key=storage_key,
+                upload=upload_file,
+            )
+            logger.info(f"Uploaded file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}")
 
             # Determine file type (default to Document)
             ftype_str = (
-                types_list[original_idx]
-                if original_idx < len(types_list)
+                types_list[idx]
+                if idx < len(types_list)
                 else "Document"
             )
             ftype = (
@@ -275,26 +406,19 @@ async def create_submission_announcement(
                 else FileTypeEnum.Document
             )
 
-            # Determine module (only relevant for Template)
-            fmodule = (
-                modules_list[original_idx]
-                if original_idx < len(modules_list) and modules_list[original_idx]
-                else None
-            )
-            if ftype == FileTypeEnum.Document:
-                fmodule = None  # Documents don't have modules
-
+            logger.info(f"Saving file to DB: {upload_file.filename} (type={ftype.value})")
             db.add(
                 AnnouncementFile(
                     announcement_id=announcement.announcement_id,
-                    file_name=f_data["file_name"],
-                    storage_key=f_data["storage_key"],
-                    mime_type=f_data["mime_type"],
-                    size_bytes=f_data["size_bytes"],
+                    file_name=upload_file.filename,
+                    storage_key=storage_key,
+                    mime_type=upload_file.content_type or "application/octet-stream",
+                    size_bytes=size_bytes,
                     file_type=ftype,
-                    module=fmodule,
                 )
             )
+    else:
+        logger.info("No files to upload")
 
     # 4. Link existing files from body.files (if using pre-uploaded files)
     for f in body.files:
@@ -306,9 +430,14 @@ async def create_submission_announcement(
                 mime_type=f.mimeType,
                 size_bytes=f.size,
                 file_type=FileTypeEnum(f.type),
-                module=f.module,
             )
         )
+
+    await _create_placeholder_submissions_for_groups(
+        assign_to=body.assignTo,
+        announcement=announcement,
+        db=db,
+    )
 
     await db.commit()
 
@@ -376,12 +505,13 @@ async def get_submission_announcement(
     summary="Edit a submission-request announcement",
 )
 async def edit_submission_announcement(
-    announcement_id: UUID,
     request: Request,
+    announcement_id: UUID,
     title: Optional[str] = Form(None, description="Announcement title"),
     description: Optional[str] = Form(None, description="Announcement description"),
     assignTo: Optional[str] = Form(
-        None, description="Target audience: Students, Supervisors, or Both"
+        None,
+        description=f"Target audience: {ASSIGN_TO_CHOICES_DESC}",
     ),
     dueDate: Optional[str] = Form(
         None, description="Due date in ISO format (YYYY-MM-DDTHH:MM:SSZ)"
@@ -396,10 +526,6 @@ async def edit_submission_announcement(
         None,
         description="Comma-separated file types for each uploaded file (Document or Template)",
     ),
-    file_modules: Optional[str] = Form(
-        None,
-        description="Comma-separated module names for Template files (use empty string for Documents)",
-    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -408,13 +534,12 @@ async def edit_submission_announcement(
     Request Body (multipart/form-data):
     - title: (Optional) New announcement title
     - description: (Optional) New announcement description
-    - assignTo: (Optional) New target audience (Students, Supervisors, or Both)
+    - assignTo: (Optional) New target audience (Students, Supervisors, FYP1 Students, FYP2 Students, or Both)
     - dueDate: (Optional) New due date in ISO format (e.g., 2026-02-12T00:00:00Z)
     - total_marks: (Optional) New total marks
     - keep_file_ids: (Optional) Comma-separated UUIDs of files to keep. Files not in this list will be deleted.
     - uploaded_files: (Optional) New files to upload
     - file_types: (Optional) Comma-separated types for each new file: 'Document' or 'Template' (defaults to Document)
-    - file_modules: (Optional) Comma-separated module names for Template files
     """
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
@@ -430,9 +555,6 @@ async def edit_submission_announcement(
         keep_file_ids.strip() if keep_file_ids and keep_file_ids.strip() else None
     )
     file_types = file_types.strip() if file_types and file_types.strip() else None
-    file_modules = (
-        file_modules.strip() if file_modules and file_modules.strip() else None
-    )
 
     # Parse total_marks (handle empty strings)
     parsed_total_marks = None
@@ -517,13 +639,23 @@ async def edit_submission_announcement(
             db.add(target)
 
     # 4. Sync files based on keep_file_ids
+    # IMPORTANT: keep_file_ids controls EXISTING files only
+    # - Not provided (None): Keep all existing files
+    # - Empty string: Delete all existing files  
+    # - Comma-separated UUIDs: Keep only those files, delete others
+    # This is independent of NEW files being uploaded via uploaded_files
     if keep_file_ids_provided:  # If keep_file_ids was sent (even empty = delete all)
+        logger.info(f"File sync requested with keep_file_ids: {keep_ids if keep_ids else 'DELETE ALL'}")
         # Delete files that are not in the keep list (both from DB and storage)
         for existing_file in list(announcement.files):
             if existing_file.file_id not in keep_ids:
                 # Delete from Supabase Storage
                 try:
-                    await FileService.delete_file(existing_file.storage_key)
+                    await delete_file_from_supabase(
+                        supabase,
+                        bucket=ANNOUNCEMENTS_BUCKET,
+                        storage_key=existing_file.storage_key,
+                    )
                     logger.info(
                         f"Deleted file from storage: {existing_file.storage_key}"
                     )
@@ -535,32 +667,40 @@ async def edit_submission_announcement(
                 # Delete from database
                 await db.delete(existing_file)
 
-    # 5. Upload new files if provided (extract from request to handle empty strings)
+    # 5. Upload NEW files if provided
+    # Extract files manually from form data to avoid 422 when empty string is sent
     form = await request.form()
-    uploaded_files = form.getlist("uploaded_files")
-    valid_files = []
-    valid_file_indices = []
-    for idx, f in enumerate(uploaded_files):
-        if isinstance(f, UploadFile) and f.filename and f.size and f.size > 0:
-            valid_files.append(f)
-            valid_file_indices.append(idx)
+    incoming_files = [
+        v
+        for k, v in form.multi_items()
+        if k == "uploaded_files" and getattr(v, "filename", None)
+    ]
+    logger.info(f"Received {len(incoming_files)} NEW files for upload in PATCH")
 
-    # Parse file_types and file_modules lists
+    # Parse file_types list (for NEW files only)
     types_list = [t.strip() for t in file_types.split(",")] if file_types else []
-    modules_list = [m.strip() for m in file_modules.split(",")] if file_modules else []
+    logger.info(f"NEW file types: {types_list}")
 
-    if valid_files:
-        uploaded_file_data = await FileService.upload_multiple_files(
-            valid_files, folder="announcements"
-        )
-        for i, f_data in enumerate(uploaded_file_data):
-            # Get original index to map to file_types/file_modules
-            original_idx = valid_file_indices[i] if i < len(valid_file_indices) else i
+    if incoming_files:
+        logger.info(f"Uploading {len(incoming_files)} NEW files to storage (PATCH)...")
+
+        for idx, upload_file in enumerate(incoming_files):
+            # Build storage key
+            storage_key = _build_storage_key(current_user.user_id, upload_file.filename)
+
+            # Upload to Supabase
+            size_bytes = await upload_file_to_supabase(
+                supabase,
+                bucket=ANNOUNCEMENTS_BUCKET,
+                storage_key=storage_key,
+                upload=upload_file,
+            )
+            logger.info(f"Uploaded NEW file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}")
 
             # Determine file type (default to Document)
             ftype_str = (
-                types_list[original_idx]
-                if original_idx < len(types_list)
+                types_list[idx]
+                if idx < len(types_list)
                 else "Document"
             )
             ftype = (
@@ -569,26 +709,19 @@ async def edit_submission_announcement(
                 else FileTypeEnum.Document
             )
 
-            # Determine module (only relevant for Template)
-            fmodule = (
-                modules_list[original_idx]
-                if original_idx < len(modules_list) and modules_list[original_idx]
-                else None
-            )
-            if ftype == FileTypeEnum.Document:
-                fmodule = None  # Documents don't have modules
-
+            logger.info(f"Saving NEW file to DB: {upload_file.filename} (type={ftype.value})")
             db.add(
                 AnnouncementFile(
                     announcement_id=announcement_id,
-                    file_name=f_data["file_name"],
-                    storage_key=f_data["storage_key"],
-                    mime_type=f_data["mime_type"],
-                    size_bytes=f_data["size_bytes"],
+                    file_name=upload_file.filename,
+                    storage_key=storage_key,
+                    mime_type=upload_file.content_type or "application/octet-stream",
+                    size_bytes=size_bytes,
                     file_type=ftype,
-                    module=fmodule,
                 )
             )
+    else:
+        logger.info("No NEW files to upload (PATCH)")
 
     announcement.updated_at = datetime.utcnow()
     await db.commit()
@@ -624,7 +757,7 @@ async def list_official_submission_tasks(
 
     Returns paginated list of submission requests with:
     - Basic info (title, description, created date)
-    - Target audience (Students, Supervisors, or Both)
+    - Target audience (Students, Supervisors, FYP1 Students, FYP2 Students, or Both)
     - Attached files (templates, documents)
     """
     if current_user.role != RoleEnum.admin:
@@ -699,7 +832,6 @@ async def list_official_submission_tasks(
                 mime_type=file.mime_type,
                 size_bytes=file.size_bytes,
                 file_type=file.file_type.value,
-                module=file.module,
                 uploaded_at=file.uploaded_at,
             )
             for file in announcement.files
@@ -775,15 +907,21 @@ async def get_submission_responses(
         )
 
     # Determine which groups should submit based on announcement targets
-    target_group_ids = []
+    target_group_ids: Set[UUID] = set()
+    cycle_filters: Set[FYPCycleEnum] = set()
     fetch_all_groups = False
 
     for target in announcement.targets:
-        if target.target_role == TargetRoleEnum.all_students:
+        role = target.target_role
+        if role in (TargetRoleEnum.all_students, TargetRoleEnum.both):
             fetch_all_groups = True
             break
+        if role == TargetRoleEnum.fyp1_students:
+            cycle_filters.add(FYPCycleEnum.fyp1)
+        elif role == TargetRoleEnum.fyp2_students:
+            cycle_filters.add(FYPCycleEnum.fyp2)
         elif target.group_id:
-            target_group_ids.append(target.group_id)
+            target_group_ids.add(target.group_id)
 
     # Build query for groups with their projects and submissions
     if fetch_all_groups:
@@ -796,8 +934,14 @@ async def get_submission_responses(
             .where(Group.project.has())  # Only groups with projects
         )
     else:
-        # Get specific groups
-        if not target_group_ids:
+        # Get specific groups based on provided targets/cycles
+        conditions = []
+        if target_group_ids:
+            conditions.append(Group.group_id.in_(list(target_group_ids)))
+        if cycle_filters:
+            conditions.append(Group.fyp_cycle.in_(list(cycle_filters)))
+
+        if not conditions:
             # No targets specified, return empty list with pagination
             return GroupSubmissionsResponse(
                 submissions=[],
@@ -816,7 +960,7 @@ async def get_submission_responses(
             )
             .where(
                 and_(
-                    Group.group_id.in_(target_group_ids),
+                    or_(*conditions),
                     Group.project.has(),  # Only groups with projects
                 )
             )
@@ -850,6 +994,7 @@ async def get_submission_responses(
                 SubmissionStatusEnum.graded: "Graded",
                 SubmissionStatusEnum.returned: "Returned",
                 SubmissionStatusEnum.pending: "Pending",
+                SubmissionStatusEnum.missing: "Missing",
             }
             status = status_map.get(submission.status, submission.status.value)
         else:
@@ -1107,7 +1252,13 @@ async def download_submission_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Download from storage
-    file_content = await FileService.download_file(file_record.storage_key)
+    try:
+        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(file_record.storage_key)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found or failed to download: {str(e)}"
+        )
 
     # Return as streaming response
     return StreamingResponse(
