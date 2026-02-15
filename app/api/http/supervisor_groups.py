@@ -32,6 +32,8 @@ from app.schemas.supervisor_groups_schema import (
     GroupProfileSupervisor,
     IndustryInfo,
     RepoLink,
+    SupervisorGroupDropdownItem,
+    SupervisorGroupDropdownResponse,
     SupervisorGroupInfo,
     SupervisorGroupMember,
     SupervisorGroupProfileResponse,
@@ -184,7 +186,68 @@ async def get_supervisor_groups(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Group profile detail — GET /supervisors/my-groups/{group_id}
+# 2. Dropdown listing — GET /supervisors/my-groups/dropdown
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/my-groups/dropdown",
+    response_model=SupervisorGroupDropdownResponse,
+    summary="Get simple list of supervisor's groups for dropdowns",
+    description="Returns a lightweight list of groups (id and name) where the user is a primary or co-supervisor.",
+)
+async def get_supervisor_groups_dropdown(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supervisor-only: Fetch lightweight list of groups for dropdowns.
+    """
+    # 1. Role check
+    if current_user.role != RoleEnum.supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only supervisors can access this endpoint",
+        )
+
+    # 2. Query groups
+    # We include groups where user is primary supervisor OR is in co-supervisors list
+    query = (
+        select(Group.group_id, Group.name)
+        .where(
+            or_(
+                Group.supervisor_id == current_user.user_id,
+                Group.cosupervisor_ids.contains([current_user.user_id]),
+            )
+        )
+        .order_by(Group.name.asc())
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    # 3. Build response
+    items = [
+        SupervisorGroupDropdownItem(
+            group_id=str(row.group_id),
+            name=row.name,
+        )
+        for row in rows
+    ]
+
+    # Append "All Groups" option at the end
+    items.append(
+        SupervisorGroupDropdownItem(
+            group_id="all",
+            name="All Groups",
+        )
+    )
+
+    return SupervisorGroupDropdownResponse(groups=items)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Group profile detail — GET /supervisors/my-groups/{group_id}
 # ─────────────────────────────────────────────────────────────────────────────
 
 

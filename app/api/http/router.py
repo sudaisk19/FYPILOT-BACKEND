@@ -94,3 +94,7 @@ router.include_router(
 from app.api.http.admin_submissions import router as admin_submissions_router
 
 router.include_router(admin_submissions_router)
+
+from app.api.http.supervisor_submissions import router as supervisor_submissions_router
+
+router.include_router(supervisor_submissions_router)

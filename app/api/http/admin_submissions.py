@@ -169,8 +169,8 @@ async def create_submission_announcement(
         ..., description="Target audience: Students, Supervisors, or Both"
     ),
     description: Optional[str] = Form(None, description="Announcement description"),
-    dueDate: Optional[str] = Form(
-        None, description="Due date in ISO format (YYYY-MM-DDTHH:MM:SSZ)"
+    dueDate: str = Form(
+        ..., description="Due date in ISO format (YYYY-MM-DDTHH:MM:SSZ)"
     ),
     total_marks: Optional[float] = Form(
         None, description="Total marks for the submission"

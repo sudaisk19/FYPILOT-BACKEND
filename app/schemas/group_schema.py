@@ -104,8 +104,8 @@ class ProjectInfo(BaseModel):
 class GroupProfileResponse(BaseModel):
     group: Dict[str, Any] = Field(..., description="Group basic information")
     members: List[GroupMemberInfo] = Field(default_factory=list)
-    supervisors: Dict[str, Optional[SupervisorInfo]] = Field(
-        default_factory=lambda: {"primary": None, "co_supervisor": None}
+    supervisors: Dict[str, Any] = Field(
+        default_factory=lambda: {"primary": None, "co_supervisors": []}
     )
     project: Optional[ProjectInfo] = None
     invites: GroupInvitesInfo = Field(
