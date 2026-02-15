@@ -1,8 +1,11 @@
 import logging
 import os
 import re
+import mimetypes
+import tempfile
 from datetime import datetime
 from typing import List, Optional, Set
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -15,7 +18,8 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -61,6 +65,8 @@ from app.services.storage_service import (
 router = APIRouter(prefix="/admin", tags=["admin-submissions"])
 logger = logging.getLogger(__name__)
 
+SUBMISSION_FILES_BUCKET = "submission_files"
+
 
 ASSIGNMENT_LABEL_TO_ROLES = {
     "All Students": (TargetRoleEnum.all_students,),
@@ -103,6 +109,41 @@ def _build_storage_key(user_id: UUID, filename: str) -> str:
     """Build a unique storage key for a file."""
     safe_name = _safe_filename(filename)
     return f"announcements/{uuid4()}-{safe_name}"
+
+
+def _resolve_submission_storage_key(raw_key: str) -> str:
+    """Map stored keys or URLs back to the Supabase object path."""
+    if not raw_key:
+        return raw_key
+
+    if raw_key.startswith(("http://", "https://")):
+        parsed = urlparse(raw_key)
+        path = parsed.path
+        public_prefix = "/storage/v1/object/public/"
+        if public_prefix in path:
+            path = path.split(public_prefix, 1)[1]
+
+        bucket_prefix = f"{SUBMISSION_FILES_BUCKET}/"
+        if bucket_prefix in path:
+            return path.split(bucket_prefix, 1)[1]
+
+        return os.path.basename(path)
+
+    # Handle values that still include bucket prefix
+    bucket_prefix = f"{SUBMISSION_FILES_BUCKET}/"
+    if raw_key.startswith(bucket_prefix):
+        return raw_key[len(bucket_prefix) :]
+
+    return raw_key
+
+
+def _infer_mime(file_name: str, stored_mime: Optional[str]) -> str:
+    """Best-effort MIME detection for download responses."""
+    if stored_mime:
+        return stored_mime
+
+    guessed, _ = mimetypes.guess_type(file_name)
+    return guessed or "application/octet-stream"
 
 
 def _assign_to_label(targets: List[AnnouncementTarget]) -> Optional[str]:
@@ -267,7 +308,7 @@ async def download_announcement_file(
 
     # Download from storage
     try:
-        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(file_record.storage_key)
+        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(file_record.storage_key)
     except Exception as e:
         raise HTTPException(
             status_code=404,
@@ -1006,6 +1047,8 @@ async def get_submission_responses(
 
         group_submissions.append(
             GroupSubmissionStatus(
+                group_id=group.group_id,
+                submission_id=submission.submission_id if submission else None,
                 fyp_id=fyp_id,
                 project_name=project_name,
                 status=status,
@@ -1114,13 +1157,9 @@ async def get_submission_evaluation(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
-        supervisorMarks=(
-            float(submission.supervisor_marks) if submission.supervisor_marks else None
-        ),
+        note=submission.note,
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
-        supervisorFeedback=submission.supervisor_feedback,
         adminFeedback=submission.admin_feedback,
-        supervisorGradedAt=submission.supervisor_graded_at,
         adminGradedAt=submission.admin_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
@@ -1208,13 +1247,9 @@ async def update_admin_grading(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
-        supervisorMarks=(
-            float(submission.supervisor_marks) if submission.supervisor_marks else None
-        ),
+        note=submission.note,
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
-        supervisorFeedback=submission.supervisor_feedback,
         adminFeedback=submission.admin_feedback,
-        supervisorGradedAt=submission.supervisor_graded_at,
         adminGradedAt=submission.admin_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
@@ -1251,18 +1286,30 @@ async def download_submission_file(
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
 
+    storage_key = _resolve_submission_storage_key(file_record.storage_key)
+
     # Download from storage
     try:
-        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(file_record.storage_key)
+        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(storage_key)
     except Exception as e:
         raise HTTPException(
             status_code=404,
-            detail=f"File not found or failed to download: {str(e)}"
+            detail=f"File not found or failed to download: {str(e)}",
         )
 
-    # Return as streaming response
-    return StreamingResponse(
-        iter([file_content]),
-        media_type=file_record.mime_type or "application/octet-stream",
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    temp_file.write(file_content)
+    temp_file.flush()
+    temp_path = temp_file.name
+    temp_file.close()
+
+    background = BackgroundTask(lambda path=temp_path: os.path.exists(path) and os.remove(path))
+
+    media_type = _infer_mime(file_record.file_name, file_record.mime_type)
+
+    return FileResponse(
+        temp_path,
+        media_type=media_type,
         headers={"Content-Disposition": f'inline; filename="{file_record.file_name}"'},
+        background=background,
     )

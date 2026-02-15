@@ -641,4 +641,73 @@ async function editSubmissionTask(
   });
   return response.json();
 }
+
+---
+
+## Submission Evaluation APIs
+
+These endpoints power the admin grading flow for a single group submission.
+
+### 1. **GET** `/submissions/{submission_id}/evaluation` – Fetch Submission Details
+
+- **Path Params**
+  - `submission_id` (UUID) – Target submission
+- **Response:** `SubmissionEvaluationResponse`
+
+```typescript
+interface SubmissionEvaluationResponse {
+  submissionId: string;
+  title: string;
+  totalMarks: number | null;
+  note: string | null;
+  adminMarks: number | null;
+  adminFeedback: string | null;
+  adminGradedAt: string | null; // ISO timestamp
+  submittedAt: string | null;   // Group's submission timestamp
+  files: SubmissionFileInfo[];
+}
+
+interface SubmissionFileInfo {
+  fileId: string;
+  fileName: string;
+  storageKey: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string | null;
+}
+```
+
+> **Note:** Supervisor grading details are deliberately excluded; admins only see/manage their own marks.
+
+### 2. **POST** `/submissions/{submission_id}/evaluation` – Update Admin Grading
+
+- **Path Params**
+  - `submission_id` (UUID)
+- **Request Body (JSON):**
+
+| Field        | Type   | Required | Description                  |
+|--------------|--------|----------|------------------------------|
+| `adminMarks` | number | No       | Admin-awarded marks          |
+| `adminFeedback` | string | No    | Admin feedback/remarks       |
+
+- **Response:** Updated `SubmissionEvaluationResponse` (same shape as GET)
+
+**Example:**
+
+```json
+{
+  "adminMarks": 18.5,
+  "adminFeedback": "Great demo, minor UI tweaks needed."
+}
+```
+
+### 3. **GET** `/submissions/{submission_id}/files/{file_id}/download` – Download Submission File
+
+- **Path Params**
+  - `submission_id` (UUID) – Used to verify ownership
+  - `file_id` (UUID) – Target submission file
+- **Response:** Binary file stream with `Content-Disposition: inline; filename="..."`
+- **Errors:** `404` if the submission or file cannot be found; `403` if requester is not an admin.
+
+Use the returned `storageKey` from the evaluation payload to correlate files on the frontend if needed.
 ```
