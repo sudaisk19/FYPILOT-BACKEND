@@ -94,3 +94,17 @@ router.include_router(
 from app.api.http.admin_submissions import router as admin_submissions_router
 
 router.include_router(admin_submissions_router)
+
+from app.api.http.admin_milestone import router as admin_milestones_router
+
+router.include_router(admin_milestones_router)
+
+from app.api.http.student_fypmilestone import router as student_milestones_router
+router.include_router(
+    student_milestones_router, prefix="/students", tags=["student-milestones"]
+)
+
+from app.api.http.supervisor_fypmilestone import router as supervisor_milestones_router
+router.include_router(
+    supervisor_milestones_router, prefix="/supervisors", tags=["supervisor-milestones"]
+)
