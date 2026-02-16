@@ -18,10 +18,10 @@ class TargetResponse(BaseModel):
 class FileResponse(BaseModel):
     file_id: UUID
     file_name: str
+    storage_key: str
     file_type: FileTypeEnum
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
-    module: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -32,9 +32,9 @@ class AnnouncementResponse(BaseModel):
     title: str
     description: Optional[str]
     is_submission_request: bool
-    due_at: Optional[datetime] = None
     total_marks: Optional[float] = None
     created_at: datetime
+    updated_at: datetime
     targets: List[TargetResponse]
     files: List[FileResponse]
 

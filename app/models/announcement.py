@@ -145,8 +145,6 @@ class AnnouncementFile(Base):
     file_type: Mapped[FileTypeEnum] = mapped_column(
         Enum(FileTypeEnum, name="file_type_enum"), default=FileTypeEnum.Document
     )
-    module: Mapped[Optional[str]] = mapped_column(Text)
-
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
