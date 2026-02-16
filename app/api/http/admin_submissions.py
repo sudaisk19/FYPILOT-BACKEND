@@ -1,7 +1,7 @@
 import logging
+import mimetypes
 import os
 import re
-import mimetypes
 import tempfile
 from datetime import datetime
 from typing import List, Optional, Set
@@ -15,14 +15,13 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
-    UploadFile,
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
-from starlette.background import BackgroundTask
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from starlette.background import BackgroundTask
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db, supabase
@@ -148,9 +147,7 @@ def _infer_mime(file_name: str, stored_mime: Optional[str]) -> str:
 
 def _assign_to_label(targets: List[AnnouncementTarget]) -> Optional[str]:
     """Convert announcement targets into a human-readable label."""
-    role_set = frozenset(
-        t.target_role for t in targets if t.target_role is not None
-    )
+    role_set = frozenset(t.target_role for t in targets if t.target_role is not None)
     if not role_set:
         return None
     if TargetRoleEnum.both in role_set:
@@ -161,7 +158,10 @@ def _assign_to_label(targets: List[AnnouncementTarget]) -> Optional[str]:
         return mapped
 
     # Fallbacks for mixed legacy data
-    if TargetRoleEnum.all_students in role_set and TargetRoleEnum.all_supervisors in role_set:
+    if (
+        TargetRoleEnum.all_students in role_set
+        and TargetRoleEnum.all_supervisors in role_set
+    ):
         return "Both"
     if TargetRoleEnum.all_students in role_set:
         return "Students"
@@ -308,15 +308,19 @@ async def download_announcement_file(
 
     # Download from storage (announcement files bucket)
     try:
+<<<<<<< azka-dev2
         file_content = (
             supabase.storage
             .from_(ANNOUNCEMENTS_BUCKET)
             .download(file_record.storage_key)
+=======
+        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
+            file_record.storage_key
+>>>>>>> sudais-dev
         )
     except Exception as e:
         raise HTTPException(
-            status_code=404,
-            detail=f"File not found or failed to download: {str(e)}"
+            status_code=404, detail=f"File not found or failed to download: {str(e)}"
         )
 
     # Return as streaming response
@@ -437,21 +441,21 @@ async def create_submission_announcement(
                 storage_key=storage_key,
                 upload=upload_file,
             )
-            logger.info(f"Uploaded file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}")
+            logger.info(
+                f"Uploaded file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}"
+            )
 
             # Determine file type (default to Document)
-            ftype_str = (
-                types_list[idx]
-                if idx < len(types_list)
-                else "Document"
-            )
+            ftype_str = types_list[idx] if idx < len(types_list) else "Document"
             ftype = (
                 FileTypeEnum.Template
                 if ftype_str.lower() == "template"
                 else FileTypeEnum.Document
             )
 
-            logger.info(f"Saving file to DB: {upload_file.filename} (type={ftype.value})")
+            logger.info(
+                f"Saving file to DB: {upload_file.filename} (type={ftype.value})"
+            )
             db.add(
                 AnnouncementFile(
                     announcement_id=announcement.announcement_id,
@@ -686,11 +690,13 @@ async def edit_submission_announcement(
     # 4. Sync files based on keep_file_ids
     # IMPORTANT: keep_file_ids controls EXISTING files only
     # - Not provided (None): Keep all existing files
-    # - Empty string: Delete all existing files  
+    # - Empty string: Delete all existing files
     # - Comma-separated UUIDs: Keep only those files, delete others
     # This is independent of NEW files being uploaded via uploaded_files
     if keep_file_ids_provided:  # If keep_file_ids was sent (even empty = delete all)
-        logger.info(f"File sync requested with keep_file_ids: {keep_ids if keep_ids else 'DELETE ALL'}")
+        logger.info(
+            f"File sync requested with keep_file_ids: {keep_ids if keep_ids else 'DELETE ALL'}"
+        )
         # Delete files that are not in the keep list (both from DB and storage)
         for existing_file in list(announcement.files):
             if existing_file.file_id not in keep_ids:
@@ -740,21 +746,21 @@ async def edit_submission_announcement(
                 storage_key=storage_key,
                 upload=upload_file,
             )
-            logger.info(f"Uploaded NEW file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}")
+            logger.info(
+                f"Uploaded NEW file: {upload_file.filename} ({size_bytes} bytes) to {storage_key}"
+            )
 
             # Determine file type (default to Document)
-            ftype_str = (
-                types_list[idx]
-                if idx < len(types_list)
-                else "Document"
-            )
+            ftype_str = types_list[idx] if idx < len(types_list) else "Document"
             ftype = (
                 FileTypeEnum.Template
                 if ftype_str.lower() == "template"
                 else FileTypeEnum.Document
             )
 
-            logger.info(f"Saving NEW file to DB: {upload_file.filename} (type={ftype.value})")
+            logger.info(
+                f"Saving NEW file to DB: {upload_file.filename} (type={ftype.value})"
+            )
             db.add(
                 AnnouncementFile(
                     announcement_id=announcement_id,
@@ -1294,7 +1300,9 @@ async def download_submission_file(
 
     # Download from storage
     try:
-        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(storage_key)
+        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
+            storage_key
+        )
     except Exception as e:
         raise HTTPException(
             status_code=404,
@@ -1307,7 +1315,9 @@ async def download_submission_file(
     temp_path = temp_file.name
     temp_file.close()
 
-    background = BackgroundTask(lambda path=temp_path: os.path.exists(path) and os.remove(path))
+    background = BackgroundTask(
+        lambda path=temp_path: os.path.exists(path) and os.remove(path)
+    )
 
     media_type = _infer_mime(file_record.file_name, file_record.mime_type)
 
