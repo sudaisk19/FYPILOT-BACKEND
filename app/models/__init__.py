@@ -56,6 +56,10 @@ from .supervisor_industry import SupervisorIndustry
 # Base models first
 from .user import RoleEnum, User
 
+#Milestone Model
+from .milestone import AdminMilestone
+
+
 # Export all models
 __all__ = [
     "User",
@@ -72,6 +76,7 @@ __all__ = [
     "Project",
     "ProjectDomain",
     "ProjectDomain",
+    "AdminMilestone"
     # Submission and Announcement models
     "Announcement",
     "AnnouncementFile",
