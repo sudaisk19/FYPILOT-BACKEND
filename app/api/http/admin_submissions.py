@@ -306,10 +306,17 @@ async def download_announcement_file(
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Download from storage
+    # Download from storage (announcement files bucket)
     try:
+<<<<<<< azka-dev2
+        file_content = (
+            supabase.storage
+            .from_(ANNOUNCEMENTS_BUCKET)
+            .download(file_record.storage_key)
+=======
         file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
             file_record.storage_key
+>>>>>>> sudais-dev
         )
     except Exception as e:
         raise HTTPException(

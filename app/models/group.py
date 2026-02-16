@@ -48,11 +48,6 @@ class Group(Base):
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
-    milestone_template_id = Column(
-        PGUUID(as_uuid=True),
-        ForeignKey("milestone_templates.template_id", ondelete="SET NULL"),
-        nullable=True,
-    )
     supervisor_id = Column(
         PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
     )

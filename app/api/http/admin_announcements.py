@@ -1,10 +1,9 @@
 import os
 import re
-from datetime import datetime
 from typing import List, Optional, Tuple
-from uuid import UUID
+from uuid import UUID,uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -17,7 +16,10 @@ from app.models.announcement import (
 )
 from app.models.user import RoleEnum, User
 from app.repositories import announcement_repository
-from app.schemas.admin_announcement_schema import PaginatedAnnouncements
+from app.schemas.admin_announcement_schema import (
+    AnnouncementResponse,
+    PaginatedAnnouncements,
+)
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
     delete_file_from_supabase,
@@ -34,8 +36,15 @@ def _safe_filename(name: str) -> str:
 
 
 def _build_storage_key(user_id: UUID, filename: str) -> str:
+    """Build a unique storage key for a file."""
     safe_name = _safe_filename(filename)
-    return f"announcements/{safe_name}"
+    return f"announcements/{uuid4()}-{safe_name}"
+
+
+def _resolve_file_type(raw: Optional[str]) -> FileTypeEnum:
+    if raw and raw.strip().lower() == "template":
+        return FileTypeEnum.Template
+    return FileTypeEnum.Document
 
 
 router = APIRouter(prefix="/admin", tags=["admin-announcements"])
@@ -65,21 +74,34 @@ async def get_all_announcements(
     )
 
 
-@router.post("/announcements", status_code=201)
+@router.get("/announcements/{announcement_id}", response_model=AnnouncementResponse)
+async def get_announcement_by_id(
+    announcement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != RoleEnum.admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
+    if (
+        not announcement
+        or announcement.created_by_role != AnnouncementRoleEnum.admin
+        or announcement.is_submission_request
+    ):
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    return announcement
+
+
+@router.post("/announcements", status_code=201, response_model=AnnouncementResponse)
 async def post_announcement(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     target_type: TargetRoleEnum = Form(...),
-    due_at: Optional[str] = Form(
-        None, description="ISO datetime; e.g. 2026-02-12T00:00:00Z"
-    ),
-    total_marks: Optional[float] = Form(None),
     files: Optional[List[UploadFile]] = File(None),
     file_types: Optional[str] = Form(
         None, description="Comma separated types matching files (Document/Template)"
-    ),
-    file_modules: Optional[str] = Form(
-        None, description="Comma separated module names for template files"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -89,20 +111,10 @@ async def post_announcement(
             status_code=403, detail="Only admins can create announcements"
         )
 
-    parsed_due_at = None
-    if due_at:
-        try:
-            parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid due_at format; use ISO datetime"
-            )
-
     file_payloads: List[
-        Tuple[str, str, FileTypeEnum, Optional[str], Optional[int], Optional[str]]
+        Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]
     ] = []
     types_list = [t.strip() for t in file_types.split(",")] if file_types else []
-    modules_list = [m.strip() for m in file_modules.split(",")] if file_modules else []
 
     if files:
         for idx, upload in enumerate(files):
@@ -116,19 +128,8 @@ async def post_announcement(
                 upload=upload,
             )
 
-            ftype_raw = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = (
-                FileTypeEnum.Template
-                if ftype_raw.lower() == "template"
-                else FileTypeEnum.Document
-            )
-            module_val = None
-            if ftype == FileTypeEnum.Template:
-                module_val = (
-                    modules_list[idx]
-                    if idx < len(modules_list) and modules_list[idx]
-                    else None
-                )
+            ftype_raw = types_list[idx] if idx < len(types_list) else None
+            ftype = _resolve_file_type(ftype_raw)
 
             file_payloads.append(
                 (
@@ -137,7 +138,6 @@ async def post_announcement(
                     ftype,
                     upload.content_type,
                     size_bytes,
-                    module_val,
                 )
             )
 
@@ -149,21 +149,20 @@ async def post_announcement(
         description=description,
         target_role=target_type,
         files=file_payloads or None,
-        due_at=parsed_due_at,
-        total_marks=total_marks,
     )
 
     await db.commit()
-    await db.refresh(new_announcement)
 
-    return {
-        "status": "success",
-        "message": f"Announcement created for {target_type.value}",
-        "announcement_id": str(new_announcement.announcement_id),
-    }
+    persisted = await announcement_repository.get_by_id(
+        db, new_announcement.announcement_id
+    )
+    if not persisted:
+        raise HTTPException(status_code=500, detail="Failed to load announcement")
+
+    return AnnouncementResponse.model_validate(persisted)
 
 
-@router.delete("/announcements/{announcement_id}")
+@router.delete("/announcements/{announcement_id}", response_model=AnnouncementResponse)
 async def delete_announcement(
     announcement_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -178,27 +177,23 @@ async def delete_announcement(
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
 
+    snapshot = AnnouncementResponse.model_validate(announcement)
+
     await announcement_repository.delete(db, announcement)
     await db.commit()
 
-    return {
-        "status": "success",
-        "message": "Announcement deleted",
-        "announcement_id": str(announcement_id),
-    }
+    return snapshot
 
 
-@router.patch("/announcements/{announcement_id}")
+@router.patch("/announcements/{announcement_id}", response_model=AnnouncementResponse)
 async def update_announcement(
+    request: Request,
     announcement_id: UUID,
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     # Dropdown ke liye Enum use karein taake 422 na aaye
     target_type: Optional[TargetRoleEnum] = Form(None),
-    due_at: Optional[str] = Form(None),
-    total_marks: Optional[float] = Form(None),
     keep_file_ids: Optional[str] = Form(None),
-    files: Optional[List[UploadFile]] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -209,14 +204,6 @@ async def update_announcement(
     announcement = await announcement_repository.get_by_id(db, announcement_id)
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
-
-    # 2. Date Parsing with Safety
-    parsed_due_at = None
-    if due_at and due_at.strip():
-        try:
-            parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format")
 
     parsed_keep_ids = None
     if keep_file_ids is not None:
@@ -229,8 +216,6 @@ async def update_announcement(
         announcement,
         title=title.strip() if title else None,
         description=description.strip() if description else None,
-        due_at=parsed_due_at,
-        total_marks=total_marks,
         keep_file_ids=parsed_keep_ids,
     )
 
@@ -263,30 +248,48 @@ async def update_announcement(
                 status_code=400, detail="Invalid UUID format in keep_file_ids"
             )
 
-    # 6. Adding New Files
-    if files:
-        for upload in files:
-            if not upload.filename:
-                continue
+    content_type = (request.headers.get("content-type", "") or "").lower()
+    incoming_files: List[UploadFile] = []
+    types_list: List[str] = []
 
-            storage_key = f"announcements/{upload.filename}"
-            size_bytes = await upload_file_to_supabase(
-                supabase,
-                bucket=ANNOUNCEMENTS_BUCKET,
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        if hasattr(form, "getlist"):
+            candidates = form.getlist("files")
+            for candidate in candidates:
+                filename = getattr(candidate, "filename", None)
+                if filename:
+                    incoming_files.append(candidate)
+
+        raw_types = form.get("file_types") if hasattr(form, "get") else None
+        if raw_types:
+            types_list = [t.strip() for t in raw_types.split(",") if t.strip()]
+
+    for idx, upload in enumerate(incoming_files):
+        storage_key = _build_storage_key(current_user.user_id, upload.filename)
+        size_bytes = await upload_file_to_supabase(
+            supabase,
+            bucket=ANNOUNCEMENTS_BUCKET,
+            storage_key=storage_key,
+            upload=upload,
+        )
+
+        ftype = _resolve_file_type(types_list[idx] if idx < len(types_list) else None)
+
+        announcement.files.append(
+            AnnouncementFile(
+                file_name=upload.filename,
                 storage_key=storage_key,
-                upload=upload,
+                mime_type=upload.content_type,
+                size_bytes=size_bytes,
+                file_type=ftype,
             )
-
-            announcement.files.append(
-                AnnouncementFile(
-                    file_name=upload.filename,
-                    storage_key=storage_key,
-                    mime_type=upload.content_type,
-                    size_bytes=size_bytes,
-                    file_type=FileTypeEnum.Document,
-                )
-            )
+        )
 
     await db.commit()
-    await db.refresh(announcement)
-    return {"status": "success", "message": "Announcement updated"}
+
+    persisted = await announcement_repository.get_by_id(db, announcement_id)
+    if not persisted:
+        raise HTTPException(status_code=500, detail="Failed to load announcement")
+
+    return AnnouncementResponse.model_validate(persisted)
