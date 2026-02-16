@@ -251,6 +251,7 @@ async def get_admin_supervisor_profile(
             projects_data.append(
                 SupervisedProjectInfo(
                     project_id=group.project.project_id,
+                    fyp_id=group.project.fyp_id,
                     name=group.project.name,
                     description=group.project.description,
                     fyp_cycle=group.fyp_cycle,
@@ -266,6 +267,7 @@ async def get_admin_supervisor_profile(
                 projects_data.append(
                     SupervisedProjectInfo(
                         project_id=group.project.project_id,
+                        fyp_id=group.project.fyp_id,
                         name=f"{group.project.name} (Co-Supervisor)",
                         description=group.project.description,
                         fyp_cycle=(

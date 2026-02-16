@@ -708,7 +708,7 @@ async def get_group_profile(
             )
 
         # Get supervisor information
-        supervisors = {"primary": None, "co_supervisor": None}
+        supervisors = {"primary": None, "co_supervisors": []}
 
         if group.supervisor_id:
             supervisor_result = await db.execute(
@@ -729,21 +729,23 @@ async def get_group_profile(
                 )
 
         if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
-            cosupervisor_result = await db.execute(
+            cosupervisors_result = await db.execute(
                 select(Supervisor, User)
                 .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.cosupervisor_ids[0])
+                .where(Supervisor.user_id.in_(group.cosupervisor_ids))
             )
-            cosupervisor_data = cosupervisor_result.first()
-            if cosupervisor_data:
-                cosupervisor, cosupervisor_user = cosupervisor_data
-                supervisors["co_supervisor"] = SupervisorInfo(
-                    user_id=cosupervisor_user.user_id,
-                    full_name=cosupervisor_user.full_name,
-                    department=cosupervisor.department,
-                    designation=cosupervisor.designation,
-                    email=cosupervisor_user.email,
-                    avatar_url=cosupervisor_user.profile_avatar,
+            cosupervisors_data = cosupervisors_result.all()
+
+            for cosupervisor, cosupervisor_user in cosupervisors_data:
+                supervisors["co_supervisors"].append(
+                    SupervisorInfo(
+                        user_id=cosupervisor_user.user_id,
+                        full_name=cosupervisor_user.full_name,
+                        department=cosupervisor.department,
+                        designation=cosupervisor.designation,
+                        email=cosupervisor_user.email,
+                        avatar_url=cosupervisor_user.profile_avatar,
+                    )
                 )
 
         # Get project information
@@ -762,9 +764,9 @@ async def get_group_profile(
                 raw_result = await db.execute(
                     text(
                         """
-                        SELECT project_id, group_id, name, description, objectives, 
+                           SELECT project_id, group_id, name, description, objectives, 
                                tech_stack, start_date, end_date, project_type, 
-                               industry_id, repo_links, created_at, updated_at
+                               industry_id, repo_links, created_at, updated_at, fyp_id
                         FROM projects 
                         WHERE group_id = :group_id
                     """
@@ -791,6 +793,7 @@ async def get_group_profile(
                             self.repo_links = data[10]
                             self.created_at = data[11]
                             self.updated_at = data[12]
+                            self.fyp_id = data[13]
 
                     project_data = MockProject(raw_data)
                 else:
@@ -830,6 +833,7 @@ async def get_group_profile(
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
+                fyp_id=getattr(project_data, "fyp_id", None),
                 name=project_data.name,
                 description=project_data.description,
                 objectives=project_data.objectives,

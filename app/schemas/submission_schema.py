@@ -79,6 +79,8 @@ class PaginatedSubmissionTasksResponse(BaseModel):
 
 
 class GroupSubmissionStatus(BaseModel):
+    group_id: UUID
+    submission_id: Optional[UUID] = None
     fyp_id: str
     project_name: str
     status: str
@@ -128,11 +130,9 @@ class SubmissionEvaluationResponse(BaseModel):
     submissionId: UUID
     title: str
     totalMarks: Optional[float] = None
-    supervisorMarks: Optional[float] = None
+    note: Optional[str] = None
     adminMarks: Optional[float] = None
-    supervisorFeedback: Optional[str] = None
     adminFeedback: Optional[str] = None
-    supervisorGradedAt: Optional[datetime] = None
     adminGradedAt: Optional[datetime] = None
     files: List[SubmissionFileInfo] = Field(default_factory=list)
     submittedAt: Optional[datetime] = None
