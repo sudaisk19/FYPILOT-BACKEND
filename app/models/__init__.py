@@ -48,6 +48,7 @@ from .submission import (
     SubmissionTypeEnum,
 )
 from .supervisor import Supervisor
+from .supervisor_evaluation import SupervisorEvaluation
 
 # Supervisor relationship models (junction tables)
 from .supervisor_domain import SupervisorDomain
@@ -76,7 +77,8 @@ __all__ = [
     "Project",
     "ProjectDomain",
     "ProjectDomain",
-    "AdminMilestone"
+    "AdminMilestone",
+    "SupervisorEvaluation",
     # Submission and Announcement models
     "Announcement",
     "AnnouncementFile",
