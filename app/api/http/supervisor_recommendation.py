@@ -9,17 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.middleware.ai_recommender import (
-    ai_recommender_circuit,
-    recommendation_rate_limiter,
+from app.middleware.ai_service import (
+    ai_service_circuit,
+    supervisor_recommendation_rate_limiter,
 )
 from app.models.user import User
-from app.schemas.recommendation_schema import (
-    RecommendationRequest,
-    RecommendationResponse,
+from app.schemas.supervisor_recommendation_schema import (
+    SupervisorRecommendationRequest,
+    SupervisorRecommendationResponse,
 )
-from app.services.ai_recommender import AIRecommenderServiceError
-from app.services.recommendation_service import recommendation_service
+from app.services.supervisor_recommendation_client import (
+    SupervisorRecommendationServiceError,
+)
+from app.services.supervisor_recommendation_service import (
+    supervisor_recommendation_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +37,8 @@ async def check_ai_service_health():
 
     Returns health status of the external AI service and circuit breaker state.
     """
-    is_healthy = await recommendation_service.health_check()
-    circuit_state = ai_recommender_circuit.state.value
+    is_healthy = await supervisor_recommendation_service.health_check()
+    circuit_state = ai_service_circuit.state.value
 
     if is_healthy:
         return {
@@ -52,9 +56,9 @@ async def check_ai_service_health():
         }
 
 
-@router.post("/supervisors", response_model=RecommendationResponse)
+@router.post("/supervisors", response_model=SupervisorRecommendationResponse)
 async def get_supervisor_recommendations(
-    request: RecommendationRequest,
+    request: SupervisorRecommendationRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -79,7 +83,7 @@ async def get_supervisor_recommendations(
         )
 
     # Apply rate limiting (10 requests per minute per user)
-    await recommendation_rate_limiter.check_and_raise(
+    await supervisor_recommendation_rate_limiter.check_and_raise(
         identifier=str(current_user.user_id),
         endpoint_name="supervisor recommendations",
     )
@@ -99,7 +103,7 @@ async def get_supervisor_recommendations(
         )
 
     try:
-        recommendations = await recommendation_service.recommend_supervisors(
+        recommendations = await supervisor_recommendation_service.recommend_supervisors(
             db=db,
             group_id=request.group_id,
             idea_domain=request.idea_domain,
@@ -120,7 +124,7 @@ async def get_supervisor_recommendations(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
-    except AIRecommenderServiceError as e:
+    except SupervisorRecommendationServiceError as e:
         logger.error(f"AI Recommender service error: {e.message}")
 
         # Map service errors to appropriate HTTP status codes
@@ -168,13 +172,13 @@ async def refresh_supervisor_index(
         )
 
     try:
-        result = await recommendation_service.refresh_supervisor_index()
+        result = await supervisor_recommendation_service.refresh_supervisor_index()
         return {
             "status": "success",
             "message": "Supervisor index refresh triggered",
             "details": result,
         }
-    except AIRecommenderServiceError as e:
+    except SupervisorRecommendationServiceError as e:
         logger.error(f"Failed to refresh supervisor index: {e.message}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -198,8 +202,8 @@ async def get_circuit_breaker_status(
         )
 
     return {
-        "state": ai_recommender_circuit.state.value,
-        "failure_count": ai_recommender_circuit._failure_count,
-        "failure_threshold": ai_recommender_circuit.failure_threshold,
-        "recovery_timeout_seconds": ai_recommender_circuit.recovery_timeout,
+        "state": ai_service_circuit.state.value,
+        "failure_count": ai_service_circuit._failure_count,
+        "failure_threshold": ai_service_circuit.failure_threshold,
+        "recovery_timeout_seconds": ai_service_circuit.recovery_timeout,
     }

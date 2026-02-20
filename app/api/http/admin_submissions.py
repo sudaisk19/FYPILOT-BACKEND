@@ -1166,6 +1166,11 @@ async def get_submission_evaluation(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
@@ -1256,6 +1261,11 @@ async def update_admin_grading(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )

@@ -7,7 +7,6 @@ from .admin import Admin
 
 # Submission and Announcement models
 from .announcement import (
-    Announcement,
     AnnouncementFile,
     AnnouncementRoleEnum,
     AnnouncementTarget,
@@ -57,8 +56,9 @@ from .supervisor_industry import SupervisorIndustry
 # Base models first
 from .user import RoleEnum, User
 
-#Milestone Model
-from .milestone import AdminMilestone
+# Milestone Model
+
+# Jury Assignment models
 
 
 # Export all models

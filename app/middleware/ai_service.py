@@ -1,6 +1,8 @@
-# app/middleware/ai_recommender.py
+# app/middleware/ai_service.py
 """
-Middleware utilities for AI Recommender service integration.
+Middleware utilities for AI service integration.
+
+Shared by both supervisor recommendation and jury matching services.
 
 Provides:
 - Rate limiting for recommendation endpoints
@@ -137,12 +139,12 @@ class RateLimiter:
             )
 
 
-# Default rate limiter for recommendation endpoints
+# Rate limiter for supervisor recommendation endpoints
 # Uses settings from config (default: 10 requests per 60 seconds)
-recommendation_rate_limiter = RateLimiter(
+supervisor_recommendation_rate_limiter = RateLimiter(
     max_requests=settings.ai_rate_limit_requests,
     window_seconds=settings.ai_rate_limit_window,
-    key_prefix="ratelimit:recommendations",
+    key_prefix="ratelimit:supervisor_recommendations",
 )
 
 
@@ -153,7 +155,7 @@ recommendation_rate_limiter = RateLimiter(
 
 class ResponseCache:
     """
-    Cache for AI Recommender responses.
+    Cache for AI service responses.
 
     Caches recommendation results to reduce load on the AI service.
     Uses request parameters to generate cache keys.
@@ -256,10 +258,10 @@ class ResponseCache:
         logger.debug(f"Cache invalidation requested for group: {group_id}")
 
 
-# Default response cache (uses settings from config, default: 5 minute TTL)
-recommendation_cache = ResponseCache(
+# Response cache for supervisor recommendations (default: 5 minute TTL)
+supervisor_recommendation_cache = ResponseCache(
     ttl_seconds=settings.ai_cache_ttl,
-    key_prefix="ai_cache:recommendations",
+    key_prefix="ai_cache:supervisor_recommendations",
 )
 
 
@@ -279,7 +281,7 @@ class CircuitState(Enum):
 @dataclass
 class CircuitBreaker:
     """
-    Circuit breaker pattern for AI Recommender service.
+    Circuit breaker pattern for AI service.
 
     Prevents cascading failures by temporarily blocking requests
     to a failing service.
@@ -370,16 +372,15 @@ class CircuitBreaker:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
                     "error": "Service temporarily unavailable",
-                    "message": "AI Recommender service is experiencing issues. Please try again later.",
+                    "message": "AI service is experiencing issues. Please try again later.",
                     "retry_after_seconds": retry_after,
                 },
                 headers={"Retry-After": str(retry_after)},
             )
 
 
-# Global circuit breaker for AI Recommender service
-# Uses settings from config
-ai_recommender_circuit = CircuitBreaker(
+# Global circuit breaker for the AI service (shared by supervisor + jury)
+ai_service_circuit = CircuitBreaker(
     failure_threshold=settings.ai_circuit_failure_threshold,
     recovery_timeout=settings.ai_circuit_recovery_timeout,
     half_open_max_calls=3,
@@ -451,8 +452,8 @@ class RequestDeduplicator:
         await cache.release_lock(lock_key)
 
 
-# Global request deduplicator
-request_deduplicator = RequestDeduplicator(
+# Request deduplicator for supervisor recommendations
+supervisor_recommendation_deduplicator = RequestDeduplicator(
     lock_ttl_seconds=30,
-    key_prefix="dedup:recommendations",
+    key_prefix="dedup:supervisor_recommendations",
 )

@@ -966,17 +966,17 @@ async def get_submission_evaluation(
         for f in submission.files
     ]
 
-    # Note: Returning supervisor marks/feedback here
+    # Return only supervisor marks (admin marks hidden from supervisor)
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
         note=submission.note,
-        adminMarks=(
+        supervisorMarks=(
             float(submission.supervisor_marks) if submission.supervisor_marks else None
         ),
-        adminFeedback=submission.supervisor_feedback,
-        adminGradedAt=submission.supervisor_graded_at,
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
@@ -1059,16 +1059,17 @@ async def update_supervisor_grading(
         for f in submission.files
     ]
 
+    # Return only supervisor marks (admin marks hidden from supervisor)
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
         note=submission.note,
-        adminMarks=(
+        supervisorMarks=(
             float(submission.supervisor_marks) if submission.supervisor_marks else None
         ),
-        adminFeedback=submission.supervisor_feedback,
-        adminGradedAt=submission.supervisor_graded_at,
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
