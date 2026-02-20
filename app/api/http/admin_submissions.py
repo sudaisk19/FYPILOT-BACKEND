@@ -308,8 +308,10 @@ async def download_announcement_file(
 
     # Download from storage (announcement files bucket)
     try:
-        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(
-            file_record.storage_key
+        file_content = (
+            supabase.storage
+            .from_(ANNOUNCEMENTS_BUCKET)
+            .download(file_record.storage_key)
         )
     except Exception as e:
         raise HTTPException(

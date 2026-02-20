@@ -1,5 +1,6 @@
 # app/repositories/milestone_repository.py
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -53,9 +54,13 @@ async def create_milestone(
     admin_id: UUID,
 ) -> AdminMilestone:
     """Create and persist a new milestone."""
+    data = payload.model_dump()
+    if data.get("is_active") and not data.get("activated_at"):
+        data["activated_at"] = datetime.now(timezone.utc)
+
     milestone = AdminMilestone(
         admin_id=admin_id,
-        **payload.model_dump(),
+        **data,
     )
     db.add(milestone)
     await db.commit()
@@ -75,8 +80,14 @@ async def update_milestone(
         return None
 
     update_data = payload.model_dump(exclude_unset=True)
+    is_active_change = update_data.get("is_active") if "is_active" in update_data else None
     for field, value in update_data.items():
         setattr(milestone, field, value)
+
+    if is_active_change is True and milestone.activated_at is None:
+        milestone.activated_at = datetime.now(timezone.utc)
+    elif is_active_change is False:
+        milestone.activated_at = None
 
     await db.commit()
     await db.refresh(milestone)

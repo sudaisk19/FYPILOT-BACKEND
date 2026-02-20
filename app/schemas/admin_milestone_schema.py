@@ -18,12 +18,14 @@ class AdminMilestoneBase(BaseModel):
     evaluator: Optional[str] = Field(
         None, description="Who will grade or evaluate this milestone"
     )
-    activity: Optional[str] = Field(
-        None, description="Short description of what students must do"
-    )
     fyp_cycle: FYPCycleEnum = Field(
         default=FYPCycleEnum.fyp1,
         description="Cycle (fyp1 / fyp2) this milestone applies to",
+    )
+    is_active: bool = Field(False, description="Whether the milestone is active/visible")
+    marks_visible_to_students: bool = Field(
+        False,
+        description="If true, students can see marks released for this milestone",
     )
 
 
@@ -38,8 +40,9 @@ class AdminMilestoneUpdate(BaseModel):
     weightage: Optional[float] = Field(None, ge=0, le=100)
     due_date: Optional[date] = None
     evaluator: Optional[str] = None
-    activity: Optional[str] = None
     fyp_cycle: Optional[FYPCycleEnum] = None
+    is_active: Optional[bool] = None
+    marks_visible_to_students: Optional[bool] = None
 
 
 class AdminMilestoneResponse(AdminMilestoneBase):
@@ -47,6 +50,7 @@ class AdminMilestoneResponse(AdminMilestoneBase):
     admin_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+    activated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
