@@ -308,15 +308,8 @@ async def download_announcement_file(
 
     # Download from storage (announcement files bucket)
     try:
-<<<<<<< azka-dev2
-        file_content = (
-            supabase.storage
-            .from_(ANNOUNCEMENTS_BUCKET)
-            .download(file_record.storage_key)
-=======
-        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
+        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(
             file_record.storage_key
->>>>>>> sudais-dev
         )
     except Exception as e:
         raise HTTPException(
@@ -1171,6 +1164,11 @@ async def get_submission_evaluation(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
@@ -1261,6 +1259,11 @@ async def update_admin_grading(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )

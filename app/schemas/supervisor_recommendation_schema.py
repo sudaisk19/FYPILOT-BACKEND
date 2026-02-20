@@ -1,4 +1,4 @@
-# app/schemas/recommendation_schema.py
+# app/schemas/supervisor_recommendation_schema.py
 """Schemas for supervisor recommendation requests and responses."""
 
 from typing import List, Optional
@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class RecommendationRequest(BaseModel):
+class SupervisorRecommendationRequest(BaseModel):
     """Request schema for supervisor recommendations."""
 
     group_id: str = Field(..., description="ID of the student group")
@@ -29,7 +29,7 @@ class RecommendationRequest(BaseModel):
         }
 
 
-class SupervisorRecommendation(BaseModel):
+class SupervisorRecommendationMatch(BaseModel):
     """Schema for a single supervisor recommendation."""
 
     name: str
@@ -43,9 +43,9 @@ class SupervisorRecommendation(BaseModel):
     reason: str
 
 
-class RecommendationResponse(BaseModel):
+class SupervisorRecommendationResponse(BaseModel):
     """Response schema for supervisor recommendations."""
 
-    recommendations: List[SupervisorRecommendation] = Field(
+    recommendations: List[SupervisorRecommendationMatch] = Field(
         description="List of top 5 recommended supervisors"
     )

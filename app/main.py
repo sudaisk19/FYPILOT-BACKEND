@@ -24,10 +24,13 @@ from app.auth.routes import router as auth_router  # your signup/login endpoints
 from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
-from app.services.ai_recommender import (  # AI Recommender HTTP client
-    ai_recommender_client,
-)
 from app.services.cache import cache  # Redis cache
+from app.services.jury_matching_client import (  # Jury Matching HTTP client
+    jury_matching_client,
+)
+from app.services.supervisor_recommendation_client import (  # Supervisor Recommendation HTTP client
+    supervisor_recommendation_client,
+)
 
 # Configure logger
 logger = logging.getLogger("uvicorn.error")
@@ -127,8 +130,12 @@ async def on_shutdown():
     # Gracefully close Redis connection
     await cache.disconnect()
 
-    # Close AI Recommender HTTP client
-    await ai_recommender_client.close()
+    # Close Supervisor Recommendation HTTP client
+    await supervisor_recommendation_client.close()
+
+    # Close Jury Matching HTTP client
+    await jury_matching_client.close()
+
     logger.info("Application shutdown complete.")
 
 

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -12,7 +12,9 @@ class AdminMilestoneBase(BaseModel):
     weightage: Optional[float] = Field(
         None, ge=0, le=100, description="Percentage weight of this milestone"
     )
-    due_date: Optional[date] = Field(None, description="Date when this milestone will occur")
+    due_date: Optional[date] = Field(
+        None, description="Date when this milestone will occur"
+    )
     evaluator: Optional[str] = Field(
         None, description="Who will grade or evaluate this milestone"
     )
@@ -27,11 +29,11 @@ class AdminMilestoneBase(BaseModel):
 
 class AdminMilestoneCreate(AdminMilestoneBase):
     """Request body when an admin creates a milestone."""
-    pass
 
 
 class AdminMilestoneUpdate(BaseModel):
     """Patch body; every field is optional."""
+
     title: Optional[str] = None
     weightage: Optional[float] = Field(None, ge=0, le=100)
     due_date: Optional[date] = None
@@ -48,4 +50,3 @@ class AdminMilestoneResponse(AdminMilestoneBase):
 
     class Config:
         from_attributes = True
-

@@ -1,5 +1,5 @@
 # app/api/http/student_fypmilestone.py
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,7 +41,9 @@ async def list_student_milestones(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != RoleEnum.student:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student only")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Student only"
+        )
 
     cycle = await _resolve_student_cycle(current_user.user_id, db)
     return await milestone_repository.list_milestones(db, fyp_cycle=cycle)
@@ -54,7 +56,9 @@ async def get_student_milestone(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != RoleEnum.student:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student only")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Student only"
+        )
 
     cycle = await _resolve_student_cycle(current_user.user_id, db)
     milestone = await milestone_repository.get_milestone(db, milestone_id)

@@ -1,4 +1,4 @@
-# app/services/recommendation_service.py
+# app/services/supervisor_recommendation_service.py
 """
 Supervisor Recommendation Service - Refactored to use External AI Microservice.
 
@@ -20,29 +20,29 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.middleware.ai_recommender import (
-    ai_recommender_circuit,
-    recommendation_cache,
-    request_deduplicator,
+from app.middleware.ai_service import (
+    ai_service_circuit,
+    supervisor_recommendation_cache,
+    supervisor_recommendation_deduplicator,
 )
 from app.repositories import group_repository
-from app.services.ai_recommender import (
-    AIRecommenderServiceError,
-    ai_recommender_client,
+from app.services.supervisor_recommendation_client import (
+    SupervisorRecommendationServiceError,
+    supervisor_recommendation_client,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class RecommendationService:
+class SupervisorRecommendationService:
     """Service for generating supervisor recommendations via external AI service."""
 
     def __init__(self):
         """Initialize the recommendation service."""
-        self._ai_client = ai_recommender_client
-        self._cache = recommendation_cache
-        self._circuit = ai_recommender_circuit
-        self._deduplicator = request_deduplicator
+        self._ai_client = supervisor_recommendation_client
+        self._cache = supervisor_recommendation_cache
+        self._circuit = ai_service_circuit
+        self._deduplicator = supervisor_recommendation_deduplicator
 
     async def health_check(self) -> bool:
         """
@@ -85,7 +85,7 @@ class RecommendationService:
 
         Raises:
             ValueError: If the group is not found.
-            AIRecommenderServiceError: If the AI service fails.
+            SupervisorRecommendationServiceError: If the AI service fails.
             HTTPException: If circuit breaker is open.
         """
         # 1. Check circuit breaker
@@ -179,7 +179,7 @@ class RecommendationService:
 
             return recommendations
 
-        except AIRecommenderServiceError as e:
+        except SupervisorRecommendationServiceError as e:
             # Record failure with circuit breaker
             self._circuit.record_failure()
             logger.error(
@@ -337,4 +337,4 @@ class RecommendationService:
 
 
 # Global instance
-recommendation_service = RecommendationService()
+supervisor_recommendation_service = SupervisorRecommendationService()
