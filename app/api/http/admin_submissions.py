@@ -283,7 +283,7 @@ async def _create_placeholder_submissions_for_groups(
 
 
 @router.get(
-    "/files/{file_id}/download",
+    "/announcement-files/{file_id}/download",
     summary="Download or view an announcement file",
 )
 async def download_announcement_file(
@@ -330,7 +330,7 @@ async def download_announcement_file(
 
 
 @router.post(
-    "/submission-tasks",
+    "/submission-create",
     response_model=SubmissionAnnouncementResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a submission-request announcement",
@@ -503,7 +503,7 @@ async def create_submission_announcement(
 
 
 @router.get(
-    "/submission-tasks/{announcement_id}",
+    "/submission-details/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Get a single submission-request announcement",
 )
@@ -544,7 +544,7 @@ async def get_submission_announcement(
 
 
 @router.patch(
-    "/submission-tasks/{announcement_id}",
+    "/submission-update/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Edit a submission-request announcement",
 )
@@ -789,7 +789,7 @@ async def edit_submission_announcement(
 # ─── LIST ─────────────────────────────────────────────────────────────────────
 
 
-@router.get("/submission-tasks", response_model=PaginatedSubmissionTasksResponse)
+@router.get("/submission-list", response_model=PaginatedSubmissionTasksResponse)
 async def list_official_submission_tasks(
     search: Optional[str] = Query(None, description="Search by submission name"),
     page: int = Query(1, ge=1),
@@ -912,7 +912,7 @@ async def list_official_submission_tasks(
 
 
 @router.get(
-    "/submission-tasks/{announcement_id}/submissions",
+    "/submission-responses/{announcement_id}",
     response_model=GroupSubmissionsResponse,
 )
 async def get_submission_responses(
@@ -1100,7 +1100,7 @@ async def get_submission_responses(
 
 
 @router.get(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Get submission details for evaluation",
 )
@@ -1177,7 +1177,7 @@ async def get_submission_evaluation(
 
 
 @router.post(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Update admin grading for a submission",
 )
@@ -1272,7 +1272,7 @@ async def update_admin_grading(
 
 
 @router.get(
-    "/submissions/{submission_id}/files/{file_id}/download",
+    "/submission-files/{submission_id}/{file_id}/download",
     summary="Download or view a submission file",
 )
 async def download_submission_file(
