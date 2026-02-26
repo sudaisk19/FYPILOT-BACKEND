@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -29,6 +29,20 @@ class AdminMilestoneBase(BaseModel):
     )
 
 
+class MilestoneListItem(BaseModel):
+    """Slim milestone item for list views."""
+
+    milestone_id: UUID
+    title: str
+    fyp_cycle: FYPCycleEnum
+    is_active: bool
+    due_date: Optional[date] = None
+    weightage: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
 class AdminMilestoneCreate(AdminMilestoneBase):
     """Request body when an admin creates a milestone."""
 
@@ -47,10 +61,60 @@ class AdminMilestoneUpdate(BaseModel):
 
 class AdminMilestoneResponse(AdminMilestoneBase):
     milestone_id: UUID
-    admin_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     activated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SupervisorMilestoneResponse(AdminMilestoneResponse):
+    marks_visible_to_students: Optional[bool] = Field(None, exclude=True)
+
+
+class StudentMilestoneListItem(BaseModel):
+    """Slim milestone item for student list view — excludes admin/internal fields."""
+
+    milestone_id: UUID
+    title: str
+    fyp_cycle: FYPCycleEnum
+    due_date: Optional[date] = None
+    weightage: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StudentMilestoneResponse(AdminMilestoneBase):
+    """Detailed milestone for students — excludes is_active and activated_at."""
+
+    milestone_id: UUID
+    marks_visible_to_students: bool
+    marks: Optional[float] = Field(None, description="Student's group marks, shown only when marks_visible_to_students is true")
+    created_at: datetime
+    updated_at: datetime
+    is_active: Optional[bool] = Field(None, exclude=True)
+
+    class Config:
+        from_attributes = True
+
+
+class AdminEvaluationResponse(BaseModel):
+    """Enriched evaluation row returned to admin, including supervisor name and project info."""
+
+    evaluation_id: UUID
+    milestone_id: UUID
+    group_id: UUID
+    supervisor_id: UUID
+    supervisor_name: Optional[str] = None
+    project_name: Optional[str] = None
+    fyp_id: Optional[str] = None
+    marks: Optional[float] = None
+    feedback: Optional[str] = None
+    wbs_achieved: Optional[bool] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
