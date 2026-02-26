@@ -168,6 +168,7 @@ async def get_supervisor_groups(
             p = group.project
             project_info = SupervisorGroupProject(
                 project_id=str(p.project_id),
+                fyp_id=p.fyp_id,
                 name=p.name,
                 description=p.description,
                 project_type=str(p.project_type) if p.project_type else None,

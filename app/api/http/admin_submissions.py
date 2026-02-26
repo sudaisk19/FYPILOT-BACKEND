@@ -1177,7 +1177,7 @@ async def get_submission_evaluation(
 
 
 @router.post(
-    "/submission-evaluation/{submission_id}",
+    "/submission-evaluation-update/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Update admin grading for a submission",
 )
@@ -1220,12 +1220,9 @@ async def update_admin_grading(
     if body.adminFeedback is not None:
         submission.admin_feedback = body.adminFeedback
 
-    # Set graded timestamp if marks are being updated
+    # Set graded timestamp + status when admin provides any grading data
     if body.adminMarks is not None or body.adminFeedback is not None:
         submission.admin_graded_at = datetime.utcnow()
-
-    # Update submission status to graded if it was submitted
-    if submission.status == SubmissionStatusEnum.submitted:
         submission.status = SubmissionStatusEnum.graded
 
     await db.commit()

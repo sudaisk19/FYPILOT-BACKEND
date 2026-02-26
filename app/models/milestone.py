@@ -19,11 +19,6 @@ class AdminMilestone(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    admin_id = Column(
-        PGUUID(as_uuid=True),
-        ForeignKey("admins.user_id"),
-        nullable=True,
-    )
     title = Column(Text, nullable=False)
     weightage = Column(Numeric, nullable=True)
     due_date = Column(Date, nullable=True)
@@ -51,7 +46,6 @@ class AdminMilestone(Base):
         nullable=False,
     )
 
-    admin = relationship("Admin", backref="milestones")
     evaluations = relationship(
         "SupervisorEvaluation",
         back_populates="milestone",
