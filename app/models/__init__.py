@@ -27,6 +27,7 @@ from .domain import Domain
 
 # Group models (depend on User and Student)
 from .group import Group, GroupInvite, GroupMember
+from .group_milestone import GroupMilestone, SprintStatusEnum
 from .industry import Industry
 
 # Other models
@@ -48,6 +49,8 @@ from .submission import (
     SubmissionTypeEnum,
 )
 from .supervisor import Supervisor
+from .task import Task, TaskPriorityEnum, TaskStatusEnum
+from .task_attachment import TaskAttachment
 
 # Supervisor relationship models (junction tables)
 from .supervisor_domain import SupervisorDomain
@@ -76,7 +79,13 @@ __all__ = [
     "Project",
     "ProjectDomain",
     "ProjectDomain",
-    "AdminMilestone"
+    "AdminMilestone",
+    "GroupMilestone",
+    "SprintStatusEnum",
+    "Task",
+    "TaskPriorityEnum",
+    "TaskStatusEnum",
+    "TaskAttachment",
     # Submission and Announcement models
     "Announcement",
     "AnnouncementFile",

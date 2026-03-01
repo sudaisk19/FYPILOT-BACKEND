@@ -85,6 +85,7 @@ class BaseRepository(Generic[ModelType]):
         Returns:
             Created model instance
         """
+    
         db_obj = self.model(**obj_in)
         db.add(db_obj)
         await db.flush()

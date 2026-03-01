@@ -21,9 +21,13 @@ from app.api.http.health import router as health_router
 from app.api.http.profile_status import router as profile_status_router
 from app.api.http.shortlist import router as shortlist_router
 
+
 # Import profile routers
 from app.api.http.student_profile import router as student_profile_router
 from app.api.http.submissions import router as submissions_router
+
+# Import student progress router
+from app.api.http.student_progress import router as student_progress_router
 
 # Import explore routers
 from app.api.http.supervisor_explore import router as supervisor_explore_router
@@ -44,6 +48,7 @@ router.include_router(health_router, prefix="/health", tags=["health"])
 router.include_router(group_router, tags=["groups"])
 router.include_router(user_router, prefix="/users")
 
+
 # Mount profile routers
 router.include_router(
     student_profile_router, prefix="/students", tags=["student-profile"]
@@ -52,6 +57,11 @@ router.include_router(
     supervisor_profile_router, prefix="/supervisors", tags=["supervisor-profile"]
 )
 router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
+
+# Mount student progress router
+router.include_router(
+    student_progress_router, prefix="/groups"
+)
 
 # Mount explore routers
 router.include_router(
@@ -108,3 +118,4 @@ from app.api.http.supervisor_fypmilestone import router as supervisor_milestones
 router.include_router(
     supervisor_milestones_router, prefix="/supervisors", tags=["supervisor-milestones"]
 )
+

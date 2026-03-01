@@ -128,3 +128,9 @@ class Student(Base):
         primaryjoin="Student.user_id == group_members.c.student_id",
         secondaryjoin="group_members.c.group_id == Group.group_id",
     )
+
+    tasks = relationship(
+        "Task",
+        back_populates="assignee",
+        cascade="all, delete-orphan",
+    )

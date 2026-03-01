@@ -50,10 +50,10 @@ class Group(Base):
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
-    milestone_template_id = Column(
-        PGUUID(as_uuid=True),
-        nullable=True,
-    )
+    #milestone_template_id = Column(
+     #   PGUUID(as_uuid=True),
+      #  nullable=True,
+    #)
     supervisor_id = Column(
         PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
     )
@@ -103,6 +103,18 @@ class Group(Base):
 
     submissions = relationship(
         "Submission", back_populates="group", cascade="all, delete-orphan"
+    )
+
+    tasks = relationship(
+        "Task",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    milestones = relationship(
+        "GroupMilestone",
+        back_populates="group",
+        cascade="all, delete-orphan",
     )
 
 

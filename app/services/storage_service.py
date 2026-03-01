@@ -53,7 +53,7 @@ async def upload_file_to_supabase(
     if error_message:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload announcement file: {error_message}",
+            detail=f"Failed to upload file: {error_message}",
         )
 
     return len(data)
@@ -76,5 +76,5 @@ async def delete_file_from_supabase(
     if error_message:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to delete announcement file: {error_message}",
+            detail=f"Failed to delete file: {error_message}",
         )
