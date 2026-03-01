@@ -7,7 +7,6 @@ from .admin import Admin
 
 # Submission and Announcement models
 from .announcement import (
-    Announcement,
     AnnouncementFile,
     AnnouncementRoleEnum,
     AnnouncementTarget,
@@ -51,6 +50,7 @@ from .submission import (
 from .supervisor import Supervisor
 from .task import Task, TaskPriorityEnum, TaskStatusEnum
 from .task_attachment import TaskAttachment
+from .supervisor_evaluation import SupervisorEvaluation
 
 # Supervisor relationship models (junction tables)
 from .supervisor_domain import SupervisorDomain
@@ -59,8 +59,9 @@ from .supervisor_industry import SupervisorIndustry
 # Base models first
 from .user import RoleEnum, User
 
-#Milestone Model
-from .milestone import AdminMilestone
+# Milestone Model
+
+# Jury Assignment models
 
 
 # Export all models
@@ -86,6 +87,7 @@ __all__ = [
     "TaskPriorityEnum",
     "TaskStatusEnum",
     "TaskAttachment",
+    "SupervisorEvaluation",
     # Submission and Announcement models
     "Announcement",
     "AnnouncementFile",

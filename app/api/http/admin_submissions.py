@@ -283,7 +283,7 @@ async def _create_placeholder_submissions_for_groups(
 
 
 @router.get(
-    "/files/{file_id}/download",
+    "/announcement-files/{file_id}/download",
     summary="Download or view an announcement file",
 )
 async def download_announcement_file(
@@ -306,10 +306,12 @@ async def download_announcement_file(
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Download from storage
+    # Download from storage (announcement files bucket)
     try:
-        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
-            file_record.storage_key
+        file_content = (
+            supabase.storage
+            .from_(ANNOUNCEMENTS_BUCKET)
+            .download(file_record.storage_key)
         )
     except Exception as e:
         raise HTTPException(
@@ -328,7 +330,7 @@ async def download_announcement_file(
 
 
 @router.post(
-    "/submission-tasks",
+    "/submission-create",
     response_model=SubmissionAnnouncementResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a submission-request announcement",
@@ -501,7 +503,7 @@ async def create_submission_announcement(
 
 
 @router.get(
-    "/submission-tasks/{announcement_id}",
+    "/submission-details/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Get a single submission-request announcement",
 )
@@ -542,7 +544,7 @@ async def get_submission_announcement(
 
 
 @router.patch(
-    "/submission-tasks/{announcement_id}",
+    "/submission-update/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Edit a submission-request announcement",
 )
@@ -787,7 +789,7 @@ async def edit_submission_announcement(
 # ─── LIST ─────────────────────────────────────────────────────────────────────
 
 
-@router.get("/submission-tasks", response_model=PaginatedSubmissionTasksResponse)
+@router.get("/submission-list", response_model=PaginatedSubmissionTasksResponse)
 async def list_official_submission_tasks(
     search: Optional[str] = Query(None, description="Search by submission name"),
     page: int = Query(1, ge=1),
@@ -910,7 +912,7 @@ async def list_official_submission_tasks(
 
 
 @router.get(
-    "/submission-tasks/{announcement_id}/submissions",
+    "/submission-responses/{announcement_id}",
     response_model=GroupSubmissionsResponse,
 )
 async def get_submission_responses(
@@ -1098,7 +1100,7 @@ async def get_submission_responses(
 
 
 @router.get(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Get submission details for evaluation",
 )
@@ -1164,13 +1166,18 @@ async def get_submission_evaluation(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
 
 
 @router.post(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation-update/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Update admin grading for a submission",
 )
@@ -1213,12 +1220,9 @@ async def update_admin_grading(
     if body.adminFeedback is not None:
         submission.admin_feedback = body.adminFeedback
 
-    # Set graded timestamp if marks are being updated
+    # Set graded timestamp + status when admin provides any grading data
     if body.adminMarks is not None or body.adminFeedback is not None:
         submission.admin_graded_at = datetime.utcnow()
-
-    # Update submission status to graded if it was submitted
-    if submission.status == SubmissionStatusEnum.submitted:
         submission.status = SubmissionStatusEnum.graded
 
     await db.commit()
@@ -1254,13 +1258,18 @@ async def update_admin_grading(
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
         adminFeedback=submission.admin_feedback,
         adminGradedAt=submission.admin_graded_at,
+        supervisorMarks=(
+            float(submission.supervisor_marks) if submission.supervisor_marks else None
+        ),
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
 
 
 @router.get(
-    "/submissions/{submission_id}/files/{file_id}/download",
+    "/submission-files/{submission_id}/{file_id}/download",
     summary="Download or view a submission file",
 )
 async def download_submission_file(

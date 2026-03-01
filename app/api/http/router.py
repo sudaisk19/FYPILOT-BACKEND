@@ -110,11 +110,27 @@ from app.api.http.admin_milestone import router as admin_milestones_router
 router.include_router(admin_milestones_router)
 
 from app.api.http.student_fypmilestone import router as student_milestones_router
+
 router.include_router(
     student_milestones_router, prefix="/students", tags=["student-milestones"]
 )
 
 from app.api.http.supervisor_fypmilestone import router as supervisor_milestones_router
+
 router.include_router(
     supervisor_milestones_router, prefix="/supervisors", tags=["supervisor-milestones"]
 )
+from app.api.http.supervisor_submissions import router as supervisor_submissions_router
+
+router.include_router(supervisor_submissions_router)
+
+from app.api.http.supervisor_announcements import (
+    router as supervisor_announcements_router,
+)
+
+router.include_router(supervisor_announcements_router)
+
+# Mount jury matching router
+from app.api.http.jury_matching import router as jury_matching_router
+
+router.include_router(jury_matching_router)

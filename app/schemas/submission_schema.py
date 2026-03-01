@@ -131,9 +131,14 @@ class SubmissionEvaluationResponse(BaseModel):
     title: str
     totalMarks: Optional[float] = None
     note: Optional[str] = None
+    # Admin grading (read-only for supervisor, editable for admin)
     adminMarks: Optional[float] = None
     adminFeedback: Optional[str] = None
     adminGradedAt: Optional[datetime] = None
+    # Supervisor grading (editable for supervisor, read-only for admin)
+    supervisorMarks: Optional[float] = None
+    supervisorFeedback: Optional[str] = None
+    supervisorGradedAt: Optional[datetime] = None
     files: List[SubmissionFileInfo] = Field(default_factory=list)
     submittedAt: Optional[datetime] = None
 

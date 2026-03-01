@@ -244,7 +244,7 @@ async def _create_placeholder_submissions_for_groups(
 
 
 @router.get(
-    "/files/{file_id}/download",
+    "/announcement-files/{file_id}/download",
     summary="Download or view an announcement file",
 )
 async def download_announcement_file(
@@ -305,7 +305,7 @@ async def download_announcement_file(
 
 
 @router.post(
-    "",
+    "/submission-create",
     response_model=SubmissionAnnouncementResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a submission task for managed groups",
@@ -453,7 +453,7 @@ async def create_supervisor_submission_task(
 
 
 @router.get(
-    "/{announcement_id}",
+    "/submission-details/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Get a single submission task",
 )
@@ -492,7 +492,7 @@ async def get_supervisor_submission_task(
 
 
 @router.patch(
-    "/{announcement_id}",
+    "/submission-update/{announcement_id}",
     response_model=SubmissionAnnouncementResponse,
     summary="Edit a submission task",
 )
@@ -676,7 +676,7 @@ async def edit_supervisor_submission_task(
 # ─── LIST TASKS ───────────────────────────────────────────────────────────────
 
 
-@router.get("", response_model=PaginatedSubmissionTasksResponse)
+@router.get("/submission-list", response_model=PaginatedSubmissionTasksResponse)
 async def list_supervisor_submission_tasks(
     search: Optional[str] = Query(None, description="Search by title"),
     page: int = Query(1, ge=1),
@@ -770,7 +770,7 @@ async def list_supervisor_submission_tasks(
 
 
 @router.get(
-    "/{announcement_id}/submissions",
+    "/submission-responses/{announcement_id}",
     response_model=GroupSubmissionsResponse,
 )
 async def get_submission_responses(
@@ -908,7 +908,7 @@ async def get_submission_responses(
 
 
 @router.get(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Get submission details for evaluation",
 )
@@ -966,17 +966,17 @@ async def get_submission_evaluation(
         for f in submission.files
     ]
 
-    # Note: Returning supervisor marks/feedback here
+    # Return only supervisor marks (admin marks hidden from supervisor)
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
         note=submission.note,
-        adminMarks=(
+        supervisorMarks=(
             float(submission.supervisor_marks) if submission.supervisor_marks else None
         ),
-        adminFeedback=submission.supervisor_feedback,
-        adminGradedAt=submission.supervisor_graded_at,
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
@@ -986,7 +986,7 @@ async def get_submission_evaluation(
 
 
 @router.post(
-    "/submissions/{submission_id}/evaluation",
+    "/submission-evaluation-update/{submission_id}",
     response_model=SubmissionEvaluationResponse,
     summary="Update supervisor grading",
 )
@@ -1059,16 +1059,17 @@ async def update_supervisor_grading(
         for f in submission.files
     ]
 
+    # Return only supervisor marks (admin marks hidden from supervisor)
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
         note=submission.note,
-        adminMarks=(
+        supervisorMarks=(
             float(submission.supervisor_marks) if submission.supervisor_marks else None
         ),
-        adminFeedback=submission.supervisor_feedback,
-        adminGradedAt=submission.supervisor_graded_at,
+        supervisorFeedback=submission.supervisor_feedback,
+        supervisorGradedAt=submission.supervisor_graded_at,
         files=files,
         submittedAt=submission.submitted_at,
     )
@@ -1078,7 +1079,7 @@ async def update_supervisor_grading(
 
 
 @router.get(
-    "/submissions/{submission_id}/files/{file_id}/download",
+    "/submission-files/{submission_id}/{file_id}/download",
     summary="Download or view a submission file",
 )
 async def download_submission_file(

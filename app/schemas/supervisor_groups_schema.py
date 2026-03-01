@@ -36,6 +36,7 @@ class SupervisorGroupProject(BaseModel):
     """Project summary for the supervisor's group directory card."""
 
     project_id: str
+    fyp_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None

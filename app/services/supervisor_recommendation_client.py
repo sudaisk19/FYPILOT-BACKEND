@@ -1,8 +1,8 @@
-# app/services/ai_recommender.py
+# app/services/supervisor_recommendation_client.py
 """
-HTTP Client for AI Recommender Microservice.
+HTTP Client for the Supervisor Recommendation AI Microservice.
 
-This service provides a clean interface for communicating with the
+This client provides a clean interface for communicating with the
 external AI Recommender FastAPI service for supervisor recommendations.
 """
 
@@ -16,8 +16,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-class AIRecommenderServiceError(Exception):
-    """Custom exception for AI Recommender service errors."""
+class SupervisorRecommendationServiceError(Exception):
+    """Custom exception for Supervisor Recommendation service errors."""
 
     def __init__(self, message: str, status_code: Optional[int] = None):
         self.message = message
@@ -25,16 +25,16 @@ class AIRecommenderServiceError(Exception):
         super().__init__(self.message)
 
 
-class AIRecommenderClient:
+class SupervisorRecommendationClient:
     """
-    HTTP Client for the AI Recommender microservice.
+    HTTP Client for the Supervisor Recommendation microservice.
 
     This client handles all communication with the external recommendation
     service, including health checks and supervisor recommendations.
     """
 
     def __init__(self):
-        """Initialize the AI Recommender client with configuration."""
+        """Initialize the Supervisor Recommendation client with configuration."""
         self.base_url = settings.ai_recommender_url.rstrip("/")
         self.timeout = settings.ai_recommender_timeout
         self._client: Optional[httpx.AsyncClient] = None
@@ -92,7 +92,7 @@ class AIRecommenderClient:
             Dict containing the recommendation results from the AI service.
 
         Raises:
-            AIRecommenderServiceError: If the request fails or service is unavailable.
+            SupervisorRecommendationServiceError: If the request fails or service is unavailable.
         """
         payload = {
             "project_domain": project_domain or "",
@@ -122,20 +122,20 @@ class AIRecommenderClient:
                 logger.error(
                     f"AI Recommender service error: {response.status_code} - {error_detail}"
                 )
-                raise AIRecommenderServiceError(
+                raise SupervisorRecommendationServiceError(
                     message=f"AI service returned error: {error_detail}",
                     status_code=response.status_code,
                 )
 
         except httpx.TimeoutException as e:
             logger.error(f"AI Recommender service timeout: {e}")
-            raise AIRecommenderServiceError(
+            raise SupervisorRecommendationServiceError(
                 message="AI Recommender service request timed out",
                 status_code=504,
             )
         except httpx.RequestError as e:
             logger.error(f"AI Recommender service connection error: {e}")
-            raise AIRecommenderServiceError(
+            raise SupervisorRecommendationServiceError(
                 message=f"Failed to connect to AI Recommender service: {str(e)}",
                 status_code=503,
             )
@@ -165,14 +165,14 @@ class AIRecommenderClient:
             if response.status_code == 200:
                 return response.json()
             else:
-                raise AIRecommenderServiceError(
+                raise SupervisorRecommendationServiceError(
                     message=f"Failed to refresh supervisors: {response.text}",
                     status_code=response.status_code,
                 )
 
         except httpx.RequestError as e:
             logger.error(f"Failed to refresh supervisors: {e}")
-            raise AIRecommenderServiceError(
+            raise SupervisorRecommendationServiceError(
                 message=f"Failed to connect to AI service: {str(e)}",
                 status_code=503,
             )
@@ -182,8 +182,8 @@ class AIRecommenderClient:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
-            logger.debug("AI Recommender client connection closed")
+            logger.debug("Supervisor Recommendation client connection closed")
 
 
 # Global singleton instance
-ai_recommender_client = AIRecommenderClient()
+supervisor_recommendation_client = SupervisorRecommendationClient()

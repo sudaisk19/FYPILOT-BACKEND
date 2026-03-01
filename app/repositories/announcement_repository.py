@@ -45,18 +45,25 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         self, db: AsyncSession, page: int, size: int
     ) -> Tuple[Sequence[Announcement], int]:
         offset = (page - 1) * size
+        base_filters = (
+            Announcement.created_by_role == AnnouncementRoleEnum.admin,
+            Announcement.is_submission_request == False,  # noqa: E712
+        )
+
         query = (
             select(Announcement)
             .options(
                 selectinload(Announcement.targets),
                 selectinload(Announcement.files),
             )
+            .where(*base_filters)
             .order_by(Announcement.created_at.desc())
             .offset(offset)
             .limit(size)
         )
         rows = (await db.execute(query)).scalars().all()
-        total = (await db.execute(select(func.count(Announcement.announcement_id)))).scalar_one()
+        total_query = select(func.count(Announcement.announcement_id)).where(*base_filters)
+        total = (await db.execute(total_query)).scalar_one()
         return rows, total
 
     async def create_announcement(
@@ -70,7 +77,7 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         target_role: TargetRoleEnum,
         is_submission_request: bool = False,
         targets: Optional[Iterable[UUID | None]] = None,
-        files: Optional[Iterable[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int], Optional[str]]]] = None,
+        files: Optional[Iterable[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]]] = None,
         due_at: Optional[datetime] = None,
         total_marks: Optional[float] = None,
     ) -> Announcement:
@@ -106,9 +113,8 @@ class AnnouncementRepository(BaseRepository[Announcement]):
                     file_type=file_type,
                     mime_type=mime_type,
                     size_bytes=size_bytes,
-                    module=module,
                 )
-                for file_name, storage_key, file_type, mime_type, size_bytes, module in files
+                for file_name, storage_key, file_type, mime_type, size_bytes in files
             ]
 
         db.add(announcement)
