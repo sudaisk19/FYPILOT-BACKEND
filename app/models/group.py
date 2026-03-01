@@ -1,13 +1,11 @@
 # app/models/group.py
 import enum
 import uuid
-from datetime import datetime
 
 from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import ForeignKey, Integer, Text, func, text
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
@@ -50,22 +48,28 @@ class Group(Base):
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
-    #milestone_template_id = Column(
-     #   PGUUID(as_uuid=True),
-      #  nullable=True,
-    #)
+    milestone_template_id = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("milestone_templates.template_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     supervisor_id = Column(
         PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
     )
     # Multiple co-supervisors as ARRAY of UUIDs
     cosupervisor_ids = Column(
         ARRAY(PGUUID(as_uuid=True)),
-        nullable=True,
-        default=[],
+        nullable=False,
+        default=list,
+        server_default=text("'{}'::uuid[]"),
         comment="Array of co-supervisor user IDs",
     )
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # Table constraints
     __table_args__ = (
@@ -133,7 +137,7 @@ class GroupMember(Base):
         ),  # ← must reference students.user_id
         primary_key=True,
     )
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # now SQLAlchemy can wire this relationship:
     group = relationship("Group", back_populates="members", overlaps="groups,students")
@@ -166,5 +170,5 @@ class GroupInvite(Base):
         nullable=False,
         default=InviteStatusEnum.pending,
     )
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)

@@ -88,6 +88,7 @@ class IndustryInfo(BaseModel):
 
 class ProjectInfo(BaseModel):
     project_id: UUID
+    fyp_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     objectives: Optional[List[Any]] = Field(default_factory=list)
@@ -104,8 +105,8 @@ class ProjectInfo(BaseModel):
 class GroupProfileResponse(BaseModel):
     group: Dict[str, Any] = Field(..., description="Group basic information")
     members: List[GroupMemberInfo] = Field(default_factory=list)
-    supervisors: Dict[str, Optional[SupervisorInfo]] = Field(
-        default_factory=lambda: {"primary": None, "co_supervisor": None}
+    supervisors: Dict[str, Any] = Field(
+        default_factory=lambda: {"primary": None, "co_supervisors": []}
     )
     project: Optional[ProjectInfo] = None
     invites: GroupInvitesInfo = Field(
@@ -125,6 +126,9 @@ class GroupUpdateData(BaseModel):
 class ProjectUpdateData(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
+    fyp_id: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="External FYP identifier"
+    )
     objectives: Optional[List[Any]] = None
     tech_stack: Optional[List[str]] = None
     domain_ids: Optional[List[UUID]] = Field(None, max_items=10)

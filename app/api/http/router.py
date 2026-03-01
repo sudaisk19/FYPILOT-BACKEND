@@ -118,4 +118,3 @@ from app.api.http.supervisor_fypmilestone import router as supervisor_milestones
 router.include_router(
     supervisor_milestones_router, prefix="/supervisors", tags=["supervisor-milestones"]
 )
-

@@ -319,6 +319,7 @@ async def get_admin_group_profile(
         p = group.project
         project_info = ProjectInfo(
             project_id=p.project_id,
+            fyp_id=p.fyp_id,
             name=p.name,
             description=p.description,
             objectives=p.objectives or [],

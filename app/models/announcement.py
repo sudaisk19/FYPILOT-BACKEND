@@ -36,6 +36,8 @@ class TargetRoleEnum(str, enum.Enum):
     all_students = "all_students"
     all_supervisors = "all_supervisors"
     both = "both"  # Added from sumaiya-dev to preserve functionality
+    fyp1_students = "fyp1_students"
+    fyp2_students = "fyp2_students"
 
 
 class FileTypeEnum(str, enum.Enum):
