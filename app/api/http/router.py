@@ -114,6 +114,12 @@ from app.api.http.supervisor_submissions import router as supervisor_submissions
 
 router.include_router(supervisor_submissions_router)
 
+from app.api.http.supervisor_announcements import (
+    router as supervisor_announcements_router,
+)
+
+router.include_router(supervisor_announcements_router)
+
 # Mount jury matching router
 from app.api.http.jury_matching import router as jury_matching_router
 
