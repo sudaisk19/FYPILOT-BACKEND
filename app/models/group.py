@@ -104,6 +104,18 @@ class Group(Base):
         "Submission", back_populates="group", cascade="all, delete-orphan"
     )
 
+    tasks = relationship(
+        "Task",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    milestones = relationship(
+        "GroupMilestone",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
 
 class GroupMember(Base):
     __tablename__ = "group_members"

@@ -30,7 +30,9 @@ from .group_repository import GroupRepository, group_repository
 from .project_repository import ProjectRepository, project_repository
 from .request_repository import RequestRepository, request_repository
 from .shortlist_repository import ShortlistRepository, shortlist_repository
+from .sprint_repository import SprintRepository, sprint_repository
 from .student_repository import StudentRepository, student_repository
+from .task_repository import TaskRepository, task_repository
 from .supervisor_repository import SupervisorRepository, supervisor_repository
 from .user_repository import UserRepository, user_repository
 
@@ -48,6 +50,8 @@ __all__ = [
     "ProjectRepository",
     "DomainRepository",
     "AdminRepository",
+    "TaskRepository",
+    "SprintRepository",
     # Singleton instances (for convenience)
     "announcement_repository",
     "user_repository",
@@ -59,4 +63,6 @@ __all__ = [
     "project_repository",
     "domain_repository",
     "admin_repository",
+    "task_repository",
+    "sprint_repository",
 ]
