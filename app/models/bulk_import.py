@@ -66,13 +66,23 @@ class BulkImportJob(Base):
 
     # Target role for all users in this batch
     target_role = Column(
-        SAEnum(TargetRoleEnum, name="target_role_enum", native_enum=True),
+        SAEnum(
+            TargetRoleEnum,
+            name="target_role_enum",
+            native_enum=False,
+            create_constraint=False,
+        ),
         nullable=False,
     )
 
     # Job status
     status = Column(
-        SAEnum(BulkJobStatus, name="bulk_job_status_enum", native_enum=True),
+        SAEnum(
+            BulkJobStatus,
+            name="bulk_job_status_enum",
+            native_enum=False,
+            create_constraint=False,
+        ),
         nullable=False,
         default=BulkJobStatus.pending,
     )
@@ -133,7 +143,12 @@ class BulkImportItem(Base):
 
     # Processing status
     status = Column(
-        SAEnum(BulkItemStatus, name="bulk_item_status_enum", native_enum=True),
+        SAEnum(
+            BulkItemStatus,
+            name="bulk_item_status_enum",
+            native_enum=False,
+            create_constraint=False,
+        ),
         nullable=False,
         default=BulkItemStatus.pending,
     )

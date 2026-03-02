@@ -8,7 +8,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app import db
 from app.models.group_milestone import GroupMilestone, SprintStatusEnum
 
 from .base import BaseRepository
@@ -21,30 +20,35 @@ class SprintRepository(BaseRepository[GroupMilestone]):
         super().__init__(GroupMilestone)
 
     async def get_by_id(
-        self, 
-        db: AsyncSession, 
-        milestone_id: UUID, 
-        *args, # Yeh extra arguments ko handle kar lega
-        **kwargs
+        self,
+        db: AsyncSession,
+        milestone_id: UUID,
+        *args,  # Yeh extra arguments ko handle kar lega
+        **kwargs,
     ) -> Optional[GroupMilestone]:
         # milestone_id hamesha yahan "milestone_id" hi rahega
         return await super().get_by_id(db, milestone_id, "milestone_id")
 
     async def get_with_tasks(
-    self, db: AsyncSession, milestone_id: UUID
-) -> Optional[GroupMilestone]:
-     from app.models.task import Task
-     from app.models.student import Student
-     query = (
-        select(GroupMilestone)
-        .options(
-            selectinload(GroupMilestone.tasks).selectinload(Task.attachments), # Deep load attachments
-            selectinload(GroupMilestone.tasks).selectinload(Task.assignee).selectinload(Student.user) # Deep load assignee details
+        self, db: AsyncSession, milestone_id: UUID
+    ) -> Optional[GroupMilestone]:
+        from app.models.student import Student
+        from app.models.task import Task
+
+        query = (
+            select(GroupMilestone)
+            .options(
+                selectinload(GroupMilestone.tasks).selectinload(
+                    Task.attachments
+                ),  # Deep load attachments
+                selectinload(GroupMilestone.tasks)
+                .selectinload(Task.assignee)
+                .selectinload(Student.user),  # Deep load assignee details
+            )
+            .where(GroupMilestone.milestone_id == milestone_id)
         )
-        .where(GroupMilestone.milestone_id == milestone_id)
-    )
-     result = await db.execute(query)
-     return result.unique().scalars().first()
+        result = await db.execute(query)
+        return result.unique().scalars().first()
 
     async def list_by_group(
         self,
@@ -79,7 +83,9 @@ class SprintRepository(BaseRepository[GroupMilestone]):
             "sprint_goal": sprint_goal,
             "start_date": start_date,
             "end_date": end_date,
-            "status": final_status.value if hasattr(final_status, "value") else final_status,
+            "status": (
+                final_status.value if hasattr(final_status, "value") else final_status
+            ),
         }
         return await super().create(db, payload)
 

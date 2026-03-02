@@ -1,14 +1,48 @@
 # app/schemas/bulk_import_schema.py
 
 """
-Pydantic schemas for bulk import API endpoints.
+Pydantic schemas for user registration API endpoints (single + bulk).
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+
+# === Single User Registration Schemas ===
+
+
+class CreateStudentRequest(BaseModel):
+    """Request body for admin to register a single student."""
+
+    full_name: str = Field(..., min_length=1, max_length=200)
+    email: EmailStr
+    roll_number: str = Field(..., min_length=1, max_length=50)
+    fyp_start_semester: Literal["fall", "spring", "summer"]
+    fyp_start_year: int = Field(..., ge=2000, le=2100)
+    department: Optional[str] = None
+
+
+class CreateSupervisorRequest(BaseModel):
+    """Request body for admin to register a single supervisor."""
+
+    full_name: str = Field(..., min_length=1, max_length=200)
+    email: EmailStr
+    department: str = Field(..., min_length=1, max_length=200)
+    designation: str = Field(..., min_length=1, max_length=200)
+
+
+class SingleUserResponse(BaseModel):
+    """Response after creating a single user."""
+
+    user_id: UUID
+    full_name: str
+    email: str
+    role: str
+    temp_password: str
+    message: str
+
 
 # === Enums (mirrors model enums) ===
 
@@ -109,17 +143,75 @@ class BulkImportResultRow(BaseModel):
         from_attributes = True
 
 
-# === Cron Processor Schemas ===
+# === Processor Response (replaces old CronProcessorResponse) ===
 
 
-class CronProcessorResponse(BaseModel):
-    """Response from the cron processor endpoint."""
+class ProcessorResponse(BaseModel):
+    """Response from the processor endpoint (retry / manual trigger)."""
 
     processed: int
     success: int
     failed: int
     skipped: int
     jobs_completed: list[UUID] = []
+    message: str
+
+
+# === Job Report Schema ===
+
+
+class BulkImportReportItemDetail(BaseModel):
+    """Detail of a single item in the report."""
+
+    row_number: int
+    full_name: str
+    email: str
+    roll_number: Optional[str] = None
+    status: str
+    error: Optional[str] = None
+    user_id: Optional[UUID] = None
+
+
+class BulkImportReportResponse(BaseModel):
+    """
+    Full report for a completed (or in-progress) bulk import job.
+
+    Shows summary counts + detailed breakdowns of created, skipped, and failed items.
+    """
+
+    job_id: UUID
+    target_role: str
+    status: str
+
+    # Summary counts
+    total_rows: int
+    success_count: int
+    failed_count: int
+    skipped_count: int
+    pending_count: int
+    progress_percent: float
+
+    created_at: datetime
+    updated_at: datetime
+
+    # Detailed breakdowns
+    created_users: list[BulkImportReportItemDetail] = []
+    skipped_items: list[BulkImportReportItemDetail] = []
+    failed_items: list[BulkImportReportItemDetail] = []
+    pending_items: list[BulkImportReportItemDetail] = []
+
+    class Config:
+        from_attributes = True
+
+
+# === Retry Response Schema ===
+
+
+class RetryResponse(BaseModel):
+    """Response from the retry endpoint."""
+
+    job_id: UUID
+    items_reset: int
     message: str
 
 

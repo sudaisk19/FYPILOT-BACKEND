@@ -105,7 +105,6 @@ class Settings(BaseSettings):
     )
 
     # ─── Bulk Import Settings ───────────────────────────────
-    cron_token: str | None = Field(default=None, validation_alias="CRON_TOKEN")
     app_encryption_key: str | None = Field(
         default=None, validation_alias="APP_ENCRYPTION_KEY"
     )

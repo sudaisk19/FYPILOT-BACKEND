@@ -1,7 +1,7 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column
+from sqlalchemy import Boolean, CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -73,6 +73,28 @@ class Supervisor(Base):
         Integer,  # Integer type for current students
         nullable=False,  # Required field
         default=0,  # Start with 0 students
+    )
+
+    # Role flags (set to True during bulk registration)
+    is_supervisor = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+
+    is_jury = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
     )
 
     # Capacity Constraints
