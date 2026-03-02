@@ -1,7 +1,7 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import CheckConstraint, Column
+from sqlalchemy import Boolean, CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -61,6 +61,27 @@ class Supervisor(Base):
         ),
         nullable=False,
         default="research",
+    )
+
+    is_supervisor = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    is_jury = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
     )
     # Capacity Management
     capacity_max = Column(
