@@ -320,14 +320,13 @@ class GroupInfo(BaseModel):
     """Minimal group information"""
 
     group_id: UUID
-    name: str
+    project_name: str
     fyp_stage: str
     fyp_cycle: str
     cohort_year: Optional[int] = None
     max_members: int
     supervisor_name: Optional[str] = None
     cosupervisor_name: Optional[str] = None
-    project_name: Optional[str] = None
     members: List[GroupMemberInfo] = Field(default_factory=list)
 
 

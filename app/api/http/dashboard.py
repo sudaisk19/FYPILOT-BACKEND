@@ -65,7 +65,10 @@ async def get_student_dashboard_data(
 
         # Get groups the student is enrolled in
         groups_query = (
-            select(Group).join(Group.students).where(Student.user_id == user.user_id)
+            select(Group)
+            .options(selectinload(Group.project))
+            .join(Group.students)
+            .where(Student.user_id == user.user_id)
         )
         groups_result = await db.execute(groups_query)
         groups = groups_result.scalars().all()
@@ -75,7 +78,7 @@ async def get_student_dashboard_data(
         for group in groups:
             group_info = GroupInfo(
                 group_id=group.group_id,
-                group_name=group.name,
+                project_name=group.project.name if group.project else "Unknown Project",
                 project_title=getattr(group, "project_title", None),
                 status=group.fyp_stage,
                 created_at=group.created_at.isoformat(),
@@ -127,7 +130,11 @@ async def get_supervisor_dashboard_data(
             )
 
         # Get groups managed by the supervisor
-        groups_query = select(Group).where(Group.supervisor_id == user.user_id)
+        groups_query = (
+            select(Group)
+            .options(selectinload(Group.project))
+            .where(Group.supervisor_id == user.user_id)
+        )
         groups_result = await db.execute(groups_query)
         groups = groups_result.scalars().all()
 
@@ -156,7 +163,7 @@ async def get_supervisor_dashboard_data(
 
             group_info = GroupInfo(
                 group_id=group.group_id,
-                group_name=group.name,
+                project_name=group.project.name if group.project else "Unknown Project",
                 project_title=getattr(group, "project_title", None),
                 status=group.fyp_stage,
                 created_at=group.created_at.isoformat(),

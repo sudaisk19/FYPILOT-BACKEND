@@ -345,14 +345,14 @@ async def send_group_invitation_email(
 
 
 async def send_supervisor_accepted_email(
-    to_email: str, group_name: str, supervisor_name: str, role: str
+    to_email: str, project_name: str, supervisor_name: str, role: str
 ):
     """
     Send email to group members when supervisor accepts their request.
 
     Args:
         to_email (str): Group member's email address
-        group_name (str): Name of the group
+        project_name (str): Name of the project
         supervisor_name (str): Name of the supervisor who accepted
         role (str): Role accepted (supervisor or cosupervisor)
     """
@@ -370,7 +370,7 @@ async def send_supervisor_accepted_email(
     <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <p style="margin: 0 0 8px; font-weight: 600; color: #065f46;">Request Status: Accepted ✓</p>
         <ul style="margin: 0; padding-left: 20px; color: #065f46;">
-            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
             <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
             <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
         </ul>
@@ -392,14 +392,14 @@ async def send_supervisor_accepted_email(
 
 
 async def send_supervisor_rejected_email(
-    to_email: str, group_name: str, supervisor_name: str, role: str
+    to_email: str, project_name: str, supervisor_name: str, role: str
 ):
     """
     Send email to group members when supervisor rejects their request.
 
     Args:
         to_email (str): Group member's email address
-        group_name (str): Name of the group
+        project_name (str): Name of the project
         supervisor_name (str): Name of the supervisor who rejected
         role (str): Role requested (supervisor or cosupervisor)
     """
@@ -417,7 +417,7 @@ async def send_supervisor_rejected_email(
     <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <p style="margin: 0 0 8px; font-weight: 600; color: #7f1d1d;">Request Status: Declined</p>
         <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
-            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
             <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
             <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
         </ul>

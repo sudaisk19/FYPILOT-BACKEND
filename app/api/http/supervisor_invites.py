@@ -11,12 +11,11 @@ from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.domain import Domain
 from app.models.group import Group, GroupMember, InviteStatusEnum
-from app.models.project import Project, ProjectDomain
+from app.models.project import Project, ProjectDomain, project_type_value
 from app.models.request import Request, RequestTypeEnum
 from app.models.student import Student
 from app.models.supervisor import Supervisor
 from app.models.user import User
-from app.models.project import project_type_value
 from app.schemas.invite_schema import (
     PendingInviteItem,
     PendingInvitesResponse,
@@ -248,7 +247,6 @@ async def list_pending_invites_for_supervisor(
             if project:
                 project_name = project.name
                 project_type = project_type_value(project.project_type)
-            
 
                 # Fetch project domains
                 domains_result = await db.execute(
@@ -299,7 +297,6 @@ async def list_pending_invites_for_supervisor(
             PendingInviteItem(
                 request_id=req.request_id,
                 group_id=req.group_id,
-                group_name=group.name,
                 requested_role=req.request_type.value,
                 created_at=req.created_at,
                 project_name=project_name,
@@ -340,7 +337,11 @@ async def accept_supervisor_request(
         )
 
     # Get group and supervisor info for email
-    group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
+    group_result = await db.execute(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(Group.group_id == req.group_id)
+    )
     group = group_result.scalars().first()
     role = (
         "supervisor"
@@ -411,7 +412,7 @@ async def accept_supervisor_request(
             background_tasks.add_task(
                 send_supervisor_accepted_email,
                 user.email,
-                group.name,
+                group.project.name if group.project else "Unknown Project",
                 current_user.full_name,
                 role,
             )
@@ -449,7 +450,11 @@ async def reject_invite(
         )
 
     # Get group and supervisor info for email
-    group_result = await db.execute(select(Group).where(Group.group_id == req.group_id))
+    group_result = await db.execute(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(Group.group_id == req.group_id)
+    )
     group = group_result.scalars().first()
     role = (
         "supervisor"
@@ -481,7 +486,7 @@ async def reject_invite(
             background_tasks.add_task(
                 send_supervisor_rejected_email,
                 user.email,
-                group.name,
+                group.project.name if group.project else "Unknown Project",
                 current_user.full_name,
                 role,
             )

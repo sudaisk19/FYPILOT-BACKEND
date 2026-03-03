@@ -73,7 +73,9 @@ def _resolve_file_type(raw: Optional[str]) -> FileTypeEnum:
 async def _get_managed_groups(user_id: UUID, db: AsyncSession) -> List[Group]:
     """Fetch all groups where the supervisor is primary or co-supervisor."""
     result = await db.execute(
-        select(Group).where(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(
             or_(
                 Group.supervisor_id == user_id,
                 Group.cosupervisor_ids.contains([user_id]),
@@ -111,13 +113,16 @@ def _build_response(
 ) -> SupervisorAnnouncementResponse:
     """Build a supervisor announcement response from an ORM object."""
 
-    # Build a group_id -> name lookup for friendly target names
-    group_name_map = {g.group_id: g.name for g in managed_groups}
+    # Build a group_id -> project_name lookup for friendly target names
+    project_name_map = {
+        g.group_id: g.project.name if g.project else "Unknown Project"
+        for g in managed_groups
+    }
 
     targets = [
         SupervisorAnnouncementTargetResponse(
             group_id=t.group_id,
-            group_name=group_name_map.get(t.group_id) if t.group_id else None,
+            project_name=project_name_map.get(t.group_id) if t.group_id else None,
         )
         for t in announcement.targets
     ]

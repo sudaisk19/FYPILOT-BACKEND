@@ -76,7 +76,7 @@ class AssignSupervisorResponse(BaseModel):
 
     message: str
     group_id: str
-    group_name: str
+    project_name: str
     supervisor_id: str
     supervisor_name: str
     role: str
