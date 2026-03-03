@@ -23,6 +23,7 @@ from app.db import get_db, supabase
 from app.models.group_milestone import SprintStatusEnum
 from app.models.task import Task, TaskPriorityEnum, TaskStatusEnum
 from app.models.user import RoleEnum, User
+from pydantic import BaseModel
 from app.repositories import group_repository, sprint_repository, task_repository
 from app.schemas.task_schema import (
     MemberSummary,
@@ -39,6 +40,16 @@ from app.services.storage_service import (
     upload_file_to_supabase,
 )
 
+
+class GroupMemberItem(BaseModel):
+    user_id: str
+    full_name: Optional[str]
+
+
+class GroupMembersResponse(BaseModel):
+    members: List[GroupMemberItem]
+
+
 router = APIRouter(prefix="/{group_id}/progress", tags=["student-progress"])
 
 TASK_ATTACHMENTS_BUCKET = "task_attachments"
@@ -51,6 +62,20 @@ def _safe_filename(name: str) -> str:
     safe_ext = re.sub(r"[^A-Za-z0-9._-]", "_", ext)
     cleaned = f"{safe_base}{safe_ext}" if safe_ext else safe_base
     return cleaned or "file"
+
+@router.get("/members", response_model=GroupMembersResponse)
+async def list_group_members(
+    group_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _ensure_group_access(db, group_id, current_user)
+    rows = await group_repository.get_members_with_users(db, group_id)
+    members = [
+        GroupMemberItem(user_id=str(user.user_id), full_name=user.full_name)
+        for user, student, member in rows
+    ]
+    return GroupMembersResponse(members=members)
 
 
 @router.get("/tasks", response_model=PaginatedTasksResponse)
@@ -237,6 +262,10 @@ async def update_task(
     if milestone_id is not None:
         await _ensure_sprint(db, milestone_id, group_id)
         updates["milestone_id"] = milestone_id
+
+    if due_date is not None:
+        from datetime import date as date_type
+        updates["due_date"] = date_type.fromisoformat(due_date)
 
     if updates:
         await task_repository.update_task(db, task_id, updates)

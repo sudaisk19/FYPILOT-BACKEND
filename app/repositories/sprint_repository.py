@@ -76,7 +76,7 @@ class SprintRepository(BaseRepository[GroupMilestone]):
         end_date: Optional[date],
         status: Optional[SprintStatusEnum] = None,
     ) -> GroupMilestone:
-        final_status = status or SprintStatusEnum.planned
+        final_status = status or SprintStatusEnum.Planned
         payload = {
             "group_id": group_id,
             "title": title,
@@ -108,7 +108,7 @@ class SprintRepository(BaseRepository[GroupMilestone]):
     ) -> Optional[GroupMilestone]:
         query = select(GroupMilestone).where(
             GroupMilestone.group_id == group_id,
-            GroupMilestone.status == SprintStatusEnum.active,
+            GroupMilestone.status == SprintStatusEnum.Active,
         )
         result = await db.execute(query)
         return result.scalars().first()
