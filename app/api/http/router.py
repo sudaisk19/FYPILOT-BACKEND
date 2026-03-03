@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 # Import admin router
 from app.api.http.admin_announcements import router as admin_announcements_router
+from app.api.http.admin_dashboard import router as admin_dashboard_router
 from app.api.http.admin_groups import router as admin_groups_router
 from app.api.http.admin_profile import router as admin_profile_router
 
@@ -93,6 +94,8 @@ router.include_router(
 router.include_router(admin_groups_router)
 
 router.include_router(admin_announcements_router)
+router.include_router(admin_dashboard_router)
+# Mount bulk import router (admin only)
 # Mount user registration router (admin only — both single + bulk)
 router.include_router(
     bulk_import_router,

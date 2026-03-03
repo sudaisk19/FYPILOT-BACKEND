@@ -1,14 +1,14 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import (  # SQLAlchemy column types
+from sqlalchemy import (
     Boolean,
     Column,
     ForeignKey,
     Integer,
     Numeric,
     Text,
-)
+)  # SQLAlchemy column types
 from sqlalchemy.dialects.postgresql import (
     ARRAY,
     JSONB,
@@ -98,8 +98,8 @@ class Student(Base):
     is_active = Column(
         Boolean,
         nullable=False,
-        server_default="false",
-        default=False,
+        default=True,
+        server_default="true",
     )
 
     @hybrid_property

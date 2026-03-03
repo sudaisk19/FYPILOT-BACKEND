@@ -62,6 +62,27 @@ class Supervisor(Base):
         nullable=False,
         default="research",
     )
+
+    is_supervisor = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    is_jury = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
     # Capacity Management
     capacity_max = Column(
         Integer,  # Integer type for max students
