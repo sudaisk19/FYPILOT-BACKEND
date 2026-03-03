@@ -5,7 +5,8 @@ import uuid
 from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, Text, func, text
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
@@ -33,7 +34,6 @@ class FYPCycleEnum(str, enum.Enum):
 class Group(Base):
     __tablename__ = "groups"
     group_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(Text, nullable=False)
     fyp_stage = Column(
         Text,
         nullable=False,
@@ -63,7 +63,10 @@ class Group(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Table constraints
@@ -132,7 +135,9 @@ class GroupMember(Base):
         ),  # ← must reference students.user_id
         primary_key=True,
     )
-    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    joined_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # now SQLAlchemy can wire this relationship:
     group = relationship("Group", back_populates="members", overlaps="groups,students")
@@ -165,5 +170,7 @@ class GroupInvite(Base):
         nullable=False,
         default=InviteStatusEnum.pending,
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     expires_at = Column(DateTime(timezone=True), nullable=False)

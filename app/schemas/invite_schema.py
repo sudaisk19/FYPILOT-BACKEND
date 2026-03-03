@@ -24,7 +24,6 @@ class SendSupervisorInviteRequest(BaseModel):
 class PendingInviteItem(BaseModel):
     request_id: UUID
     group_id: UUID
-    group_name: str
     requested_role: str = Field(..., description="supervisor or cosupervisor")
     created_at: datetime
     project_name: str | None = Field(None, description="Project name if project exists")

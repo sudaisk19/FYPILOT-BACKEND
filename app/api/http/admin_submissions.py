@@ -308,10 +308,8 @@ async def download_announcement_file(
 
     # Download from storage (announcement files bucket)
     try:
-        file_content = (
-            supabase.storage
-            .from_(ANNOUNCEMENTS_BUCKET)
-            .download(file_record.storage_key)
+        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(
+            file_record.storage_key
         )
     except Exception as e:
         raise HTTPException(
@@ -917,7 +915,7 @@ async def list_official_submission_tasks(
 )
 async def get_submission_responses(
     announcement_id: UUID,
-    search: Optional[str] = Query(None, description="Search by group name or FYP ID"),
+    search: Optional[str] = Query(None, description="Search by project name or FYP ID"),
     status_filter: Optional[str] = Query(
         None, description="Filter by status: submitted, missing, graded, returned"
     ),
@@ -1048,7 +1046,7 @@ async def get_submission_responses(
 
         # Get project FYP ID and name
         fyp_id = group.project.fyp_id or f"P-{str(group.project.project_id)[:8]}"
-        project_name = group.name or group.project.name
+        project_name = group.project.name if group.project else "Unknown Project"
 
         group_submissions.append(
             GroupSubmissionStatus(

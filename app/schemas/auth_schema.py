@@ -135,7 +135,7 @@ class StudentInfo(BaseModel):
 
 class GroupInfo(BaseModel):
     group_id: Optional[UUID] = None
-    group_name: Optional[str] = None
+    project_name: Optional[str] = None
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
@@ -146,7 +146,7 @@ class GroupInfo(BaseModel):
 
 class SupervisedGroup(BaseModel):
     group_id: UUID
-    group_name: str
+    project_name: str
     fyp_stage: str
     fyp_cycle: str
     member_count: int

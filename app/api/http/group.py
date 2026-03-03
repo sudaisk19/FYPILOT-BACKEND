@@ -89,7 +89,6 @@ async def create_group(
 
     # 3) Create the Group
     grp = Group(
-        name=body.name,
         fyp_stage=FYPStageEnum.ideation,
         fyp_cycle=FYPCycleEnum.fyp1,
         created_at=datetime.utcnow(),
@@ -115,7 +114,7 @@ async def create_group(
     if not existing_project:
         project = Project(
             group_id=grp.group_id,
-            name=grp.name,
+            name=body.project_name,
             project_type=ProjectTypeEnum.research,  # Use enum directly, not .value
         )
         db.add(project)
@@ -128,7 +127,7 @@ async def create_group(
     await db.commit()
 
     return GroupResponse(
-        group_id=grp.group_id, name=grp.name, project_id=project.project_id
+        group_id=grp.group_id, project_name=project.name, project_id=project.project_id
     )
 
 
@@ -593,7 +592,13 @@ async def delete_group(
 
     try:
         # Store group info for response before deletion
-        group_name = group.name
+        project_result_for_deletion = await db.execute(
+            select(Project).where(Project.group_id == group_id)
+        )
+        project_for_deletion = project_result_for_deletion.scalars().first()
+        project_name = (
+            project_for_deletion.name if project_for_deletion else "Unknown Project"
+        )
         deleted_at = datetime.utcnow().isoformat()
 
         # Delete the group (CASCADE will handle related records)
@@ -603,7 +608,7 @@ async def delete_group(
         await db.commit()
 
         return DeleteGroupResponse(
-            message=f"Group '{group_name}' has been successfully deleted",
+            message=f"Group for project '{project_name}' has been successfully deleted",
             group_id=group_id,
             deleted_at=deleted_at,
         )
@@ -885,7 +890,6 @@ async def get_group_profile(
         # Build group basic info
         group_info = {
             "group_id": str(group.group_id),
-            "name": group.name,
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle,
             "cohort_year": group.cohort_year,
@@ -982,8 +986,6 @@ async def update_group_profile(
         if update_data.group:
             group_updates = {}
 
-            if update_data.group.name is not None:
-                group_updates["name"] = update_data.group.name
             if update_data.group.fyp_stage is not None:
                 # Cast to proper enum type to avoid database constraint issues
                 group_updates["fyp_stage"] = update_data.group.fyp_stage

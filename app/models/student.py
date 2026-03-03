@@ -1,7 +1,14 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import Column, ForeignKey, Numeric, Text  # SQLAlchemy column types
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+)  # SQLAlchemy column types
 from sqlalchemy.dialects.postgresql import (
     ARRAY,
     JSONB,
@@ -75,6 +82,24 @@ class Student(Base):
         JSONB,  # JSONB for per-skill level mapping (e.g., {"React": 5, "Python": 3})
         nullable=False,  # Required field
         default=dict,  # Initialize as empty dict
+    )
+
+    # FYP batch registration fields
+    fyp_start_semester = Column(
+        Text,  # e.g. "Fall", "Spring"
+        nullable=True,
+    )
+
+    fyp_start_year = Column(
+        Integer,  # e.g. 2026
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
     )
 
     @hybrid_property

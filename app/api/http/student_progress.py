@@ -1,25 +1,24 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-from uuid import UUID, uuid4
-from fastapi import Form
 import os
 import re
-from app.core.config import settings
+from typing import Dict, List, Optional
+from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Query,
     UploadFile,
     status,
-    Form
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.config import settings
 from app.db import get_db, supabase
 from app.models.group_milestone import SprintStatusEnum
 from app.models.task import Task, TaskPriorityEnum, TaskStatusEnum
@@ -34,9 +33,7 @@ from app.schemas.task_schema import (
     SprintResponse,
     SprintUpdate,
     TaskAttachmentResponse,
-    TaskCreate,
     TaskResponse,
-    TaskUpdate,
 )
 from app.services.storage_service import (
     delete_file_from_supabase,
@@ -56,6 +53,7 @@ class GroupMembersResponse(BaseModel):
 router = APIRouter(prefix="/{group_id}/progress", tags=["student-progress"])
 
 TASK_ATTACHMENTS_BUCKET = "task_attachments"
+
 
 def _safe_filename(name: str) -> str:
     base, ext = os.path.splitext(name)
@@ -134,7 +132,7 @@ async def create_task(
     milestone_id: Optional[UUID] = Form(None),
     due_date: Optional[str] = Form(None),
     files: Optional[List[UploadFile]] = File(None),
-    links: Optional[str] = Form(None, description="Comma separated URLs"), 
+    links: Optional[str] = Form(None, description="Comma separated URLs"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -147,6 +145,7 @@ async def create_task(
         await _ensure_sprint(db, milestone_id, group_id)
 
     from datetime import date
+
     due_date_obj = date.fromisoformat(due_date) if due_date else None
 
     task = await task_repository.create_task(
@@ -165,16 +164,19 @@ async def create_task(
     )
     if links:
         from app.models.task_attachment import TaskAttachment
+
         link_list = [l.strip() for l in links.split(",") if l.strip()]
         for link in link_list:
-            db.add(TaskAttachment(
-                task_id=task.task_id,
-                file_name="External Link", # Frontend se bhi name le sakte hain
-                storage_key=link,         # Direct URL save ho raha hai
-                mime_type="application/url",
-                size_bytes=0
-            ))
-    
+            db.add(
+                TaskAttachment(
+                    task_id=task.task_id,
+                    file_name="External Link",  # Frontend se bhi name le sakte hain
+                    storage_key=link,  # Direct URL save ho raha hai
+                    mime_type="application/url",
+                    size_bytes=0,
+                )
+            )
+
     if files:
         for upload in files:
             if not upload.filename:
@@ -182,26 +184,27 @@ async def create_task(
 
             # Naming consistent with your build_storage_key logic
             storage_key = f"tasks/{group_id}/{task.task_id}/{upload.filename}"
-            
+
             # File upload to Supabase (using existing service)
             size_bytes = await upload_file_to_supabase(
                 supabase,
-                bucket="task_attachments", # Ensure this bucket exists in Supabase
+                bucket="task_attachments",  # Ensure this bucket exists in Supabase
                 storage_key=storage_key,
                 upload=upload,
             )
 
             # DB mein attachment save karein
             from app.models.task_attachment import TaskAttachment
+
             attachment = TaskAttachment(
                 task_id=task.task_id,
                 file_name=upload.filename,
                 storage_key=storage_key,
                 mime_type=upload.content_type,
-                size_bytes=size_bytes
+                size_bytes=size_bytes,
             )
             db.add(attachment)
-            
+
     await db.commit()
 
     full_task = await task_repository.get_with_details(db, task.task_id)
@@ -241,14 +244,18 @@ async def update_task(
     current_user: User = Depends(get_current_user),
 ):
     await _ensure_group_access(db, group_id, current_user)
-    task = await _get_task_for_group(db, task_id, group_id)
+    await _get_task_for_group(db, task_id, group_id)
 
     # 1. Base Task Fields Update
     updates = {}
-    if title is not None: updates["title"] = title
-    if description is not None: updates["description"] = description
-    if status is not None: updates["status"] = status.value
-    if priority is not None: updates["priority"] = priority.value
+    if title is not None:
+        updates["title"] = title
+    if description is not None:
+        updates["description"] = description
+    if status is not None:
+        updates["status"] = status.value
+    if priority is not None:
+        updates["priority"] = priority.value
     if assignee_id is not None:
         await _ensure_member(db, group_id, assignee_id)
         updates["assignee_id"] = assignee_id
@@ -267,56 +274,68 @@ async def update_task(
     if keep_file_ids is not None:
         try:
             # Jo IDs list mein NAI hain, unhein delete kar dain
-            keep_ids = {UUID(fid.strip()) for fid in keep_file_ids.split(",") if fid.strip()}
-            
+            keep_ids = {
+                UUID(fid.strip()) for fid in keep_file_ids.split(",") if fid.strip()
+            }
+
             # Repository se current attachments mangwaein
             current_attachments = await task_repository.list_attachments(db, task_id)
             for att in current_attachments:
                 if att.attachment_id not in keep_ids:
                     # Supabase se file urayein
                     await delete_file_from_supabase(
-    client=supabase, 
-    bucket="task_attachments", 
-    storage_key=att.storage_key
-)
+                        client=supabase,
+                        bucket="task_attachments",
+                        storage_key=att.storage_key,
+                    )
                     # DB se record urayein
                     await db.delete(att)
         except ValueError:
-            pass # Invalid ID format ko ignore karein
+            pass  # Invalid ID format ko ignore karein
 
     # 3. New Files Upload (Post wali logic)
     if files:
         for upload in files:
-            if not upload.filename: continue
+            if not upload.filename:
+                continue
             safe_name = _safe_filename(upload.filename)
             # Wahi storage path jo POST mein tha
             storage_key = f"tasks/{group_id}/{task_id}/{safe_name}"
-            
+
             size_bytes = await upload_file_to_supabase(
-                supabase, bucket="task_attachments", storage_key=storage_key, upload=upload
-            )
-            
-            from app.models.task_attachment import TaskAttachment
-            db.add(TaskAttachment(
-                task_id=task_id, 
-                file_name=upload.filename, 
+                supabase,
+                bucket="task_attachments",
                 storage_key=storage_key,
-                mime_type=upload.content_type, 
-                size_bytes=size_bytes
-            ))
+                upload=upload,
+            )
+
+            from app.models.task_attachment import TaskAttachment
+
+            db.add(
+                TaskAttachment(
+                    task_id=task_id,
+                    file_name=upload.filename,
+                    storage_key=storage_key,
+                    mime_type=upload.content_type,
+                    size_bytes=size_bytes,
+                )
+            )
     if links:
         from app.models.task_attachment import TaskAttachment
+
         for link in [l.strip() for l in links.split(",") if l.strip()]:
-            db.add(TaskAttachment(
-                task_id=task_id,
-                file_name="External Link",
-                storage_key=link,
-                mime_type="application/url",
-                size_bytes=0
-            ))
+            db.add(
+                TaskAttachment(
+                    task_id=task_id,
+                    file_name="External Link",
+                    storage_key=link,
+                    mime_type="application/url",
+                    size_bytes=0,
+                )
+            )
 
     await db.commit()
-    
+
     refreshed = await _get_task_for_group(db, task_id, group_id)
     return _task_to_response(refreshed)
 
@@ -329,7 +348,7 @@ async def delete_task(
     current_user: User = Depends(get_current_user),
 ):
     await _ensure_group_access(db, group_id, current_user)
-    
+
     # Task fetch karein details ke saath (attachments load karne ke liye)
     task = await task_repository.get_with_details(db, task_id)
     if not task or task.group_id != group_id:
@@ -341,16 +360,16 @@ async def delete_task(
         if attachment.storage_key and not attachment.storage_key.startswith("http"):
             await delete_file_from_supabase(
                 client=supabase,
-                bucket="task_attachments", # Ya aapka TASK_ATTACHMENTS_BUCKET variable
+                bucket="task_attachments",  # Ya aapka TASK_ATTACHMENTS_BUCKET variable
                 storage_key=attachment.storage_key,
             )
 
-    # 2. Database se task delete karein 
+    # 2. Database se task delete karein
     # (Aapka repository automatic attachments bhi delete kar dega agar cascade delete on hai)
     deleted = await task_repository.delete_task(db, task_id)
     if not deleted:
         raise HTTPException(status_code=500, detail="Unable to delete task")
-    
+
     await db.commit()
     return None
 
@@ -365,17 +384,23 @@ async def list_sprints(
 
     # Summary view ke liye tasks load karne ki zaroorat nahi hai
     sprints = await sprint_repository.list_by_group(db, group_id, include_tasks=False)
-    
+
     # Milestone IDs nikal kar unke aggregated stats layein
     milestone_ids = [s.milestone_id for s in sprints]
     stats = await sprint_repository.task_counts(db, milestone_ids)
-    
+
     # Payload banate waqt har sprint ko uske specific stats bhejain
-    payload = [_sprint_to_response(sprint, stats.get(sprint.milestone_id)) for sprint in sprints]
-    
+    payload = [
+        _sprint_to_response(sprint, stats.get(sprint.milestone_id))
+        for sprint in sprints
+    ]
+
     return SprintListResponse(sprints=payload, total=len(payload))
 
-@router.post("/sprints", response_model=SprintResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/sprints", response_model=SprintResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_sprint(
     group_id: UUID,
     payload: SprintCreate,
@@ -383,15 +408,13 @@ async def create_sprint(
     current_user: User = Depends(get_current_user),
 ):
     await _ensure_group_access(db, group_id, current_user)
-    
+
     # 1. Improved Date Validation
     from datetime import date
+
     today = date.today()
     if payload.start_date < today:
-        raise HTTPException(
-            status_code=400, 
-            detail="Sprint cannot start in the past"
-        )
+        raise HTTPException(status_code=400, detail="Sprint cannot start in the past")
     _validate_dates(payload.start_date, payload.end_date)
 
     # 2. Default Status 'planned'
@@ -403,7 +426,7 @@ async def create_sprint(
         sprint_goal=payload.sprint_goal,
         start_date=payload.start_date,
         end_date=payload.end_date,
-        status=SprintStatusEnum.Planned.value 
+        status=SprintStatusEnum.Planned.value,
     )
     await db.commit()
 
@@ -420,23 +443,26 @@ async def get_sprint(
     current_user: User = Depends(get_current_user),
 ):
     await _ensure_group_access(db, group_id, current_user)
-    
+
     # Eager load tasks (with assignee and attachments) using repository helper
     sprint = await sprint_repository.get_with_tasks(db, sprint_id)
-    
+
     if not sprint or sprint.group_id != group_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found"
+        )
 
     # 1. Base response banayein (Status counts calculate honge)
     resp = _sprint_to_response(sprint, None)
-    
+
     # 2. Tasks ki detailed mapping karein (Boards ke liye)
     if hasattr(sprint, "tasks") and sprint.tasks:
         resp.tasks = [_task_to_response(task) for task in sprint.tasks]
     else:
         resp.tasks = []
-        
+
     return resp
+
 
 @router.patch("/sprints/{sprint_id}", response_model=SprintResponse)
 async def update_sprint(
@@ -452,7 +478,9 @@ async def update_sprint(
         raise HTTPException(status_code=404, detail="Not found")
 
     # 1. model_dump use karein aur explicitly None values ko filter out karein
-    updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    updates = {
+        k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None
+    }
 
     if not updates:
         # Agar kuch update karne ko nahi hai toh purana sprint return kar dain
@@ -474,7 +502,7 @@ async def update_sprint(
             )
 
     # 4. DB Update
-    updated = await sprint_repository.update_sprint(db, sprint_id, updates)
+    await sprint_repository.update_sprint(db, sprint_id, updates)
     await db.commit()
 
     # Refreshed data load karein detail view ke liye
@@ -482,8 +510,9 @@ async def update_sprint(
     resp = _sprint_to_response(refreshed, None)
     if hasattr(refreshed, "tasks") and refreshed.tasks:
         resp.tasks = [_task_to_response(t) for t in refreshed.tasks]
-    
+
     return resp
+
 
 @router.delete("/sprints/{sprint_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sprint(
@@ -493,7 +522,7 @@ async def delete_sprint(
     current_user: User = Depends(get_current_user),
 ):
     await _ensure_group_access(db, group_id, current_user)
-    
+
     # 1. Sprint fetch karein
     sprint = await sprint_repository.get_with_tasks(db, sprint_id)
     if not sprint or sprint.group_id != group_id:
@@ -501,25 +530,24 @@ async def delete_sprint(
 
     # 2. Tasks ko pehle hi Backlog mein move karein (Explicit Commit)
     if hasattr(sprint, "tasks") and sprint.tasks:
-        from app.models.task import Task
         from sqlalchemy import update
-        
+
+        from app.models.task import Task
+
         # Tasks ko un-link karein
         await db.execute(
-            update(Task)
-            .where(Task.milestone_id == sprint_id)
-            .values(milestone_id=None)
+            update(Task).where(Task.milestone_id == sprint_id).values(milestone_id=None)
         )
         # Yahan commit karna zaroori hai taake tasks ka relation khatam ho jaye
-        await db.commit() 
+        await db.commit()
         # Session refresh karein taake delete safe ho
-        await db.begin() 
+        await db.begin()
 
     # 3. Ab Sprint delete karein (Ab tasks delete nahi honge kyunke unka link toot chuka hai)
     deleted = await sprint_repository.delete_sprint(db, sprint_id)
     if not deleted:
         raise HTTPException(status_code=500, detail="Unable to delete sprint")
-    
+
     await db.commit()
     return None
 
@@ -531,17 +559,24 @@ async def _ensure_group_access(
 ):
     group = await group_repository.get_by_id(db, group_id)
     if not group:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+        )
 
     if current_user.role == RoleEnum.admin:
         return group
 
     if current_user.role == RoleEnum.supervisor:
         cosupervisors = group.cosupervisor_ids or []
-        if group.supervisor_id == current_user.user_id or current_user.user_id in cosupervisors:
+        if (
+            group.supervisor_id == current_user.user_id
+            or current_user.user_id in cosupervisors
+        ):
             return group
 
-    is_member = await group_repository.check_membership(db, group_id, current_user.user_id)
+    is_member = await group_repository.check_membership(
+        db, group_id, current_user.user_id
+    )
     if not is_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -568,9 +603,7 @@ async def _ensure_sprint(db: AsyncSession, milestone_id: UUID, group_id: UUID) -
         )
 
 
-async def _get_task_for_group(
-    db: AsyncSession, task_id: UUID, group_id: UUID
-) -> Task:
+async def _get_task_for_group(db: AsyncSession, task_id: UUID, group_id: UUID) -> Task:
     task = await task_repository.get_with_details(db, task_id)
     if not task or task.group_id != group_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -581,17 +614,19 @@ def _task_to_response(task: Task) -> TaskResponse:
     assignee = _member_summary(task)
     # Supabase Public Storage ka base path
     BASE_URL = f"{settings.supabase_url}/storage/v1/object/public/task_attachment/"
-    
+
     attachments_payload = []
     for att in task.attachments:
         # 1. Pydantic model se data nikal kar dictionary banayein
-        att_data = TaskAttachmentResponse.model_validate(att, from_attributes=True).model_dump()
-        
-        # 2. Logic: Agar storage_key link hai (starts with http) toh wahi rakho, 
+        att_data = TaskAttachmentResponse.model_validate(
+            att, from_attributes=True
+        ).model_dump()
+
+        # 2. Logic: Agar storage_key link hai (starts with http) toh wahi rakho,
         # warna BASE_URL ke sath joro
         is_link = str(att.storage_key).startswith(("http://", "https://"))
         att_data["url"] = att.storage_key if is_link else f"{BASE_URL}{att.storage_key}"
-        
+
         # 3. Wapas model mein convert karke list mein daal dein
         attachments_payload.append(TaskAttachmentResponse(**att_data))
 
@@ -607,8 +642,9 @@ def _task_to_response(task: Task) -> TaskResponse:
         due_date=task.due_date,
         created_at=task.created_at,
         updated_at=task.updated_at,
-        attachments=attachments_payload, # <-- Updated list yahan use hogi
+        attachments=attachments_payload,  # <-- Updated list yahan use hogi
     )
+
 
 def _member_summary(task: Task) -> Optional[MemberSummary]:
     student = task.assignee
@@ -628,19 +664,17 @@ def _member_summary(task: Task) -> Optional[MemberSummary]:
     )
 
 
-def _sprint_to_response(
-    sprint, stats: Optional[Dict[str, int]]
-) -> SprintResponse:
+def _sprint_to_response(sprint, stats: Optional[Dict[str, int]]) -> SprintResponse:
     # 1. Stats se counts nikalain (Repository se filtered data)
     status_counts = stats or {}
-    
+
     # Check karein ke total tasks kitne hain
     total_tasks = sum(status_counts.values())
-    
+
     # Sirf 'done' status waale tasks ka count
     completed = status_counts.get(TaskStatusEnum.Done.value, 0)
 
-    # Note: Hum yahan 'sprint.tasks' ko touch nahi kar rahe taake 
+    # Note: Hum yahan 'sprint.tasks' ko touch nahi kar rahe taake
     # Lazy Loading wala error (MissingGreenlet) na aaye.
     return SprintResponse(
         milestone_id=sprint.milestone_id,

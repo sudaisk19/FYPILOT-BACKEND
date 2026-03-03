@@ -339,7 +339,7 @@ async def get_admin_group_profile(
     return AdminGroupProfileResponse(
         group={
             "group_id": str(group.group_id),
-            "name": group.name,
+            "project_name": project_info.name if project_info else "Unknown Project",
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle.value if group.fyp_cycle else None,
             "cohort_year": group.cohort_year,
@@ -384,7 +384,11 @@ async def assign_supervisor_to_group(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # 1. Validate group exists
-    group_result = await db.execute(select(Group).where(Group.group_id == group_id))
+    group_result = await db.execute(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(Group.group_id == group_id)
+    )
     group = group_result.scalars().first()
 
     if not group:
@@ -417,7 +421,7 @@ async def assign_supervisor_to_group(
         return AssignSupervisorResponse(
             message=f"{new_supervisor_user.full_name} is already the supervisor",
             group_id=str(group_id),
-            group_name=group.name,
+            project_name=group.project.name if group.project else "Unknown Project",
             supervisor_id=str(body.supervisor_id),
             supervisor_name=new_supervisor_user.full_name,
             role="supervisor",
@@ -470,7 +474,7 @@ async def assign_supervisor_to_group(
     return AssignSupervisorResponse(
         message=f"Successfully {action} {new_supervisor_user.full_name} as supervisor",
         group_id=str(group_id),
-        group_name=group.name,
+        project_name=group.project.name if group.project else "Unknown Project",
         supervisor_id=str(body.supervisor_id),
         supervisor_name=new_supervisor_user.full_name,
         role="supervisor",
@@ -499,7 +503,11 @@ async def assign_cosupervisor_to_group(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # 1. Validate group exists
-    group_result = await db.execute(select(Group).where(Group.group_id == group_id))
+    group_result = await db.execute(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(Group.group_id == group_id)
+    )
     group = group_result.scalars().first()
 
     if not group:
@@ -533,7 +541,7 @@ async def assign_cosupervisor_to_group(
         return AssignSupervisorResponse(
             message=f"{new_supervisor_user.full_name} is already a co-supervisor",
             group_id=str(group_id),
-            group_name=group.name,
+            project_name=group.project.name if group.project else "Unknown Project",
             supervisor_id=str(body.supervisor_id),
             supervisor_name=new_supervisor_user.full_name,
             role="cosupervisor",
@@ -553,7 +561,7 @@ async def assign_cosupervisor_to_group(
     return AssignSupervisorResponse(
         message=f"Successfully added {new_supervisor_user.full_name} as co-supervisor",
         group_id=str(group_id),
-        group_name=group.name,
+        project_name=group.project.name if group.project else "Unknown Project",
         supervisor_id=str(body.supervisor_id),
         supervisor_name=new_supervisor_user.full_name,
         role="cosupervisor",

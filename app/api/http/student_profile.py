@@ -159,7 +159,7 @@ async def get_student_profile(
         # Build group info
         group_info = GroupInfo(
             group_id=group.group_id,
-            name=group.name,
+            project_name=(group.project.name if group.project else "Unknown Project"),
             fyp_stage=(
                 group.fyp_stage.value
                 if hasattr(group.fyp_stage, "value")
@@ -174,11 +174,6 @@ async def get_student_profile(
             max_members=group.max_members,
             supervisor_name=supervisor_name,
             cosupervisor_name=cosupervisor_name,
-            project_name=(
-                group.project[0].name
-                if group.project and len(group.project) > 0
-                else None
-            ),
             members=members,
         )
 

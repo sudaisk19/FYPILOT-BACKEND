@@ -22,7 +22,7 @@ class SupervisorAnnouncementFileResponse(BaseModel):
 
 class SupervisorAnnouncementTargetResponse(BaseModel):
     group_id: Optional[UUID] = None
-    group_name: Optional[str] = None
+    project_name: Optional[str] = None
 
     class Config:
         from_attributes = True
