@@ -96,6 +96,28 @@ class Supervisor(Base):
         default=0,  # Start with 0 students
     )
 
+    # Role flags (set to True during bulk registration)
+    is_supervisor = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+
+    is_jury = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+
     # Capacity Constraints
     __table_args__ = (
         CheckConstraint("capacity_max >= 0", name="check_capacity_max_positive"),

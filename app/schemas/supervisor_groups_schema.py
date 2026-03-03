@@ -19,7 +19,7 @@ class SupervisorGroupInfo(BaseModel):
     """Basic group metadata shown on a directory card."""
 
     group_id: str
-    name: str
+    project_name: str
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
@@ -66,7 +66,7 @@ class GroupProfileGroupInfo(BaseModel):
     """Group metadata for the detailed profile view."""
 
     group_id: str
-    name: str
+    project_name: str
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
@@ -143,7 +143,7 @@ class SupervisorGroupDropdownItem(BaseModel):
     """Simple group item for dropdowns."""
 
     group_id: str
-    name: str
+    project_name: str
 
 
 class SupervisorGroupDropdownResponse(BaseModel):

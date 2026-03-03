@@ -1,7 +1,7 @@
 # app/repositories/milestone_repository.py
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -10,10 +10,8 @@ from sqlalchemy.orm import joinedload
 
 from app.models.group import FYPCycleEnum, Group
 from app.models.milestone import AdminMilestone
-from app.models.project import Project
 from app.models.supervisor import Supervisor
 from app.models.supervisor_evaluation import SupervisorEvaluation
-from app.models.user import User
 from app.schemas.admin_milestone_schema import (
     AdminEvaluationResponse,
     AdminMilestoneCreate,
@@ -76,7 +74,9 @@ async def list_milestones(
     fyp_cycle: Optional[FYPCycleEnum] = None,
 ) -> List[AdminMilestone]:
     """Return all milestones, optionally filtered by cycle."""
-    query = select(AdminMilestone).order_by(AdminMilestone.due_date, AdminMilestone.created_at)
+    query = select(AdminMilestone).order_by(
+        AdminMilestone.due_date, AdminMilestone.created_at
+    )
     if fyp_cycle:
         query = query.where(AdminMilestone.fyp_cycle == fyp_cycle)
 
@@ -130,7 +130,9 @@ async def update_milestone(
         return None
 
     update_data = payload.model_dump(exclude_unset=True)
-    is_active_change = update_data.get("is_active") if "is_active" in update_data else None
+    is_active_change = (
+        update_data.get("is_active") if "is_active" in update_data else None
+    )
     for field, value in update_data.items():
         setattr(milestone, field, value)
 

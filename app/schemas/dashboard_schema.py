@@ -20,7 +20,7 @@ class GroupInfo(BaseModel):
     """Group information for dashboard"""
 
     group_id: UUID
-    group_name: str
+    project_name: str
     project_title: str
     status: str
     created_at: str

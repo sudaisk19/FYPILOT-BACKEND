@@ -1,8 +1,9 @@
 # app/models/milestone.py
 import uuid
-from sqlalchemy import Boolean, Column, Date, Numeric, Text
+
+from sqlalchemy import TIMESTAMP, Boolean, Column, Date
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import TIMESTAMP, ForeignKey
+from sqlalchemy import Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func

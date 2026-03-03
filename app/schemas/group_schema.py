@@ -8,12 +8,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class CreateGroupRequest(BaseModel):
-    name: str
+    project_name: str
 
 
 class GroupResponse(BaseModel):
     group_id: UUID
-    name: str
+    project_name: str
     project_id: Optional[UUID] = None
 
 
@@ -116,7 +116,6 @@ class GroupProfileResponse(BaseModel):
 
 # PATCH Request Schemas
 class GroupUpdateData(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
     fyp_cycle: Optional[str] = Field(None, pattern="^(fyp1|fyp2)$")
     cohort_year: Optional[int] = Field(None, ge=2020, le=2030)
     supervisor_id: Optional[UUID] = None

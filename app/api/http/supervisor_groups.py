@@ -71,7 +71,7 @@ def _normalize_tech_stack(raw) -> List[str]:
     summary="Get supervisor's assigned groups",
     description=(
         "Returns all groups assigned to the logged-in supervisor as directory cards. "
-        "Supports optional search across group name, project name, tech stack, and member names."
+        "Supports optional search across project name, tech stack, and member names."
     ),
 )
 async def get_supervisor_groups(
@@ -81,7 +81,7 @@ async def get_supervisor_groups(
         None,
         min_length=1,
         max_length=100,
-        description="Search across group name, project name, tech stack, and member names",
+        description="Search across project name, tech stack, and member names",
     ),
 ):
     """
@@ -145,7 +145,7 @@ async def get_supervisor_groups(
     for group in groups:
         group_info = SupervisorGroupInfo(
             group_id=str(group.group_id),
-            name=group.name,
+            project_name=group.project.name if group.project else "Unknown Project",
             fyp_stage=group.fyp_stage,
             fyp_cycle=group.fyp_cycle.value if group.fyp_cycle else None,
             cohort_year=group.cohort_year,
@@ -214,14 +214,15 @@ async def get_supervisor_groups_dropdown(
     # 2. Query groups
     # We include groups where user is primary supervisor OR is in co-supervisors list
     query = (
-        select(Group.group_id, Group.name)
+        select(Group.group_id, Project.name.label("name"))
+        .outerjoin(Project, Project.group_id == Group.group_id)
         .where(
             or_(
                 Group.supervisor_id == current_user.user_id,
                 Group.cosupervisor_ids.contains([current_user.user_id]),
             )
         )
-        .order_by(Group.name.asc())
+        .order_by(Project.name.asc())
     )
 
     result = await db.execute(query)
@@ -231,7 +232,7 @@ async def get_supervisor_groups_dropdown(
     items = [
         SupervisorGroupDropdownItem(
             group_id=str(row.group_id),
-            name=row.name,
+            project_name=row.name or "Unknown Project",
         )
         for row in rows
     ]
@@ -240,7 +241,7 @@ async def get_supervisor_groups_dropdown(
     items.append(
         SupervisorGroupDropdownItem(
             group_id="all",
-            name="All Groups",
+            project_name="All Groups",
         )
     )
 
@@ -324,7 +325,7 @@ async def get_supervisor_group_profile(
     # 4. Build group info
     group_info = GroupProfileGroupInfo(
         group_id=str(group.group_id),
-        name=group.name,
+        project_name=group.project.name if group.project else "Unknown Project",
         fyp_stage=group.fyp_stage,
         fyp_cycle=group.fyp_cycle.value if group.fyp_cycle else None,
         cohort_year=group.cohort_year,

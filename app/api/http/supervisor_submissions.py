@@ -775,7 +775,7 @@ async def list_supervisor_submission_tasks(
 )
 async def get_submission_responses(
     announcement_id: UUID,
-    search: Optional[str] = Query(None, description="Search by group name or FYP ID"),
+    search: Optional[str] = Query(None, description="Search by project name or FYP ID"),
     status_filter: Optional[str] = Query(
         None, description="Filter by status: submitted, missing, graded, returned"
     ),
@@ -863,7 +863,7 @@ async def get_submission_responses(
             st_val = "Missing"
 
         fyp_id = group.project.fyp_id or f"P-{str(group.project.project_id)[:8]}"
-        project_name = group.name or group.project.name
+        project_name = group.project.name if group.project else "Unknown Project"
 
         group_submissions.append(
             GroupSubmissionStatus(

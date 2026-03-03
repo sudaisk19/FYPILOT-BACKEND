@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -22,7 +22,9 @@ class AdminMilestoneBase(BaseModel):
         default=FYPCycleEnum.fyp1,
         description="Cycle (fyp1 / fyp2) this milestone applies to",
     )
-    is_active: bool = Field(False, description="Whether the milestone is active/visible")
+    is_active: bool = Field(
+        False, description="Whether the milestone is active/visible"
+    )
     marks_visible_to_students: bool = Field(
         False,
         description="If true, students can see marks released for this milestone",
@@ -91,7 +93,10 @@ class StudentMilestoneResponse(AdminMilestoneBase):
 
     milestone_id: UUID
     marks_visible_to_students: bool
-    marks: Optional[float] = Field(None, description="Student's group marks, shown only when marks_visible_to_students is true")
+    marks: Optional[float] = Field(
+        None,
+        description="Student's group marks, shown only when marks_visible_to_students is true",
+    )
     created_at: datetime
     updated_at: datetime
     is_active: Optional[bool] = Field(None, exclude=True)

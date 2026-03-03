@@ -7,7 +7,7 @@ Handles the core business logic for bulk user registration:
 - File parsing (CSV/Excel)
 - Password generation and encryption
 - User creation with profiles
-- Batch processing for cron jobs
+- Inline background processing (replaces old cron-based approach)
 """
 
 import csv
@@ -45,8 +45,14 @@ TEMP_PASSWORD_TTL_HOURS = settings.temp_password_ttl_hours
 APP_ENCRYPTION_KEY = settings.app_encryption_key
 
 # Required columns for each role
-STUDENT_REQUIRED_COLUMNS = {"full_name", "email", "roll_number"}
-SUPERVISOR_REQUIRED_COLUMNS = {"full_name", "email"}
+STUDENT_REQUIRED_COLUMNS = {
+    "full_name",
+    "email",
+    "roll_number",
+    "fyp_start_semester",
+    "fyp_start_year",
+}
+SUPERVISOR_REQUIRED_COLUMNS = {"full_name", "email", "department", "designation"}
 
 # Email validation regex
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -236,6 +242,35 @@ def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
         if not roll_number:
             return "roll_number is required for students"
 
+        # Validate fyp_start_semester
+        semester = row.get("fyp_start_semester", "").strip()
+        if not semester:
+            return "fyp_start_semester is required for students"
+        if semester.lower() not in ("fall", "spring", "summer"):
+            return f"Invalid fyp_start_semester: '{semester}'. Must be Fall, Spring, or Summer"
+
+        # Validate fyp_start_year
+        year_str = row.get("fyp_start_year", "").strip()
+        if not year_str:
+            return "fyp_start_year is required for students"
+        try:
+            year_val = int(float(year_str))  # handle "2026.0" from Excel
+            if year_val < 2000 or year_val > 2100:
+                return (
+                    f"Invalid fyp_start_year: {year_val}. Must be between 2000 and 2100"
+                )
+        except (ValueError, TypeError):
+            return f"Invalid fyp_start_year: '{year_str}'. Must be a valid year number"
+
+    # Validate department and designation for supervisors
+    if target_role == TargetRoleEnum.supervisor:
+        department = row.get("department", "").strip()
+        if not department:
+            return "department is required for supervisors"
+        designation = row.get("designation", "").strip()
+        if not designation:
+            return "designation is required for supervisors"
+
     return None
 
 
@@ -311,101 +346,6 @@ async def create_bulk_import_job(
     return job, None
 
 
-async def process_pending_items(db: AsyncSession, batch_size: int = BATCH_SIZE) -> dict:
-    """
-    Process a batch of pending bulk import items.
-
-    Uses SELECT FOR UPDATE SKIP LOCKED to prevent concurrent processing.
-
-    Returns:
-        Dict with processing statistics
-    """
-    stats = {
-        "processed": 0,
-        "success": 0,
-        "failed": 0,
-        "skipped": 0,
-        "jobs_completed": [],
-    }
-
-    # Get pending items with row-level locking
-    # Join with job to get target_role
-    query = (
-        select(BulkImportItem)
-        .join(BulkImportJob)
-        .where(
-            BulkImportItem.status == BulkItemStatus.pending,
-            BulkImportJob.status.in_([BulkJobStatus.pending, BulkJobStatus.processing]),
-        )
-        .order_by(BulkImportItem.job_id, BulkImportItem.row_number)
-        .limit(batch_size)
-        .with_for_update(skip_locked=True)
-    )
-
-    result = await db.execute(query)
-    items = result.scalars().all()
-
-    if not items:
-        logger.info("No pending items to process")
-        return stats
-
-    # Update jobs to processing status
-    job_ids = set(item.job_id for item in items)
-    await db.execute(
-        update(BulkImportJob)
-        .where(
-            BulkImportJob.id.in_(job_ids), BulkImportJob.status == BulkJobStatus.pending
-        )
-        .values(status=BulkJobStatus.processing)
-    )
-
-    # Load jobs for target_role lookup
-    jobs_query = select(BulkImportJob).where(BulkImportJob.id.in_(job_ids))
-    jobs_result = await db.execute(jobs_query)
-    jobs_map = {job.id: job for job in jobs_result.scalars().all()}
-
-    # Process each item
-    for item in items:
-        job = jobs_map.get(item.job_id)
-        if not job:
-            continue
-
-        try:
-            result = await process_single_item(db, item, job.target_role)
-            stats[result] += 1
-            stats["processed"] += 1
-        except Exception as e:
-            logger.error(f"Error processing item {item.id}: {e}")
-            item.status = BulkItemStatus.failed
-            item.error = str(e)[:500]
-            stats["failed"] += 1
-            stats["processed"] += 1
-
-    # Update job counters
-    for job_id in job_ids:
-        await update_job_counters(db, job_id, stats)
-
-    await db.commit()
-
-    # Check for completed jobs
-    for job_id in job_ids:
-        job_query = select(BulkImportJob).where(BulkImportJob.id == job_id)
-        job_result = await db.execute(job_query)
-        job = job_result.scalar_one_or_none()
-        if job and job.processed_rows >= job.total_rows:
-            job.status = BulkJobStatus.done
-            stats["jobs_completed"].append(job_id)
-
-    await db.commit()
-
-    logger.info(
-        f"Processed {stats['processed']} items: {stats['success']} success, "
-        f"{stats['failed']} failed, {stats['skipped']} skipped"
-    )
-
-    return stats
-
-
 async def process_single_item(
     db: AsyncSession,
     item: BulkImportItem,
@@ -470,6 +410,13 @@ async def process_single_item(
 
     # Create profile based on role
     if target_role == TargetRoleEnum.student:
+        # Parse fyp_start_year (handle "2026.0" from Excel)
+        fyp_year_raw = payload.get("fyp_start_year", "").strip()
+        try:
+            fyp_year = int(float(fyp_year_raw))
+        except (ValueError, TypeError):
+            fyp_year = None
+
         student = Student(
             user_id=user.user_id,
             roll_number=payload["roll_number"].strip(),
@@ -478,16 +425,23 @@ async def process_single_item(
             interests=[],
             skills=[],
             skills_levels={},
+            fyp_start_semester=payload.get("fyp_start_semester", "").strip().lower()
+            or None,
+            fyp_start_year=fyp_year,
+            is_active=True,
         )
         db.add(student)
     else:
         supervisor = Supervisor(
             user_id=user.user_id,
-            department=payload.get("department", "").strip() or None,
-            designation=payload.get("designation", "").strip() or None,
+            department=payload["department"].strip(),
+            designation=payload["designation"].strip(),
             project_type="research",  # Default
             capacity_max=8,
             capacity_filled=0,
+            is_supervisor=True,
+            is_jury=True,
+            is_active=True,
         )
         db.add(supervisor)
 
@@ -503,9 +457,8 @@ async def process_single_item(
     return "success"
 
 
-async def update_job_counters(db: AsyncSession, job_id: UUID, stats: dict) -> None:
-    """Update job counters based on processed items."""
-    # Get current counts from items
+async def update_job_counters(db: AsyncSession, job_id: UUID) -> None:
+    """Update job counters by re-counting item statuses from the DB."""
     from sqlalchemy import func
 
     counts_query = select(
@@ -536,6 +489,359 @@ async def update_job_counters(db: AsyncSession, job_id: UUID, stats: dict) -> No
             processed_rows=counts.processed,
         )
     )
+
+
+# ─── NEW: Inline Background Processing ─────────────────────────
+
+
+async def process_job_inline(job_id: UUID) -> None:
+    """
+    Process ALL pending items for a specific job in-process.
+
+    This is called as a FastAPI BackgroundTask after the upload endpoint
+    returns 201 to the admin. It creates its own DB session since
+    background tasks run outside the request lifecycle.
+
+    Handles power failure / restart gracefully:
+    - Items that were not processed remain in "pending" status
+    - The job stays in "processing" status
+    - Admin can call the retry endpoint to resume
+    """
+    from app.db import AsyncSessionLocal
+
+    logger.info(f"Background processing started for job {job_id}")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # Load the job
+            job_query = select(BulkImportJob).where(BulkImportJob.id == job_id)
+            job_result = await db.execute(job_query)
+            job = job_result.scalar_one_or_none()
+
+            if not job:
+                logger.error(f"Job {job_id} not found for background processing")
+                return
+
+            if job.status not in (BulkJobStatus.pending, BulkJobStatus.processing):
+                logger.info(f"Job {job_id} already in status {job.status}, skipping")
+                return
+
+            # Mark job as processing
+            job.status = BulkJobStatus.processing
+            await db.commit()
+
+            # Load all pending items for this job
+            items_query = (
+                select(BulkImportItem)
+                .where(
+                    BulkImportItem.job_id == job_id,
+                    BulkImportItem.status == BulkItemStatus.pending,
+                )
+                .order_by(BulkImportItem.row_number)
+            )
+            items_result = await db.execute(items_query)
+            items = items_result.scalars().all()
+
+            if not items:
+                logger.info(f"No pending items for job {job_id}")
+                job.status = BulkJobStatus.done
+                await update_job_counters(db, job_id)
+                await db.commit()
+                return
+
+            # Process each item
+            stats = {"processed": 0, "success": 0, "failed": 0, "skipped": 0}
+
+            for item in items:
+                try:
+                    result = await process_single_item(db, item, job.target_role)
+                    stats[result] += 1
+                    stats["processed"] += 1
+                except Exception as e:
+                    logger.error(
+                        f"Error processing item {item.id} (row {item.row_number}): {e}"
+                    )
+                    item.status = BulkItemStatus.failed
+                    item.error = str(e)[:500]
+                    stats["failed"] += 1
+                    stats["processed"] += 1
+
+                # Commit after each item so progress is saved
+                # (if power fails, already-processed items don't reprocess)
+                await db.commit()
+
+            # Update final job counters and mark as done
+            await update_job_counters(db, job_id)
+
+            # Reload job to get updated counters
+            await db.refresh(job)
+            job.status = BulkJobStatus.done
+            await db.commit()
+
+            logger.info(
+                f"Job {job_id} completed: {stats['success']} success, "
+                f"{stats['failed']} failed, {stats['skipped']} skipped "
+                f"out of {stats['processed']} processed"
+            )
+
+        except Exception as e:
+            logger.error(f"Fatal error processing job {job_id}: {e}")
+            try:
+                # Try to mark job as failed
+                await db.rollback()
+                job_query = select(BulkImportJob).where(BulkImportJob.id == job_id)
+                job_result = await db.execute(job_query)
+                job = job_result.scalar_one_or_none()
+                if job:
+                    job.status = BulkJobStatus.failed
+                    await update_job_counters(db, job_id)
+                    await db.commit()
+            except Exception as inner_e:
+                logger.error(f"Failed to mark job {job_id} as failed: {inner_e}")
+
+
+# ─── Retry / Resume Processing ─────────────────────────────────
+
+
+async def retry_failed_items(db: AsyncSession, job_id: UUID) -> int:
+    """
+    Reset failed items back to pending so they can be reprocessed.
+
+    Returns:
+        Number of items reset to pending
+    """
+    # Reset failed items to pending
+    result = await db.execute(
+        update(BulkImportItem)
+        .where(
+            BulkImportItem.job_id == job_id,
+            BulkImportItem.status == BulkItemStatus.failed,
+        )
+        .values(status=BulkItemStatus.pending, error=None)
+    )
+    items_reset = result.rowcount
+
+    if items_reset > 0:
+        # Reset job status so it can be reprocessed
+        await db.execute(
+            update(BulkImportJob)
+            .where(BulkImportJob.id == job_id)
+            .values(status=BulkJobStatus.pending)
+        )
+        await update_job_counters(db, job_id)
+
+    await db.commit()
+    return items_reset
+
+
+async def resume_interrupted_job(db: AsyncSession, job_id: UUID) -> int:
+    """
+    Resume a job that was interrupted (e.g., power failure).
+    Only resets the job status — pending items are already pending.
+
+    Returns:
+        Number of pending items remaining
+    """
+    from sqlalchemy import func
+
+    # Count pending items
+    count_query = (
+        select(func.count())
+        .select_from(BulkImportItem)
+        .where(
+            BulkImportItem.job_id == job_id,
+            BulkImportItem.status == BulkItemStatus.pending,
+        )
+    )
+    result = await db.execute(count_query)
+    pending_count = result.scalar_one()
+
+    if pending_count > 0:
+        # Reset job status to pending so background processing picks it up
+        await db.execute(
+            update(BulkImportJob)
+            .where(BulkImportJob.id == job_id)
+            .values(status=BulkJobStatus.pending)
+        )
+        await db.commit()
+
+    return pending_count
+
+
+# ─── Process pending items (manual trigger / retry) ─────────────
+
+
+async def process_pending_items(db: AsyncSession, batch_size: int = BATCH_SIZE) -> dict:
+    """
+    Process a batch of pending bulk import items.
+
+    Uses SELECT FOR UPDATE SKIP LOCKED to prevent concurrent processing.
+    This is used by the manual retry/trigger endpoint.
+
+    Returns:
+        Dict with processing statistics
+    """
+    stats = {
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "skipped": 0,
+        "jobs_completed": [],
+    }
+
+    # Get pending items with row-level locking
+    query = (
+        select(BulkImportItem)
+        .join(BulkImportJob)
+        .where(
+            BulkImportItem.status == BulkItemStatus.pending,
+            BulkImportJob.status.in_([BulkJobStatus.pending, BulkJobStatus.processing]),
+        )
+        .order_by(BulkImportItem.job_id, BulkImportItem.row_number)
+        .limit(batch_size)
+        .with_for_update(skip_locked=True)
+    )
+
+    result = await db.execute(query)
+    items = result.scalars().all()
+
+    if not items:
+        logger.info("No pending items to process")
+        return stats
+
+    # Update jobs to processing status
+    job_ids = set(item.job_id for item in items)
+    await db.execute(
+        update(BulkImportJob)
+        .where(
+            BulkImportJob.id.in_(job_ids), BulkImportJob.status == BulkJobStatus.pending
+        )
+        .values(status=BulkJobStatus.processing)
+    )
+
+    # Load jobs for target_role lookup
+    jobs_query = select(BulkImportJob).where(BulkImportJob.id.in_(job_ids))
+    jobs_result = await db.execute(jobs_query)
+    jobs_map = {job.id: job for job in jobs_result.scalars().all()}
+
+    # Process each item
+    for item in items:
+        job = jobs_map.get(item.job_id)
+        if not job:
+            continue
+
+        try:
+            result = await process_single_item(db, item, job.target_role)
+            stats[result] += 1
+            stats["processed"] += 1
+        except Exception as e:
+            logger.error(f"Error processing item {item.id}: {e}")
+            item.status = BulkItemStatus.failed
+            item.error = str(e)[:500]
+            stats["failed"] += 1
+            stats["processed"] += 1
+
+    # Update job counters
+    for job_id in job_ids:
+        await update_job_counters(db, job_id)
+
+    await db.commit()
+
+    # Check for completed jobs
+    for job_id in job_ids:
+        job_query = select(BulkImportJob).where(BulkImportJob.id == job_id)
+        job_result = await db.execute(job_query)
+        job = job_result.scalar_one_or_none()
+        if job and job.processed_rows >= job.total_rows:
+            job.status = BulkJobStatus.done
+            stats["jobs_completed"].append(job_id)
+
+    await db.commit()
+
+    logger.info(
+        f"Processed {stats['processed']} items: {stats['success']} success, "
+        f"{stats['failed']} failed, {stats['skipped']} skipped"
+    )
+
+    return stats
+
+
+# ─── Job Report ─────────────────────────────────────────────────
+
+
+async def get_job_report(db: AsyncSession, job_id: UUID) -> Optional[dict]:
+    """
+    Generate a full report for a bulk import job.
+
+    Returns a dict with summary counts and detailed breakdowns of
+    created, skipped, failed, and pending items.
+    """
+    # Load job
+    job_query = select(BulkImportJob).where(BulkImportJob.id == job_id)
+    job_result = await db.execute(job_query)
+    job = job_result.scalar_one_or_none()
+
+    if not job:
+        return None
+
+    # Load all items
+    items_query = (
+        select(BulkImportItem)
+        .where(BulkImportItem.job_id == job_id)
+        .order_by(BulkImportItem.row_number)
+    )
+    items_result = await db.execute(items_query)
+    items = items_result.scalars().all()
+
+    # Categorize items
+    created_users = []
+    skipped_items = []
+    failed_items = []
+    pending_items = []
+
+    for item in items:
+        payload = item.payload
+        detail = {
+            "row_number": item.row_number,
+            "full_name": payload.get("full_name", ""),
+            "email": payload.get("email", ""),
+            "roll_number": payload.get("roll_number"),
+            "status": item.status.value if item.status else "unknown",
+            "error": item.error,
+            "user_id": item.created_user_id,
+        }
+
+        if item.status == BulkItemStatus.success:
+            created_users.append(detail)
+        elif item.status == BulkItemStatus.skipped:
+            skipped_items.append(detail)
+        elif item.status == BulkItemStatus.failed:
+            failed_items.append(detail)
+        elif item.status == BulkItemStatus.pending:
+            pending_items.append(detail)
+
+    # Calculate progress
+    progress_percent = (
+        (job.processed_rows / job.total_rows * 100) if job.total_rows > 0 else 0
+    )
+
+    return {
+        "job_id": job.id,
+        "target_role": job.target_role.value,
+        "status": job.status.value,
+        "total_rows": job.total_rows,
+        "success_count": len(created_users),
+        "failed_count": len(failed_items),
+        "skipped_count": len(skipped_items),
+        "pending_count": len(pending_items),
+        "progress_percent": round(progress_percent, 1),
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "created_users": created_users,
+        "skipped_items": skipped_items,
+        "failed_items": failed_items,
+        "pending_items": pending_items,
+    }
 
 
 async def get_job_results(
@@ -584,3 +890,131 @@ async def get_job_results(
         )
 
     return results
+
+
+# ─── Single User Registration ──────────────────────────────────
+
+
+async def create_single_student(
+    db: AsyncSession,
+    full_name: str,
+    email: str,
+    roll_number: str,
+    fyp_start_semester: str,
+    fyp_start_year: int,
+    department: str | None = None,
+) -> tuple[User, str]:
+    """
+    Create a single student user with profile.
+
+    Returns:
+        Tuple of (created_user, plaintext_temp_password)
+
+    Raises:
+        ValueError if email or roll_number already exists
+    """
+    email = email.strip().lower()
+
+    # Check email uniqueness
+    existing = await db.execute(select(User).where(User.email == email))
+    if existing.scalar_one_or_none():
+        raise ValueError(f"Email already registered: {email}")
+
+    # Check roll_number uniqueness
+    existing_roll = await db.execute(
+        select(Student).where(Student.roll_number == roll_number.strip())
+    )
+    if existing_roll.scalar_one_or_none():
+        raise ValueError(f"Roll number already exists: {roll_number}")
+
+    # Generate temp password
+    temp_password = generate_temp_password()
+    password_hash = hash_password(temp_password)
+
+    # Create user
+    user = User(
+        full_name=full_name.strip(),
+        email=email,
+        password_hash=password_hash,
+        role=RoleEnum.student,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Create student profile
+    student = Student(
+        user_id=user.user_id,
+        roll_number=roll_number.strip(),
+        department=department.strip() if department else None,
+        cgpa=None,
+        interests=[],
+        skills=[],
+        skills_levels={},
+        fyp_start_semester=fyp_start_semester.strip().lower(),
+        fyp_start_year=fyp_start_year,
+        is_active=True,
+    )
+    db.add(student)
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Created single student: {email} ({user.user_id})")
+    return user, temp_password
+
+
+async def create_single_supervisor(
+    db: AsyncSession,
+    full_name: str,
+    email: str,
+    department: str,
+    designation: str,
+) -> tuple[User, str]:
+    """
+    Create a single supervisor user with profile.
+    Auto-sets is_supervisor=True, is_jury=True, is_active=True.
+
+    Returns:
+        Tuple of (created_user, plaintext_temp_password)
+
+    Raises:
+        ValueError if email already exists
+    """
+    email = email.strip().lower()
+
+    # Check email uniqueness
+    existing = await db.execute(select(User).where(User.email == email))
+    if existing.scalar_one_or_none():
+        raise ValueError(f"Email already registered: {email}")
+
+    # Generate temp password
+    temp_password = generate_temp_password()
+    password_hash = hash_password(temp_password)
+
+    # Create user
+    user = User(
+        full_name=full_name.strip(),
+        email=email,
+        password_hash=password_hash,
+        role=RoleEnum.supervisor,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Create supervisor profile
+    supervisor = Supervisor(
+        user_id=user.user_id,
+        department=department.strip(),
+        designation=designation.strip(),
+        project_type="research",
+        capacity_max=8,
+        capacity_filled=0,
+        is_supervisor=True,
+        is_jury=True,
+        is_active=True,
+    )
+    db.add(supervisor)
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Created single supervisor: {email} ({user.user_id})")
+    return user, temp_password

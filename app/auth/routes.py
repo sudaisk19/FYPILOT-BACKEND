@@ -448,7 +448,7 @@ async def get_student_group_info(
 
         return GroupInfo(
             group_id=group.group_id,
-            group_name=group.name,
+            project_name=project.name if project else "Unknown Project",
             fyp_stage=(
                 group.fyp_stage.value
                 if hasattr(group.fyp_stage, "value")
@@ -517,7 +517,7 @@ async def get_supervisor_info(
             supervised_groups.append(
                 SupervisedGroup(
                     group_id=group.group_id,
-                    group_name=group.name,
+                    project_name=project.name if project else "Unknown Project",
                     fyp_stage=group.fyp_stage,
                     fyp_cycle=group.fyp_cycle,
                     member_count=member_count,

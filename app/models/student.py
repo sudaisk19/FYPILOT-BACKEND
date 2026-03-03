@@ -84,13 +84,14 @@ class Student(Base):
         default=dict,  # Initialize as empty dict
     )
 
+    # FYP batch registration fields
     fyp_start_semester = Column(
-        Text,
+        Text,  # e.g. "Fall", "Spring"
         nullable=True,
     )
 
     fyp_start_year = Column(
-        Integer,
+        Integer,  # e.g. 2026
         nullable=True,
     )
 
@@ -151,4 +152,10 @@ class Student(Base):
         viewonly=True,
         primaryjoin="Student.user_id == group_members.c.student_id",
         secondaryjoin="group_members.c.group_id == Group.group_id",
+    )
+
+    tasks = relationship(
+        "Task",
+        back_populates="assignee",
+        cascade="all, delete-orphan",
     )
