@@ -11,6 +11,7 @@ from app.auth.supabase_auth import get_current_user
 from app.core.config import settings
 from app.db import get_db
 from app.models.domain import Domain
+from app.models.faculty import Faculty
 from app.models.group import (
     FYPCycleEnum,
     FYPStageEnum,
@@ -27,7 +28,6 @@ from app.models.project import (
     project_type_value,
 )
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.group_schema import (
     CreateGroupRequest,
@@ -717,9 +717,9 @@ async def get_group_profile(
 
         if group.supervisor_id:
             supervisor_result = await db.execute(
-                select(Supervisor, User)
-                .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.supervisor_id)
+                select(Faculty, User)
+                .join(User, User.user_id == Faculty.user_id)
+                .where(Faculty.user_id == group.supervisor_id)
             )
             supervisor_data = supervisor_result.first()
             if supervisor_data:
@@ -735,9 +735,9 @@ async def get_group_profile(
 
         if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
             cosupervisors_result = await db.execute(
-                select(Supervisor, User)
-                .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id.in_(group.cosupervisor_ids))
+                select(Faculty, User)
+                .join(User, User.user_id == Faculty.user_id)
+                .where(Faculty.user_id.in_(group.cosupervisor_ids))
             )
             cosupervisors_data = cosupervisors_result.all()
 

@@ -10,13 +10,16 @@ from app.db import get_db
 from app.models.group import FYPCycleEnum, Group
 from app.models.user import RoleEnum, User
 from app.repositories import milestone_repository, supervisor_evaluation_repository
-from app.schemas.admin_milestone_schema import MilestoneListItem, SupervisorMilestoneResponse
+from app.schemas.admin_milestone_schema import (
+    MilestoneListItem,
+    SupervisorMilestoneResponse,
+)
 from app.schemas.supervisor_evaluation_schema import (
     SupervisorEvaluationPayload,
     SupervisorEvaluationResponse,
 )
 
-router = APIRouter(prefix="/milestones", tags=["supervisor-milestones"])
+router = APIRouter(prefix="/milestones")
 
 
 async def _get_managed_group(
@@ -44,7 +47,9 @@ async def _validate_milestone_and_group(
 ):
     milestone = await milestone_repository.get_milestone(db, milestone_id)
     if not milestone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found"
+        )
     if require_active and not milestone.is_active:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -77,8 +82,10 @@ async def list_supervisor_milestones(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     # When cycle is omitted, return both FYP1 and FYP2 milestones.
     return await milestone_repository.list_milestones(db, fyp_cycle=cycle)
@@ -90,8 +97,10 @@ async def get_supervisor_milestone(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     milestone = await milestone_repository.get_milestone(db, milestone_id)
     if not milestone:
@@ -110,8 +119,10 @@ async def get_group_evaluation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     await _validate_milestone_and_group(
         db=db,
@@ -127,7 +138,9 @@ async def get_group_evaluation(
         supervisor_id=current_user.user_id,
     )
     if not evaluation:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found"
+        )
     return evaluation
 
 
@@ -141,12 +154,16 @@ async def list_supervisor_evaluations_for_milestone(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     milestone = await milestone_repository.get_milestone(db, milestone_id)
     if not milestone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found"
+        )
 
     return await supervisor_evaluation_repository.list_evaluations_for_supervisor(
         db,
@@ -168,13 +185,16 @@ async def create_group_evaluation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     change_set = payload.model_dump(exclude_unset=True)
     if not change_set:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided for update"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields provided for update",
         )
 
     await _validate_milestone_and_group(
@@ -218,13 +238,16 @@ async def update_group_evaluation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.supervisor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only")
+    if current_user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+        )
 
     change_set = payload.model_dump(exclude_unset=True)
     if not change_set:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided for update"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields provided for update",
         )
 
     await _validate_milestone_and_group(
@@ -242,7 +265,9 @@ async def update_group_evaluation(
         supervisor_id=current_user.user_id,
     )
     if not evaluation:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found"
+        )
 
     return await supervisor_evaluation_repository.update_evaluation(
         db,

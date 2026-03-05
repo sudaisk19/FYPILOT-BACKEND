@@ -12,7 +12,7 @@ class InviteRole(str):
 
 
 class SendSupervisorInviteRequest(BaseModel):
-    supervisor_id: UUID = Field(..., description="Supervisor user_id")
+    faculty_id: UUID = Field(..., description="Faculty user_id")
     role: str = Field(
         ...,
         pattern="^(supervisor|cosupervisor)$",
@@ -43,7 +43,7 @@ class SentRequestItem(BaseModel):
     """Request sent by a group to a supervisor."""
 
     request_id: UUID
-    supervisor_id: UUID
+    faculty_id: UUID
     supervisor_name: str = Field(..., description="Supervisor's full name")
     requested_role: str = Field(..., description="supervisor or cosupervisor")
     status: str = Field(..., description="pending, accepted, declined, or cancelled")
@@ -115,7 +115,7 @@ class SupervisorRequestDetailResponse(BaseModel):
 
     request_id: UUID
     group_id: UUID
-    supervisor_id: UUID
+    faculty_id: UUID
     status: str
     message: str | None = None
     created_at: datetime

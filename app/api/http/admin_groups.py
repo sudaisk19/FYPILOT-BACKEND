@@ -11,10 +11,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.domain import Domain
+from app.models.faculty import Faculty
 from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.project import Project, ProjectDomain
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import RoleEnum, User
 from app.schemas.admin_groups_schema import (
     AdminGroupMemberInfo,
@@ -254,8 +254,8 @@ async def get_admin_group_profile(
             selectinload(Group.members)
             .joinedload(GroupMember.student)
             .joinedload(Student.user),
-            selectinload(Group.supervisor).joinedload(Supervisor.user),
-            selectinload(Group.co_supervisors).joinedload(Supervisor.user),
+            selectinload(Group.supervisor).joinedload(Faculty.user),
+            selectinload(Group.co_supervisors).joinedload(Faculty.user),
         )
         .where(Group.group_id == group_id)
     )
@@ -396,9 +396,9 @@ async def assign_supervisor_to_group(
 
     # 2. Validate new supervisor exists
     supervisor_result = await db.execute(
-        select(Supervisor, User)
-        .join(User, User.user_id == Supervisor.user_id)
-        .where(Supervisor.user_id == body.supervisor_id)
+        select(Faculty, User)
+        .join(User, User.user_id == Faculty.user_id)
+        .where(Faculty.user_id == body.supervisor_id)
     )
     row = supervisor_result.first()
 
@@ -434,9 +434,9 @@ async def assign_supervisor_to_group(
 
         # Decrement old supervisor's capacity
         await db.execute(
-            update(Supervisor)
-            .where(Supervisor.user_id == old_supervisor_id)
-            .values(capacity_filled=Supervisor.capacity_filled - 1)
+            update(Faculty)
+            .where(Faculty.user_id == old_supervisor_id)
+            .values(capacity_filled=Faculty.capacity_filled - 1)
         )
 
     # 6. Check new supervisor's capacity (safe access)
@@ -464,9 +464,9 @@ async def assign_supervisor_to_group(
 
     # Increment new supervisor's capacity (handle None case)
     await db.execute(
-        update(Supervisor)
-        .where(Supervisor.user_id == body.supervisor_id)
-        .values(capacity_filled=func.coalesce(Supervisor.capacity_filled, 0) + 1)
+        update(Faculty)
+        .where(Faculty.user_id == body.supervisor_id)
+        .values(capacity_filled=func.coalesce(Faculty.capacity_filled, 0) + 1)
     )
 
     await db.commit()
@@ -515,9 +515,9 @@ async def assign_cosupervisor_to_group(
 
     # 2. Validate supervisor exists
     supervisor_result = await db.execute(
-        select(Supervisor, User)
-        .join(User, User.user_id == Supervisor.user_id)
-        .where(Supervisor.user_id == body.supervisor_id)
+        select(Faculty, User)
+        .join(User, User.user_id == Faculty.user_id)
+        .where(Faculty.user_id == body.supervisor_id)
     )
     row = supervisor_result.first()
 
@@ -600,9 +600,9 @@ async def remove_supervisor_from_group(
 
     # Decrement capacity_filled
     await db.execute(
-        update(Supervisor)
-        .where(Supervisor.user_id == old_supervisor_id)
-        .values(capacity_filled=Supervisor.capacity_filled - 1)
+        update(Faculty)
+        .where(Faculty.user_id == old_supervisor_id)
+        .values(capacity_filled=Faculty.capacity_filled - 1)
     )
 
     group.supervisor_id = None

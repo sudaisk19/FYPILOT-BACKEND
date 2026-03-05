@@ -54,17 +54,6 @@ class StudentProfileSummary(BaseModel):
     status: str
 
 
-class SupervisorProfileSummary(BaseModel):
-    """Supervisor profile summary for dashboard"""
-
-    supervisor_id: str
-    department: str
-    expertise: List[str]
-    max_groups: int
-    current_groups: int
-    status: str
-
-
 class AdminProfileSummary(BaseModel):
     """Admin profile summary for dashboard"""
 
@@ -82,25 +71,11 @@ class StudentDashboardResponse(BaseModel):
     stats: DashboardStats
 
 
-class SupervisorDashboardResponse(BaseModel):
-    """Dashboard response for supervisors"""
-
-    supervisor_profile: SupervisorProfileSummary
-    managed_groups: List[GroupInfo]
-    stats: DashboardStats
-
-
 class AdminDashboardResponse(BaseModel):
     """Dashboard response for admins"""
 
     admin_profile: AdminProfileSummary
     stats: DashboardStats
-
-
-# Union type for all dashboard responses
-DashboardResponse = (
-    StudentDashboardResponse | SupervisorDashboardResponse | AdminDashboardResponse
-)
 
 
 class AdminTopCards(BaseModel):

@@ -12,10 +12,10 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
+from app.models.faculty import Faculty
 from app.models.group import Group
 from app.models.project import Project
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 
 from .base import BaseRepository
 
@@ -124,7 +124,7 @@ class AdminRepository(BaseRepository[Admin]):
 
             # Count supervisors
             supervisors_count = await db.execute(
-                select(func.count()).select_from(Supervisor)
+                select(func.count()).select_from(Faculty)
             )
             total_supervisors = supervisors_count.scalar_one()
 
@@ -175,7 +175,7 @@ class AdminRepository(BaseRepository[Admin]):
 
     async def count_supervisors(self, db: AsyncSession) -> int:
         """Count total supervisors."""
-        result = await db.execute(select(func.count()).select_from(Supervisor))
+        result = await db.execute(select(func.count()).select_from(Faculty))
         return result.scalar_one()
 
     async def count_groups(self, db: AsyncSession) -> int:

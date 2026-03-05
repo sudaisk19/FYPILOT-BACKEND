@@ -37,14 +37,14 @@ class SignupResponse(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str  # "student" or "supervisor" only
+    role: str  # "student" or "faculty" only
 
     @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        """Validate that role is either student or supervisor"""
-        if v not in ["student", "supervisor"]:
-            raise ValueError("Role must be 'student' or 'supervisor'")
+        """Validate that role is either student or faculty"""
+        if v not in ["student", "faculty"]:
+            raise ValueError("Role must be 'student' or 'faculty'")
         return v
 
 
@@ -163,7 +163,7 @@ class IndustryInfo(BaseModel):
     name: str
 
 
-class SupervisorInfo(BaseModel):
+class FacultyInfo(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
     office: Optional[str] = None
@@ -178,7 +178,7 @@ class SupervisorInfo(BaseModel):
 
 class SystemStats(BaseModel):
     total_students: int
-    total_supervisors: int
+    total_faculty: int
     total_groups: int
     total_projects: int
     pending_invites: int
@@ -200,5 +200,5 @@ class UserProfileResponse(BaseModel):
     updated_at: datetime
     student_info: Optional[StudentInfo] = None  # Student profile data
     group_info: Optional[GroupInfo] = None  # For students
-    supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
+    faculty_info: Optional[FacultyInfo] = None  # For faculty
     admin_info: Optional[AdminInfo] = None  # For admins

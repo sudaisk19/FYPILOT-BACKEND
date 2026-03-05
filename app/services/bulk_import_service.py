@@ -31,10 +31,9 @@ from app.models.bulk_import import (
     BulkImportJob,
     BulkItemStatus,
     BulkJobStatus,
-    TargetRoleEnum,
 )
+from app.models.faculty import Faculty
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import RoleEnum, User
 
 logger = logging.getLogger(__name__)
@@ -207,7 +206,7 @@ def parse_excel_content(content: bytes) -> tuple[list[dict], Optional[str]]:
         return [], str(e)
 
 
-def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
+def validate_row(row: dict, target_role: RoleEnum) -> Optional[str]:
     """
     Validate a single row's data.
 
@@ -215,7 +214,7 @@ def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
         Error message if invalid, None if valid
     """
     # Check required columns based on role
-    if target_role == TargetRoleEnum.student:
+    if target_role == RoleEnum.student:
         required = STUDENT_REQUIRED_COLUMNS
     else:
         required = SUPERVISOR_REQUIRED_COLUMNS
@@ -237,7 +236,7 @@ def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
         return f"Invalid email format: {email}"
 
     # Validate roll_number for students
-    if target_role == TargetRoleEnum.student:
+    if target_role == RoleEnum.student:
         roll_number = row.get("roll_number", "").strip()
         if not roll_number:
             return "roll_number is required for students"
@@ -263,7 +262,7 @@ def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
             return f"Invalid fyp_start_year: '{year_str}'. Must be a valid year number"
 
     # Validate department and designation for supervisors
-    if target_role == TargetRoleEnum.supervisor:
+    if target_role == RoleEnum.faculty:
         department = row.get("department", "").strip()
         if not department:
             return "department is required for supervisors"
@@ -277,7 +276,7 @@ def validate_row(row: dict, target_role: TargetRoleEnum) -> Optional[str]:
 async def create_bulk_import_job(
     db: AsyncSession,
     admin_user_id: UUID,
-    target_role: TargetRoleEnum,
+    target_role: RoleEnum,
     file_content: bytes,
     filename: str,
 ) -> tuple[Optional[BulkImportJob], Optional[str]]:
@@ -302,7 +301,7 @@ async def create_bulk_import_job(
         return None, "File contains no data rows"
 
     # Check required columns exist
-    if target_role == TargetRoleEnum.student:
+    if target_role == RoleEnum.student:
         required = STUDENT_REQUIRED_COLUMNS
     else:
         required = SUPERVISOR_REQUIRED_COLUMNS
@@ -349,7 +348,7 @@ async def create_bulk_import_job(
 async def process_single_item(
     db: AsyncSession,
     item: BulkImportItem,
-    target_role: TargetRoleEnum,
+    target_role: RoleEnum,
 ) -> str:
     """
     Process a single bulk import item.
@@ -377,7 +376,7 @@ async def process_single_item(
         return "skipped"
 
     # Check roll_number uniqueness for students
-    if target_role == TargetRoleEnum.student:
+    if target_role == RoleEnum.student:
         roll_number = payload["roll_number"].strip()
         existing_student = await db.execute(
             select(Student).where(Student.roll_number == roll_number)
@@ -392,11 +391,7 @@ async def process_single_item(
     password_hash = hash_password(temp_password)
 
     # Determine role
-    role = (
-        RoleEnum.student
-        if target_role == TargetRoleEnum.student
-        else RoleEnum.supervisor
-    )
+    role = RoleEnum.student if target_role == RoleEnum.student else RoleEnum.faculty
 
     # Create user
     user = User(
@@ -409,7 +404,7 @@ async def process_single_item(
     await db.flush()  # Get user_id
 
     # Create profile based on role
-    if target_role == TargetRoleEnum.student:
+    if target_role == RoleEnum.student:
         # Parse fyp_start_year (handle "2026.0" from Excel)
         fyp_year_raw = payload.get("fyp_start_year", "").strip()
         try:
@@ -432,7 +427,7 @@ async def process_single_item(
         )
         db.add(student)
     else:
-        supervisor = Supervisor(
+        faculty_member = Faculty(
             user_id=user.user_id,
             department=payload["department"].strip(),
             designation=payload["designation"].strip(),
@@ -443,7 +438,7 @@ async def process_single_item(
             is_jury=True,
             is_active=True,
         )
-        db.add(supervisor)
+        db.add(faculty_member)
 
     # Store encrypted temp password
     item.temp_password_enc = encrypt_password(temp_password)
@@ -995,13 +990,13 @@ async def create_single_supervisor(
         full_name=full_name.strip(),
         email=email,
         password_hash=password_hash,
-        role=RoleEnum.supervisor,
+        role=RoleEnum.faculty,
     )
     db.add(user)
     await db.flush()
 
-    # Create supervisor profile
-    supervisor = Supervisor(
+    # Create faculty profile
+    faculty_member = Faculty(
         user_id=user.user_id,
         department=department.strip(),
         designation=designation.strip(),
@@ -1012,9 +1007,9 @@ async def create_single_supervisor(
         is_jury=True,
         is_active=True,
     )
-    db.add(supervisor)
+    db.add(faculty_member)
     await db.commit()
     await db.refresh(user)
 
-    logger.info(f"Created single supervisor: {email} ({user.user_id})")
+    logger.info(f"Created single faculty member: {email} ({user.user_id})")
     return user, temp_password

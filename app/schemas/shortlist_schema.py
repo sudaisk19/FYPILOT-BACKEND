@@ -7,11 +7,11 @@ from pydantic import BaseModel, Field
 
 class ShortlistAddRequest(BaseModel):
     group_id: UUID = Field(..., description="Target group id")
-    supervisor_id: UUID = Field(..., description="Supervisor user_id to shortlist")
+    faculty_id: UUID = Field(..., description="Faculty user_id to shortlist")
 
 
 class ShortlistItem(BaseModel):
-    supervisor_id: UUID
+    faculty_id: UUID
     full_name: str
     profile_avatar: str | None = None
     department: str | None = None
@@ -22,4 +22,4 @@ class ShortlistItem(BaseModel):
 
 class ShortlistListResponse(BaseModel):
     group_id: UUID
-    supervisors: List[ShortlistItem] = Field(default_factory=list)
+    faculty: List[ShortlistItem] = Field(default_factory=list)

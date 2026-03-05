@@ -11,8 +11,8 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.faculty import Faculty
 from app.models.shortlisted_supervisor import ShortlistedSupervisor
-from app.models.supervisor import Supervisor
 from app.models.user import User
 
 from .base import BaseRepository
@@ -70,7 +70,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         result = await db.execute(
             delete(ShortlistedSupervisor).where(
                 ShortlistedSupervisor.group_id == group_id,
-                ShortlistedSupervisor.supervisor_id == supervisor_id,
+                ShortlistedSupervisor.faculty_id == supervisor_id,
             )
         )
         await db.flush()
@@ -95,7 +95,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         """
         query = select(ShortlistedSupervisor).where(
             ShortlistedSupervisor.group_id == group_id,
-            ShortlistedSupervisor.supervisor_id == supervisor_id,
+            ShortlistedSupervisor.faculty_id == supervisor_id,
         )
         result = await db.execute(query)
         return result.scalars().first() is not None
@@ -119,7 +119,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         """
         query = select(ShortlistedSupervisor).where(
             ShortlistedSupervisor.group_id == group_id,
-            ShortlistedSupervisor.supervisor_id == supervisor_id,
+            ShortlistedSupervisor.faculty_id == supervisor_id,
         )
         result = await db.execute(query)
         return result.scalars().first()
@@ -128,7 +128,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         self,
         db: AsyncSession,
         group_id: UUID,
-    ) -> List[Tuple[ShortlistedSupervisor, User, Supervisor]]:
+    ) -> List[Tuple[ShortlistedSupervisor, User, Faculty]]:
         """
         Get all shortlisted supervisors for a group with user and supervisor data.
 
@@ -137,12 +137,12 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
             group_id: Group's UUID
 
         Returns:
-            List of (ShortlistedSupervisor, User, Supervisor) tuples
+            List of (ShortlistedSupervisor, User, Faculty) tuples
         """
         query = (
-            select(ShortlistedSupervisor, User, Supervisor)
-            .join(Supervisor, Supervisor.user_id == ShortlistedSupervisor.supervisor_id)
-            .join(User, User.user_id == Supervisor.user_id)
+            select(ShortlistedSupervisor, User, Faculty)
+            .join(Faculty, Faculty.user_id == ShortlistedSupervisor.faculty_id)
+            .join(User, User.user_id == Faculty.user_id)
             .where(ShortlistedSupervisor.group_id == group_id)
         )
         result = await db.execute(query)

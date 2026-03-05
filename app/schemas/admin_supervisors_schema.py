@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 # Mirroring your Student pagination style
-class SupervisorCardInfo(BaseModel):
+class FacultyCardInfo(BaseModel):
     user_id: str
     full_name: str
     email: str
@@ -18,8 +18,8 @@ class SupervisorCardInfo(BaseModel):
     status: str
 
 
-class PaginatedSupervisorResponse(BaseModel):
-    supervisors: List[SupervisorCardInfo]
+class PaginatedFacultyResponse(BaseModel):
+    faculty: List[FacultyCardInfo]
     total: int
     page: int
     per_page: int
@@ -40,7 +40,7 @@ class SupervisedProjectInfo(BaseModel):
 
 
 # Full Profile Response
-class AdminSupervisorProfileOut(BaseModel):
+class AdminFacultyProfileOut(BaseModel):
     user_id: UUID
     full_name: str
     email: str
@@ -60,14 +60,14 @@ class AdminSupervisorProfileOut(BaseModel):
 # For the "Save" button on capacity
 class CapacityUpdateReq(BaseModel):
     capacity_max: int = Field(
-        ..., ge=0, description="Maximum groups a supervisor can take"
+        ..., ge=0, description="Maximum groups a faculty member can take"
     )
 
 
 # For searchable dropdown in admin assignment forms
-class SupervisorDropdownItem(BaseModel):
+class FacultyDropdownItem(BaseModel):
     """
-    Minimal supervisor info for fast dropdown/combobox.
+    Minimal faculty info for fast dropdown/combobox.
 
     Frontend displays: "{full_name} - {department}"
     Frontend sends: user_id when form is submitted
@@ -77,7 +77,7 @@ class SupervisorDropdownItem(BaseModel):
     user_id: str  # ← Sent to backend on form submit
     full_name: str  # ← Display in dropdown
     department: Optional[str] = None  # ← Display in dropdown (e.g., "Dr. Ahmed - CS")
-    is_available: bool = True  # ← Disable selection if False (supervisor is FULL)
+    is_available: bool = True  # ← Disable selection if False (faculty is FULL)
 
     class Config:
         json_schema_extra = {

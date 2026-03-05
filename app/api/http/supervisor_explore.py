@@ -22,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.domain import Domain
-from app.models.supervisor import Supervisor
-from app.models.supervisor_domain import SupervisorDomain
+from app.models.faculty import Faculty
+from app.models.faculty_domain import FacultyDomain
 from app.models.user import User
 from app.repositories import supervisor_repository
 from app.schemas.supervisor_explore_schema import (
@@ -34,7 +34,7 @@ from app.schemas.supervisor_explore_schema import (
     SupervisorDetailedInfo,
 )
 
-router = APIRouter(prefix="/explore", tags=["supervisor-explore"])
+router = APIRouter(tags=["supervisor-explore"])
 
 
 # Department alias mapping for flexible department filtering
@@ -141,11 +141,13 @@ async def explore_supervisors(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Build base query - join users and supervisors
     query = (
-        select(User, Supervisor)
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .where(User.role == "supervisor")
+        select(User, Faculty)
+        .join(Faculty, User.user_id == Faculty.user_id)
+        .where(
+            User.role == "faculty",
+            Faculty.is_supervisor == True,
+        )
     )
 
     # Collect simple filters (department, designation, search)
@@ -155,20 +157,20 @@ async def explore_supervisors(
     # Department filter with alias support
     if department:
         normalized_dept = normalize_department(department)
-        simple_filters.append(Supervisor.department.ilike(f"%{normalized_dept}%"))
+        simple_filters.append(Faculty.department.ilike(f"%{normalized_dept}%"))
 
     # Designation filter with relevance scoring
     if designation:
-        simple_filters.append(Supervisor.designation.ilike(f"%{designation}%"))
+        simple_filters.append(Faculty.designation.ilike(f"%{designation}%"))
         # Create relevance score for designation:
         # 3 = exact match (case-insensitive), 2 = prefix match, 1 = substring match
         relevance_score = case(
             (
-                func.lower(Supervisor.designation) == func.lower(designation),
+                func.lower(Faculty.designation) == func.lower(designation),
                 3,
             ),  # Exact match
             (
-                func.lower(Supervisor.designation).startswith(func.lower(designation)),
+                func.lower(Faculty.designation).startswith(func.lower(designation)),
                 2,
             ),  # Prefix match
             else_=1,  # Substring match
@@ -196,10 +198,8 @@ async def explore_supervisors(
     # Domain filter (intersected with other filters via many-to-many join)
     if domain:
         query = (
-            query.join(
-                SupervisorDomain, Supervisor.user_id == SupervisorDomain.supervisor_id
-            )
-            .join(Domain, SupervisorDomain.domain_id == Domain.domain_id)
+            query.join(FacultyDomain, Faculty.user_id == FacultyDomain.faculty_id)
+            .join(Domain, FacultyDomain.domain_id == Domain.domain_id)
             .where(Domain.name.ilike(f"%{domain}%"))
         )
 
@@ -265,7 +265,7 @@ async def explore_supervisors(
         )
 
     return PaginatedSupervisorResponse(
-        supervisors=supervisors,
+        faculty=supervisors,
         total=total,
         page=page,
         per_page=per_page,

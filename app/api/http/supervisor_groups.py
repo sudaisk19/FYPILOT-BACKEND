@@ -18,10 +18,10 @@ from sqlalchemy.types import Text as SQLText
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
+from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember
 from app.models.project import Project
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import RoleEnum, User
 from app.schemas.supervisor_groups_schema import (
     DomainInfo,
@@ -90,7 +90,7 @@ async def get_supervisor_groups(
     """
 
     # 1. Role check
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only supervisors can access this endpoint",
@@ -205,7 +205,7 @@ async def get_supervisor_groups_dropdown(
     Supervisor-only: Fetch lightweight list of groups for dropdowns.
     """
     # 1. Role check
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only supervisors can access this endpoint",
@@ -279,7 +279,7 @@ async def get_supervisor_group_profile(
     """
 
     # 1. Role check
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only supervisors can access this endpoint",
@@ -297,9 +297,9 @@ async def get_supervisor_group_profile(
             selectinload(Group.project).selectinload(Project.domains),
             selectinload(Group.project).selectinload(Project.industry),
             # Primary supervisor → user
-            selectinload(Group.supervisor).joinedload(Supervisor.user),
+            selectinload(Group.supervisor).joinedload(Faculty.user),
             # Co-supervisors → user
-            selectinload(Group.co_supervisors).joinedload(Supervisor.user),
+            selectinload(Group.co_supervisors).joinedload(Faculty.user),
         )
         .where(Group.group_id == group_id)
     )

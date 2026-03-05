@@ -64,10 +64,10 @@ async def get_admin_milestone(
 @router.get(
     "/milestones/{milestone_id}/evaluations",
     response_model=List[AdminEvaluationResponse],
-    summary="List supervisor evaluations for a milestone",
-    description="Returns every supervisor-submitted evaluation with supervisor name, project name and FYP ID.",
+    summary="List faculty evaluations for a milestone",
+    description="Returns every faculty-submitted evaluation with faculty name, project name and FYP ID.",
 )
-async def list_supervisor_evaluations_for_milestone(
+async def list_faculty_evaluations_for_milestone(
     milestone_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

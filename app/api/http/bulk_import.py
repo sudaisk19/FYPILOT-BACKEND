@@ -33,7 +33,6 @@ from app.models.bulk_import import (
     BulkImportJob,
     BulkItemStatus,
     BulkJobStatus,
-    TargetRoleEnum,
 )
 from app.models.user import User
 from app.schemas.bulk_import_schema import (
@@ -114,11 +113,14 @@ async def upload_bulk_import(
     """
     # Validate target_role
     try:
-        role_enum = TargetRoleEnum(target_role.lower())
+        target_role_lower = target_role.lower()
+        if target_role_lower not in ("student", "faculty"):
+            raise ValueError()
+        role_enum = target_role_lower
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="target_role must be 'student' or 'supervisor'",
+            detail="target_role must be 'student' or 'faculty'",
         )
 
     # Validate file
@@ -668,7 +670,7 @@ async def register_single_supervisor(
         user_id=user.user_id,
         full_name=user.full_name,
         email=user.email,
-        role="supervisor",
+        role="faculty",
         temp_password=temp_password,
-        message=f"Supervisor {user.full_name} registered successfully.",
+        message=f"Faculty {user.full_name} registered successfully.",
     )

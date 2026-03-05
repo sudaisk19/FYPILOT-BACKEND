@@ -15,6 +15,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -23,7 +24,6 @@ from app.db import get_db, supabase
 from app.models.group_milestone import SprintStatusEnum
 from app.models.task import Task, TaskPriorityEnum, TaskStatusEnum
 from app.models.user import RoleEnum, User
-from pydantic import BaseModel
 from app.repositories import group_repository, sprint_repository, task_repository
 from app.schemas.task_schema import (
     MemberSummary,
@@ -62,6 +62,7 @@ def _safe_filename(name: str) -> str:
     safe_ext = re.sub(r"[^A-Za-z0-9._-]", "_", ext)
     cleaned = f"{safe_base}{safe_ext}" if safe_ext else safe_base
     return cleaned or "file"
+
 
 @router.get("/members", response_model=GroupMembersResponse)
 async def list_group_members(
@@ -265,6 +266,7 @@ async def update_task(
 
     if due_date is not None:
         from datetime import date as date_type
+
         updates["due_date"] = date_type.fromisoformat(due_date)
 
     if updates:
@@ -566,7 +568,7 @@ async def _ensure_group_access(
     if current_user.role == RoleEnum.admin:
         return group
 
-    if current_user.role == RoleEnum.supervisor:
+    if current_user.role == RoleEnum.faculty:
         cosupervisors = group.cosupervisor_ids or []
         if (
             group.supervisor_id == current_user.user_id

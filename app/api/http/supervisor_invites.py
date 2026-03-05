@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.domain import Domain
+from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember, InviteStatusEnum
 from app.models.project import Project, ProjectDomain, project_type_value
 from app.models.request import Request, RequestTypeEnum
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.invite_schema import (
     PendingInviteItem,
@@ -85,22 +85,37 @@ async def send_supervisor_invite(
         )
 
     # Prevent same supervisor from being both primary and co (aligns with DB constraint)
-    if body.role == "supervisor" and grp.cosupervisor_id == body.supervisor_id:
+    if body.role == "supervisor" and grp.cosupervisor_id == body.faculty_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This supervisor is already assigned as co-supervisor. Cannot assign same person as supervisor.",
         )
-    if body.role == "cosupervisor" and grp.supervisor_id == body.supervisor_id:
+    if body.role == "cosupervisor" and grp.supervisor_id == body.faculty_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This supervisor is already assigned as supervisor. Cannot assign same person as co-supervisor.",
+        )
+
+    # Ensure the target faculty has the supervisor role flag
+    target_faculty = await db.execute(
+        select(Faculty).where(Faculty.user_id == body.faculty_id)
+    )
+    faculty_obj = target_faculty.scalars().first()
+    if not faculty_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Faculty not found"
+        )
+    if not faculty_obj.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This faculty member cannot be selected as a supervisor",
         )
 
     # Check for existing pending request (cancelled requests are deleted, so no need to check for them)
     existing_request = await db.execute(
         select(Request).where(
             Request.group_id == group_id,
-            Request.supervisor_id == body.supervisor_id,
+            Request.faculty_id == body.faculty_id,
             Request.status == InviteStatusEnum.pending,
         )
     )
@@ -122,7 +137,7 @@ async def send_supervisor_invite(
     )
     request = Request(
         group_id=group_id,
-        supervisor_id=body.supervisor_id,
+        faculty_id=body.faculty_id,
         request_type=request_type,
         status=InviteStatusEnum.pending,
         message=getattr(body, "message", None),
@@ -178,9 +193,9 @@ async def list_sent_requests(
     # Fetch all requests sent by this group (excluding cancelled - they're deleted)
     # Only show pending, accepted, and declined requests
     requests_result = await db.execute(
-        select(Request, Supervisor, User)
-        .join(Supervisor, Supervisor.user_id == Request.supervisor_id)
-        .join(User, User.user_id == Supervisor.user_id)
+        select(Request, Faculty, User)
+        .join(Faculty, Faculty.user_id == Request.faculty_id)
+        .join(User, User.user_id == Faculty.user_id)
         .where(
             Request.group_id == group_id,
             Request.status
@@ -213,10 +228,23 @@ async def list_pending_invites_for_supervisor(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    if current_user.role != "supervisor":
+    role_val = (
+        current_user.role.value
+        if hasattr(current_user.role, "value")
+        else current_user.role
+    )
+    if role_val != "faculty":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can view invites",
+            detail="Only faculty can view invites",
+        )
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view invites",
         )
 
     # Fetch pending requests for this supervisor with group info
@@ -224,7 +252,7 @@ async def list_pending_invites_for_supervisor(
         select(Request, Group)
         .join(Group, Group.group_id == Request.group_id)
         .where(
-            Request.supervisor_id == current_user.user_id,
+            Request.faculty_id == current_user.user_id,
             Request.status == InviteStatusEnum.pending,
         )
         .order_by(Request.created_at.desc())
@@ -314,17 +342,30 @@ async def accept_supervisor_request(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
 ):
-    if current_user.role != "supervisor":
+    role_val = (
+        current_user.role.value
+        if hasattr(current_user.role, "value")
+        else current_user.role
+    )
+    if role_val != "faculty":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can accept invites",
+            detail="Only faculty can accept invites",
+        )
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can accept invites",
         )
 
     # Load and validate the pending request
     request_result = await db.execute(
         select(Request).where(
             Request.request_id == request_id,
-            Request.supervisor_id == current_user.user_id,
+            Request.faculty_id == current_user.user_id,
             Request.status == InviteStatusEnum.pending,
         )
     )
@@ -359,9 +400,9 @@ async def accept_supervisor_request(
         )
         # Increment supervisor capacity_filled
         await db.execute(
-            update(Supervisor)
-            .where(Supervisor.user_id == current_user.user_id)
-            .values(capacity_filled=Supervisor.capacity_filled + 1)
+            update(Faculty)
+            .where(Faculty.user_id == current_user.user_id)
+            .values(capacity_filled=Faculty.capacity_filled + 1)
         )
         # Auto-decline other pending supervisor requests for this group
         await db.execute(
@@ -427,17 +468,30 @@ async def reject_invite(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
 ):
-    if current_user.role != "supervisor":
+    role_val = (
+        current_user.role.value
+        if hasattr(current_user.role, "value")
+        else current_user.role
+    )
+    if role_val != "faculty":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can reject invites",
+            detail="Only faculty can reject invites",
+        )
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can reject invites",
         )
 
     # Load and update request
     request_result = await db.execute(
         select(Request).where(
             Request.request_id == request_id,
-            Request.supervisor_id == current_user.user_id,
+            Request.faculty_id == current_user.user_id,
             Request.status == InviteStatusEnum.pending,
         )
     )
@@ -562,17 +616,30 @@ async def get_request_details_for_supervisor(
 
     Only supervisors can access this endpoint, and only for requests sent to them.
     """
-    if current_user.role != "supervisor":
+    role_val = (
+        current_user.role.value
+        if hasattr(current_user.role, "value")
+        else current_user.role
+    )
+    if role_val != "faculty":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can view request details",
+            detail="Only faculty can view request details",
+        )
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view request details",
         )
 
     # Fetch the request and verify it belongs to this supervisor
     request_result = await db.execute(
         select(Request).where(
             Request.request_id == request_id,
-            Request.supervisor_id == current_user.user_id,
+            Request.faculty_id == current_user.user_id,
         )
     )
     req = request_result.scalars().first()
@@ -720,7 +787,7 @@ async def get_request_details_for_supervisor(
     return SupervisorRequestDetailResponse(
         request_id=req.request_id,
         group_id=req.group_id,
-        supervisor_id=req.supervisor_id,
+        faculty_id=req.faculty_id,
         status=req.status.value,
         message=req.message,
         created_at=req.created_at,

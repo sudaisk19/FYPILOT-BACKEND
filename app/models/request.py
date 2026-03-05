@@ -28,9 +28,9 @@ class Request(Base):
         ForeignKey("groups.group_id", ondelete="CASCADE"),
         nullable=False,
     )
-    supervisor_id = Column(
+    faculty_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("supervisors.user_id", ondelete="CASCADE"),
+        ForeignKey("faculty.user_id", ondelete="CASCADE"),
         nullable=False,
     )
     request_type = Column(

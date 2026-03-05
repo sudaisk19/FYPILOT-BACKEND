@@ -50,18 +50,19 @@ from app.core.config import settings
 from app.db import get_db
 from app.models.admin import Admin
 from app.models.domain import Domain
+from app.models.faculty import Faculty
+from app.models.faculty_domain import FacultyDomain
+from app.models.faculty_industry import FacultyIndustry
 from app.models.group import Group, GroupMember
 from app.models.industry import Industry
 from app.models.password_reset import PasswordResetToken
 from app.models.project import Project
 from app.models.student import Student
-from app.models.supervisor import Supervisor
-from app.models.supervisor_domain import SupervisorDomain
-from app.models.supervisor_industry import SupervisorIndustry
 from app.models.user import RoleEnum, User
 from app.schemas.auth_schema import (
     AdminInfo,
     DomainInfo,
+    FacultyInfo,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     GroupInfo,
@@ -75,7 +76,6 @@ from app.schemas.auth_schema import (
     SignupResponse,
     StudentInfo,
     SupervisedGroup,
-    SupervisorInfo,
     SystemStats,
     UserProfileResponse,
 )
@@ -169,7 +169,7 @@ async def signup(user_in: UserCreateSchema, db: AsyncSession = Depends(get_db)):
                 "role": user.role.value,
                 "profile_avatar": user.profile_avatar,
                 "has_student_profile": False,  # New user won't have profiles yet
-                "has_supervisor_profile": False,
+                "has_faculty_profile": False,
                 "has_admin_profile": False,
             },
         }
@@ -214,7 +214,7 @@ async def login_for_access_token(
             select(User)
             .options(
                 selectinload(User.student_profile),
-                selectinload(User.supervisor_profile),
+                selectinload(User.faculty_profile),
                 selectinload(User.admin_profile),
             )
             .where(User.email == login_data.email)
@@ -250,7 +250,7 @@ async def login_for_access_token(
                 "role": role_val,
                 "profile_avatar": user.profile_avatar,
                 "has_student_profile": user.student_profile is not None,
-                "has_supervisor_profile": user.supervisor_profile is not None,
+                "has_faculty_profile": user.faculty_profile is not None,
                 "has_admin_profile": user.admin_profile is not None,
             },
         }
@@ -351,7 +351,7 @@ async def get_user_profile(
 
     # Initialize role-specific information
     group_info = None
-    supervisor_info = None
+    faculty_info = None
     admin_info = None
     student_info = None
 
@@ -359,8 +359,8 @@ async def get_user_profile(
         if role == "student":
             student_info = await get_student_info(current_user.user_id, db)
             group_info = await get_student_group_info(current_user.user_id, db)
-        elif role == "supervisor":
-            supervisor_info = await get_supervisor_info(current_user.user_id, db)
+        elif role == "faculty":
+            faculty_info = await get_faculty_info(current_user.user_id, db)
         elif role == "admin":
             admin_info = await get_admin_info(current_user.user_id, db)
     except Exception as e:
@@ -379,7 +379,7 @@ async def get_user_profile(
         updated_at=current_user.updated_at,
         student_info=student_info,
         group_info=group_info,
-        supervisor_info=supervisor_info,
+        faculty_info=faculty_info,
         admin_info=admin_info,
     )
 
@@ -473,18 +473,16 @@ async def get_student_group_info(
         return None
 
 
-async def get_supervisor_info(
-    user_id: UUID, db: AsyncSession
-) -> Optional[SupervisorInfo]:
-    """Get supervisor information"""
+async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyInfo]:
+    """Get faculty information"""
     try:
-        # Get supervisor profile
-        supervisor_result = await db.execute(
-            select(Supervisor).where(Supervisor.user_id == user_id)
+        # Get faculty profile
+        faculty_result = await db.execute(
+            select(Faculty).where(Faculty.user_id == user_id)
         )
-        supervisor = supervisor_result.scalar_one_or_none()
+        faculty_member = faculty_result.scalar_one_or_none()
 
-        if not supervisor:
+        if not faculty_member:
             return None
 
         # Get supervised groups
@@ -528,8 +526,8 @@ async def get_supervisor_info(
         # Get domains
         domains_result = await db.execute(
             select(Domain)
-            .join(SupervisorDomain, SupervisorDomain.domain_id == Domain.domain_id)
-            .where(SupervisorDomain.supervisor_id == user_id)
+            .join(FacultyDomain, FacultyDomain.domain_id == Domain.domain_id)
+            .where(FacultyDomain.supervisor_id == user_id)
         )
         domains = [
             DomainInfo(domain_id=d.domain_id, name=d.name)
@@ -540,30 +538,32 @@ async def get_supervisor_info(
         industries_result = await db.execute(
             select(Industry)
             .join(
-                SupervisorIndustry,
-                SupervisorIndustry.industry_id == Industry.industry_id,
+                FacultyIndustry,
+                FacultyIndustry.industry_id == Industry.industry_id,
             )
-            .where(SupervisorIndustry.supervisor_id == user_id)
+            .where(FacultyIndustry.supervisor_id == user_id)
         )
         industries = [
             IndustryInfo(industry_id=i.industry_id, name=i.name)
             for i in industries_result.scalars().all()
         ]
 
-        return SupervisorInfo(
-            department=supervisor.department,
-            designation=supervisor.designation,
-            office=supervisor.office,
-            capacity_max=supervisor.capacity_max,
-            capacity_filled=supervisor.capacity_filled,
-            project_types=[supervisor.project_type] if supervisor.project_type else [],
-            requirements=supervisor.requirements or [],
+        return FacultyInfo(
+            department=faculty_member.department,
+            designation=faculty_member.designation,
+            office=faculty_member.office,
+            capacity_max=faculty_member.capacity_max,
+            capacity_filled=faculty_member.capacity_filled,
+            project_types=(
+                [faculty_member.project_type] if faculty_member.project_type else []
+            ),
+            requirements=faculty_member.requirements or [],
             supervised_groups=supervised_groups,
             domains=domains,
             industries=industries,
         )
     except Exception as e:
-        logger.error(f"Error fetching supervisor info for user {user_id}: {e}")
+        logger.error(f"Error fetching faculty info for user {user_id}: {e}")
         return None
 
 
@@ -595,11 +595,9 @@ async def get_system_stats(db: AsyncSession) -> SystemStats:
         students_count = await db.execute(select(func.count()).select_from(Student))
         total_students = students_count.scalar_one()
 
-        # Count supervisors
-        supervisors_count = await db.execute(
-            select(func.count()).select_from(Supervisor)
-        )
-        total_supervisors = supervisors_count.scalar_one()
+        # Count faculty
+        faculty_count = await db.execute(select(func.count()).select_from(Faculty))
+        total_faculty = faculty_count.scalar_one()
 
         # Count groups
         groups_count = await db.execute(select(func.count()).select_from(Group))
@@ -625,7 +623,7 @@ async def get_system_stats(db: AsyncSession) -> SystemStats:
 
         return SystemStats(
             total_students=total_students,
-            total_supervisors=total_supervisors,
+            total_faculty=total_faculty,
             total_groups=total_groups,
             total_projects=total_projects,
             pending_invites=pending_invites,
@@ -635,7 +633,7 @@ async def get_system_stats(db: AsyncSession) -> SystemStats:
         # Return default stats if there's an error
         return SystemStats(
             total_students=0,
-            total_supervisors=0,
+            total_faculty=0,
             total_groups=0,
             total_projects=0,
             pending_invites=0,
@@ -805,7 +803,7 @@ async def oauth_callback(
             select(User)
             .options(
                 selectinload(User.student_profile),
-                selectinload(User.supervisor_profile),
+                selectinload(User.faculty_profile),
                 selectinload(User.admin_profile),
             )
             .where(User.email == email)
@@ -1024,7 +1022,7 @@ async def verify_cookie_auth(request: Request):
                 select(User)
                 .options(
                     selectinload(User.student_profile),
-                    selectinload(User.supervisor_profile),
+                    selectinload(User.faculty_profile),
                     selectinload(User.admin_profile),
                 )
                 .where(User.user_id == user_id)
@@ -1047,7 +1045,7 @@ async def verify_cookie_auth(request: Request):
                 email=user.email,
                 role=role_val,
                 has_student_profile=user.student_profile is not None,
-                has_supervisor_profile=user.supervisor_profile is not None,
+                has_faculty_profile=user.faculty_profile is not None,
                 has_admin_profile=user.admin_profile is not None,
             )
 
@@ -1087,11 +1085,11 @@ async def update_user_role(
     try:
         new_role = role_data.role
 
-        # Validate role - only allow student or supervisor
-        if new_role not in ["student", "supervisor"]:
+        # Validate role - only allow student or faculty
+        if new_role not in ["student", "faculty"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid role. Must be 'student' or 'supervisor'",
+                detail="Invalid role. Must be 'student' or 'faculty'",
             )
 
         # Update user role
@@ -1115,7 +1113,7 @@ async def update_user_role(
             "role": role_val,
             "profile_avatar": current_user.profile_avatar,
             "has_student_profile": current_user.student_profile is not None,
-            "has_supervisor_profile": current_user.supervisor_profile is not None,
+            "has_faculty_profile": current_user.faculty_profile is not None,
             "has_admin_profile": current_user.admin_profile is not None,
         }
 

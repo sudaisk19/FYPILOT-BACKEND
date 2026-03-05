@@ -8,16 +8,16 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.supervisor import Supervisor
+from app.models.faculty import Faculty
 from app.models.user import RoleEnum, User
 from app.repositories.supervisor_repository import supervisor_repository
 from app.schemas.admin_supervisors_schema import (
-    AdminSupervisorProfileOut,
+    AdminFacultyProfileOut,
     CapacityUpdateReq,
-    PaginatedSupervisorResponse,
+    FacultyCardInfo,
+    FacultyDropdownItem,
+    PaginatedFacultyResponse,
     SupervisedProjectInfo,
-    SupervisorCardInfo,
-    SupervisorDropdownItem,
 )
 from app.services.cache import cache
 
@@ -28,12 +28,12 @@ router = APIRouter()
 # DROPDOWN ENDPOINT - For searchable select/combobox in assignment forms
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get(
-    "/supervisors/dropdown",
-    response_model=list[SupervisorDropdownItem],
-    summary="Get supervisors for dropdown selection",
-    description="Returns a lightweight list of all supervisors for use in searchable dropdown/combobox. Frontend can filter as user types.",
+    "/faculty/dropdown",
+    response_model=list[FacultyDropdownItem],
+    summary="Get faculty for dropdown selection",
+    description="Returns a lightweight list of all faculty for use in searchable dropdown/combobox. Frontend can filter as user types.",
 )
-async def get_supervisors_dropdown(
+async def get_faculty_dropdown(
     search: Optional[str] = Query(
         None, description="Optional search filter (name, email, department)"
     ),
@@ -47,9 +47,9 @@ async def get_supervisors_dropdown(
     Get all supervisors in a lightweight format for dropdown selection.
 
     Use cases:
-    - Admin assigning supervisor to a group
-    - Admin assigning co-supervisor to a group
-    - Any form that needs supervisor selection
+    - Admin assigning faculty as group supervisor
+    - Admin assigning faculty as group co-supervisor
+    - Any form that needs faculty selection
 
     The frontend should use this with a searchable select component
     (e.g., React Select, MUI Autocomplete, Ant Design Select).
@@ -67,16 +67,19 @@ async def get_supervisors_dropdown(
         return []
 
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
-    cache_key = f"sup_dropdown:{search.lower().strip()}:{available_only}"
+    cache_key = f"fac_dropdown:{search.lower().strip()}:{available_only}"
     cached = await cache.get_json(cache_key)
     if cached is not None:
         return cached
 
     # ── 2. Database Query (with LIMIT) ────────────────────────────────────
     query = (
-        select(User, Supervisor)
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .where(User.role == RoleEnum.supervisor)
+        select(User, Faculty)
+        .join(Faculty, User.user_id == Faculty.user_id)
+        .where(
+            User.role == RoleEnum.faculty,
+            Faculty.is_supervisor == True,
+        )
     )
 
     filters = []
@@ -88,13 +91,13 @@ async def get_supervisors_dropdown(
             or_(
                 User.full_name.ilike(s),
                 User.email.ilike(s),
-                Supervisor.department.ilike(s),
+                Faculty.department.ilike(s),
             )
         )
 
     # Available only filter
     if available_only:
-        filters.append(Supervisor.capacity_filled < Supervisor.capacity_max)
+        filters.append(Faculty.capacity_filled < Faculty.capacity_max)
 
     if filters:
         query = query.where(and_(*filters))
@@ -105,27 +108,27 @@ async def get_supervisors_dropdown(
     rows = (await db.execute(query)).all()
 
     # ── 3. Build Response ─────────────────────────────────────────────────
-    supervisors = []
-    for user, supervisor in rows:
-        free_slots = supervisor.capacity_max - supervisor.capacity_filled
-        supervisors.append(
-            SupervisorDropdownItem(
+    faculty_list = []
+    for user, faculty_member in rows:
+        free_slots = faculty_member.capacity_max - faculty_member.capacity_filled
+        faculty_list.append(
+            FacultyDropdownItem(
                 user_id=str(user.user_id),
                 full_name=user.full_name,
-                department=supervisor.department,
+                department=faculty_member.department,
                 is_available=free_slots > 0,
             )
         )
 
-    # ── 4. Cache in Redis (5 min TTL) ─────────────────────────────────────
-    result_dicts = [s.model_dump() for s in supervisors]
+    # ── 4. Cache in Redis (5 min TTL) ─────────────────────────────────────────────────────
+    result_dicts = [s.model_dump() for s in faculty_list]
     await cache.set_json(cache_key, result_dicts, ttl_seconds=300)
 
-    return supervisors
+    return faculty_list
 
 
-@router.get("/supervisors", response_model=PaginatedSupervisorResponse)
-async def list_supervisors(
+@router.get("/faculty", response_model=PaginatedFacultyResponse)
+async def list_faculty(
     department: Optional[str] = Query(None),
     availability: Literal["all", "available", "full"] = Query("all"),
     search: Optional[str] = Query(None),
@@ -139,7 +142,7 @@ async def list_supervisors(
 
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
     cache_key = (
-        f"admin:supervisors:{department}:{availability}:" f"{search}:{page}:{per_page}"
+        f"admin:faculty:{department}:{availability}:" f"{search}:{page}:{per_page}"
     )
     cached = await cache.get_json(cache_key)
     if cached:
@@ -147,20 +150,20 @@ async def list_supervisors(
 
     # 1. Base Query using your exact models
     query = (
-        select(User, Supervisor)
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .options(selectinload(Supervisor.domains))  # Pre-loads domains for the tags
-        .where(User.role == RoleEnum.supervisor)
+        select(User, Faculty)
+        .join(Faculty, User.user_id == Faculty.user_id)
+        .options(selectinload(Faculty.domains))  # Pre-loads domains for the tags
+        .where(User.role == RoleEnum.faculty)
     )
 
     filters = []
     if department:
-        filters.append(Supervisor.department.ilike(f"%{department}%"))
+        filters.append(Faculty.department.ilike(f"%{department}%"))
 
     if availability == "available":
-        filters.append(Supervisor.capacity_filled < Supervisor.capacity_max)
+        filters.append(Faculty.capacity_filled < Faculty.capacity_max)
     elif availability == "full":
-        filters.append(Supervisor.capacity_filled >= Supervisor.capacity_max)
+        filters.append(Faculty.capacity_filled >= Faculty.capacity_max)
 
     if search:
         s = f"%{search}%"
@@ -168,7 +171,7 @@ async def list_supervisors(
             or_(
                 User.full_name.ilike(s),
                 User.email.ilike(s),
-                Supervisor.department.ilike(s),
+                Faculty.department.ilike(s),
             )
         )
 
@@ -178,8 +181,8 @@ async def list_supervisors(
     # 2. Count Query (Pagination formula from your Student API)
     count_query = (
         select(func.count(User.user_id))
-        .join(Supervisor)
-        .where(User.role == RoleEnum.supervisor)
+        .join(Faculty)
+        .where(User.role == RoleEnum.faculty)
     )
     if filters:
         count_query = count_query.where(and_(*filters))
@@ -193,26 +196,26 @@ async def list_supervisors(
     rows = (await db.execute(query)).all()
 
     # 4. Formatting for your Frontend Cards
-    supervisors_out = []
-    for user, supervisor in rows:
-        free = supervisor.capacity_max - supervisor.capacity_filled
-        supervisors_out.append(
-            SupervisorCardInfo(
+    faculty_out = []
+    for user, faculty_member in rows:
+        free = faculty_member.capacity_max - faculty_member.capacity_filled
+        faculty_out.append(
+            FacultyCardInfo(
                 user_id=str(user.user_id),
                 full_name=user.full_name,
                 email=user.email,
-                department=supervisor.department,
-                designation=supervisor.designation,
-                domains=[d.name for d in supervisor.domains],
-                capacity_max=supervisor.capacity_max,
-                capacity_filled=supervisor.capacity_filled,
+                department=faculty_member.department,
+                designation=faculty_member.designation,
+                domains=[d.name for d in faculty_member.domains],
+                capacity_max=faculty_member.capacity_max,
+                capacity_filled=faculty_member.capacity_filled,
                 free_slots=free,
                 status="AVAILABLE" if free > 0 else "FULL",
             )
         )
 
-    response = PaginatedSupervisorResponse(
-        supervisors=supervisors_out,
+    response = PaginatedFacultyResponse(
+        faculty=faculty_out,
         total=total,
         page=page,
         per_page=per_page,
@@ -229,20 +232,20 @@ async def list_supervisors(
     # 1. GET Individual Profile
 
 
-@router.get("/supervisors/{supervisor_id}", response_model=AdminSupervisorProfileOut)
-async def get_admin_supervisor_profile(
-    supervisor_id: UUID,
+@router.get("/faculty/{faculty_id}", response_model=AdminFacultyProfileOut)
+async def get_admin_faculty_profile(
+    faculty_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    user = await supervisor_repository.get_full_profile(db, supervisor_id)
-    if not user or not user.supervisor_profile:
-        raise HTTPException(status_code=404, detail="Supervisor not found")
+    user = await supervisor_repository.get_full_profile(db, faculty_id)
+    if not user or not user.faculty_profile:
+        raise HTTPException(status_code=404, detail="Faculty not found")
 
-    sp = user.supervisor_profile
+    sp = user.faculty_profile
 
     # Format Projects list for UI
     projects_data = []
@@ -278,7 +281,7 @@ async def get_admin_supervisor_profile(
                     )
                 )
 
-    return AdminSupervisorProfileOut(
+    return AdminFacultyProfileOut(
         user_id=user.user_id,
         full_name=user.full_name,
         email=user.email,
@@ -300,9 +303,9 @@ async def get_admin_supervisor_profile(
 # app/api/http/admin_supervisors.py
 
 
-@router.patch("/supervisors/{supervisor_id}/capacity")
-async def update_supervisor_capacity(
-    supervisor_id: UUID,
+@router.patch("/faculty/{faculty_id}/capacity")
+async def update_faculty_capacity(
+    faculty_id: UUID,
     data: CapacityUpdateReq,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -310,23 +313,23 @@ async def update_supervisor_capacity(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    # 1. Supervisor ko fetch karein taake current filled capacity pata chale
-    user = await supervisor_repository.get_full_profile(db, supervisor_id)
-    if not user or not user.supervisor_profile:
-        raise HTTPException(status_code=404, detail="Supervisor not found")
+    # 1. Fetch faculty to get current filled capacity
+    user = await supervisor_repository.get_full_profile(db, faculty_id)
+    if not user or not user.faculty_profile:
+        raise HTTPException(status_code=404, detail="Faculty not found")
 
-    sp = user.supervisor_profile
+    sp = user.faculty_profile
 
     # 2. Business Logic: Check if new capacity is enough for already assigned groups
     if data.capacity_max < sp.capacity_filled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot reduce capacity to {data.capacity_max}. Supervisor already has {sp.capacity_filled} assigned groups.",
+            detail=f"Cannot reduce capacity to {data.capacity_max}. Faculty member already has {sp.capacity_filled} assigned groups.",
         )
 
-    # 3. Agar sab theek hai, toh update karein
+    # 3. Apply update
     await supervisor_repository.update(
-        db, supervisor_id, {"capacity_max": data.capacity_max}
+        db, faculty_id, {"capacity_max": data.capacity_max}
     )
     await db.commit()
 

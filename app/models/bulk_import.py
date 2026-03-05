@@ -39,11 +39,7 @@ class BulkItemStatus(str, enum.Enum):
     skipped = "skipped"
 
 
-class TargetRoleEnum(str, enum.Enum):
-    """Target role for bulk import (student or supervisor only)."""
-
-    student = "student"
-    supervisor = "supervisor"
+from app.models.user import RoleEnum
 
 
 class BulkImportJob(Base):
@@ -67,8 +63,8 @@ class BulkImportJob(Base):
     # Target role for all users in this batch
     target_role = Column(
         SAEnum(
-            TargetRoleEnum,
-            name="target_role_enum",
+            RoleEnum,
+            name="user_role_enum",
             native_enum=False,
             create_constraint=False,
         ),

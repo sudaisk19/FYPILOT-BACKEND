@@ -9,7 +9,7 @@ from app.api.http.admin_profile import router as admin_profile_router
 
 # Import admin router
 from app.api.http.admin_students import router as admin_students_router
-from app.api.http.admin_supervisors import router as admin_supervisors_router
+from app.api.http.admin_supervisors import router as admin_faculty_router
 
 # Import bulk import router
 from app.api.http.bulk_import import router as bulk_import_router
@@ -54,7 +54,7 @@ router.include_router(
     student_profile_router, prefix="/students", tags=["student-profile"]
 )
 router.include_router(
-    supervisor_profile_router, prefix="/supervisors", tags=["supervisor-profile"]
+    supervisor_profile_router, prefix="/faculty", tags=["faculty-profile"]
 )
 router.include_router(admin_profile_router, prefix="/admins", tags=["admin-profile"])
 
@@ -87,9 +87,7 @@ router.include_router(profile_status_router, tags=["profile-status"])
 
 router.include_router(admin_students_router, prefix="/admin", tags=["admin-students"])
 
-router.include_router(
-    admin_supervisors_router, prefix="/admin", tags=["admin-supervisors"]
-)
+router.include_router(admin_faculty_router, prefix="/admin", tags=["admin-faculty"])
 
 router.include_router(admin_groups_router)
 
@@ -120,7 +118,7 @@ router.include_router(
 from app.api.http.supervisor_fypmilestone import router as supervisor_milestones_router
 
 router.include_router(
-    supervisor_milestones_router, prefix="/supervisors", tags=["supervisor-milestones"]
+    supervisor_milestones_router, prefix="/faculty", tags=["faculty-milestones"]
 )
 from app.api.http.supervisor_submissions import router as supervisor_submissions_router
 

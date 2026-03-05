@@ -1,8 +1,8 @@
 # app/repositories/supervisor_repository.py
 """
-Supervisor Repository Module
+Faculty Repository Module (formerly Supervisor Repository)
 
-Handles all database operations for the Supervisor model,
+Handles all database operations for the Faculty model,
 including complex queries with joins for domains and industries.
 """
 
@@ -14,54 +14,54 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.domain import Domain
+from app.models.faculty import Faculty
+from app.models.faculty_domain import FacultyDomain
+from app.models.faculty_industry import FacultyIndustry
 from app.models.industry import Industry
-from app.models.supervisor import Supervisor
-from app.models.supervisor_domain import SupervisorDomain
-from app.models.supervisor_industry import SupervisorIndustry
 from app.models.user import User
 
 from .base import BaseRepository
 
 
-class SupervisorRepository(BaseRepository[Supervisor]):
-    """Repository for Supervisor model operations."""
+class SupervisorRepository(BaseRepository[Faculty]):
+    """Repository for Faculty model operations."""
 
     def __init__(self):
-        super().__init__(Supervisor)
+        super().__init__(Faculty)
 
     async def get_by_user_id(
         self, db: AsyncSession, user_id: UUID
-    ) -> Optional[Supervisor]:
+    ) -> Optional[Faculty]:
         """
-        Get supervisor profile by user ID.
+        Get faculty profile by user ID.
 
         Args:
             db: Database session
             user_id: User's UUID
 
         Returns:
-            Supervisor instance or None
+            Faculty instance or None
         """
-        query = select(Supervisor).where(Supervisor.user_id == user_id)
+        query = select(Faculty).where(Faculty.user_id == user_id)
         result = await db.execute(query)
         return result.scalars().first()
 
     async def get_with_user(
         self, db: AsyncSession, user_id: UUID
-    ) -> Optional[Tuple[User, Supervisor]]:
+    ) -> Optional[Tuple[User, Faculty]]:
         """
-        Get supervisor with user data.
+        Get faculty with user data.
 
         Args:
             db: Database session
             user_id: User's UUID
 
         Returns:
-            Tuple of (User, Supervisor) or None
+            Tuple of (User, Faculty) or None
         """
         query = (
-            select(User, Supervisor)
-            .join(Supervisor, User.user_id == Supervisor.user_id)
+            select(User, Faculty)
+            .join(Faculty, User.user_id == Faculty.user_id)
             .where(User.user_id == user_id)
         )
         result = await db.execute(query)
@@ -69,41 +69,39 @@ class SupervisorRepository(BaseRepository[Supervisor]):
 
     async def get_with_domains_industries(
         self, db: AsyncSession, user_id: UUID
-    ) -> Optional[Supervisor]:
+    ) -> Optional[Faculty]:
         """
-        Get supervisor with domains and industries loaded.
+        Get faculty with domains and industries loaded.
 
         Args:
             db: Database session
             user_id: User's UUID
 
         Returns:
-            Supervisor instance with relationships loaded, or None
+            Faculty instance with relationships loaded, or None
         """
         query = (
-            select(Supervisor)
+            select(Faculty)
             .options(
-                selectinload(Supervisor.domains),
-                selectinload(Supervisor.industries),
+                selectinload(Faculty.domains),
+                selectinload(Faculty.industries),
             )
-            .where(Supervisor.user_id == user_id)
+            .where(Faculty.user_id == user_id)
         )
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def list_all_with_users(
-        self, db: AsyncSession
-    ) -> List[Tuple[Supervisor, User]]:
+    async def list_all_with_users(self, db: AsyncSession) -> List[Tuple[Faculty, User]]:
         """
-        Get all supervisors with their user data.
+        Get all faculty with their user data.
 
         Args:
             db: Database session
 
         Returns:
-            List of (Supervisor, User) tuples
+            List of (Faculty, User) tuples
         """
-        query = select(Supervisor, User).join(User, Supervisor.user_id == User.user_id)
+        query = select(Faculty, User).join(User, Faculty.user_id == User.user_id)
         result = await db.execute(query)
         return list(result.all())
 
@@ -116,9 +114,9 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         search: Optional[str] = None,
         page: int = 1,
         per_page: int = 10,
-    ) -> Tuple[List[Tuple[User, Supervisor]], int]:
+    ) -> Tuple[List[Tuple[User, Faculty]], int]:
         """
-        Search supervisors with filtering and pagination.
+        Search faculty with filtering and pagination.
 
         Args:
             db: Database session
@@ -130,24 +128,24 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             per_page: Items per page
 
         Returns:
-            Tuple of (list of (User, Supervisor) tuples, total count)
+            Tuple of (list of (User, Faculty) tuples, total count)
         """
         # Build base query
         query = (
-            select(User, Supervisor)
-            .join(Supervisor, User.user_id == Supervisor.user_id)
-            .where(User.role == "supervisor")
+            select(User, Faculty)
+            .join(Faculty, User.user_id == Faculty.user_id)
+            .where(User.role == "faculty")
         )
 
         filters = []
 
         # Department filter
         if department:
-            filters.append(Supervisor.department.ilike(f"%{department}%"))
+            filters.append(Faculty.department.ilike(f"%{department}%"))
 
         # Designation filter
         if designation:
-            filters.append(Supervisor.designation.ilike(f"%{designation}%"))
+            filters.append(Faculty.designation.ilike(f"%{designation}%"))
 
         # Search filter (name or email)
         if search:
@@ -162,10 +160,10 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         if domain:
             query = (
                 query.join(
-                    SupervisorDomain,
-                    Supervisor.user_id == SupervisorDomain.supervisor_id,
+                    FacultyDomain,
+                    Faculty.user_id == FacultyDomain.faculty_id,
                 )
-                .join(Domain, SupervisorDomain.domain_id == Domain.domain_id)
+                .join(Domain, FacultyDomain.domain_id == Domain.domain_id)
                 .where(Domain.name.ilike(f"%{domain}%"))
             )
 
@@ -201,52 +199,52 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         requirements: Optional[List[str]] = None,
         project_type: Optional[str] = None,
         capacity_max: int = 8,
-    ) -> Supervisor:
+    ) -> Faculty:
         """
-        Create a new supervisor profile.
+        Create a new faculty profile.
 
         Args:
             db: Database session
             user_id: User's UUID (foreign key)
-            department: Supervisor's department
-            designation: Supervisor's designation
+            department: Faculty member's department
+            designation: Faculty member's designation
             office: Office location
             requirements: List of requirements for students
             project_type: Preferred project type
             capacity_max: Maximum capacity for groups
 
         Returns:
-            Created Supervisor instance
+            Created Faculty instance
         """
-        supervisor_data = {
+        faculty_data = {
             "user_id": user_id,
             "capacity_max": capacity_max,
             "capacity_filled": 0,
         }
 
         if department is not None:
-            supervisor_data["department"] = department
+            faculty_data["department"] = department
         if designation is not None:
-            supervisor_data["designation"] = designation
+            faculty_data["designation"] = designation
         if office is not None:
-            supervisor_data["office"] = office
+            faculty_data["office"] = office
         if requirements is not None:
-            supervisor_data["requirements"] = requirements
+            faculty_data["requirements"] = requirements
         if project_type is not None:
             from app.models.project import parse_project_type
 
-            supervisor_data["project_type"] = parse_project_type(project_type)
+            faculty_data["project_type"] = parse_project_type(project_type)
 
-        return await super().create(db, supervisor_data)
+        return await super().create(db, faculty_data)
 
     async def update(
         self,
         db: AsyncSession,
         user_id: UUID,
         updates: Dict[str, Any],
-    ) -> Optional[Supervisor]:
+    ) -> Optional[Faculty]:
         """
-        Update supervisor profile fields.
+        Update faculty profile fields.
 
         Args:
             db: Database session
@@ -254,33 +252,33 @@ class SupervisorRepository(BaseRepository[Supervisor]):
             updates: Dictionary of fields to update
 
         Returns:
-            Updated Supervisor instance or None if not found
+            Updated Faculty instance or None if not found
         """
-        supervisor = await self.get_by_user_id(db, user_id)
-        if not supervisor:
+        faculty_member = await self.get_by_user_id(db, user_id)
+        if not faculty_member:
             return None
         # Normalize project_type if present in updates
         if "project_type" in updates and updates["project_type"] is not None:
             from app.models.project import parse_project_type
 
             updates["project_type"] = parse_project_type(updates["project_type"])
-        return await super().update(db, supervisor, updates)
+        return await super().update(db, faculty_member, updates)
 
     async def get_domains(self, db: AsyncSession, supervisor_id: UUID) -> List[Domain]:
         """
-        Get all domains for a supervisor.
+        Get all domains for a faculty member.
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
 
         Returns:
             List of Domain instances
         """
         query = (
             select(Domain)
-            .join(SupervisorDomain, Domain.domain_id == SupervisorDomain.domain_id)
-            .where(SupervisorDomain.supervisor_id == supervisor_id)
+            .join(FacultyDomain, Domain.domain_id == FacultyDomain.domain_id)
+            .where(FacultyDomain.faculty_id == supervisor_id)
         )
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -289,11 +287,11 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         self, db: AsyncSession, supervisor_id: UUID
     ) -> List[Industry]:
         """
-        Get all industries for a supervisor.
+        Get all industries for a faculty member.
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
 
         Returns:
             List of Industry instances
@@ -301,10 +299,10 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         query = (
             select(Industry)
             .join(
-                SupervisorIndustry,
-                Industry.industry_id == SupervisorIndustry.industry_id,
+                FacultyIndustry,
+                Industry.industry_id == FacultyIndustry.industry_id,
             )
-            .where(SupervisorIndustry.supervisor_id == supervisor_id)
+            .where(FacultyIndustry.faculty_id == supervisor_id)
         )
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -316,27 +314,25 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         domain_ids: List[UUID],
     ) -> None:
         """
-        Set domains for a supervisor (replaces existing).
+        Set domains for a faculty member (replaces existing).
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
             domain_ids: List of domain UUIDs to set
         """
         from sqlalchemy import delete
 
         # Delete existing associations
         await db.execute(
-            delete(SupervisorDomain).where(
-                SupervisorDomain.supervisor_id == supervisor_id
-            )
+            delete(FacultyDomain).where(FacultyDomain.faculty_id == supervisor_id)
         )
 
         # Create new associations
         for domain_id in domain_ids:
             db.add(
-                SupervisorDomain(
-                    supervisor_id=supervisor_id,
+                FacultyDomain(
+                    faculty_id=supervisor_id,
                     domain_id=domain_id,
                 )
             )
@@ -350,27 +346,25 @@ class SupervisorRepository(BaseRepository[Supervisor]):
         industry_ids: List[UUID],
     ) -> None:
         """
-        Set industries for a supervisor (replaces existing).
+        Set industries for a faculty member (replaces existing).
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
             industry_ids: List of industry UUIDs to set
         """
         from sqlalchemy import delete
 
         # Delete existing associations
         await db.execute(
-            delete(SupervisorIndustry).where(
-                SupervisorIndustry.supervisor_id == supervisor_id
-            )
+            delete(FacultyIndustry).where(FacultyIndustry.faculty_id == supervisor_id)
         )
 
         # Create new associations
         for industry_id in industry_ids:
             db.add(
-                SupervisorIndustry(
-                    supervisor_id=supervisor_id,
+                FacultyIndustry(
+                    faculty_id=supervisor_id,
                     industry_id=industry_id,
                 )
             )
@@ -379,60 +373,58 @@ class SupervisorRepository(BaseRepository[Supervisor]):
 
     async def increment_capacity_filled(
         self, db: AsyncSession, supervisor_id: UUID
-    ) -> Optional[Supervisor]:
+    ) -> Optional[Faculty]:
         """
         Increment the capacity_filled counter.
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
 
         Returns:
-            Updated Supervisor instance or None
+            Updated Faculty instance or None
         """
-        supervisor = await self.get_by_user_id(db, supervisor_id)
-        if supervisor:
-            supervisor.capacity_filled += 1
+        faculty_member = await self.get_by_user_id(db, supervisor_id)
+        if faculty_member:
+            faculty_member.capacity_filled += 1
             await db.flush()
-        return supervisor
+        return faculty_member
 
     async def decrement_capacity_filled(
         self, db: AsyncSession, supervisor_id: UUID
-    ) -> Optional[Supervisor]:
+    ) -> Optional[Faculty]:
         """
         Decrement the capacity_filled counter (minimum 0).
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            supervisor_id: Faculty member's user ID
 
         Returns:
-            Updated Supervisor instance or None
+            Updated Faculty instance or None
         """
-        supervisor = await self.get_by_user_id(db, supervisor_id)
-        if supervisor and supervisor.capacity_filled > 0:
-            supervisor.capacity_filled -= 1
+        faculty_member = await self.get_by_user_id(db, supervisor_id)
+        if faculty_member and faculty_member.capacity_filled > 0:
+            faculty_member.capacity_filled -= 1
             await db.flush()
-        return supervisor
+        return faculty_member
 
     async def get_full_profile(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
-        """Fetch supervisor with user, domains, industries, and supervised projects."""
+        """Fetch faculty with user, domains, industries, and supervised projects."""
         from app.models.group import Group
         from app.models.project import Project
 
         query = (
             select(User)
             .options(
-                selectinload(User.supervisor_profile).selectinload(Supervisor.domains),
-                selectinload(User.supervisor_profile).selectinload(
-                    Supervisor.industries
-                ),
-                selectinload(User.supervisor_profile)
-                .selectinload(Supervisor.supervised_groups)
+                selectinload(User.faculty_profile).selectinload(Faculty.domains),
+                selectinload(User.faculty_profile).selectinload(Faculty.industries),
+                selectinload(User.faculty_profile)
+                .selectinload(Faculty.supervised_groups)
                 .selectinload(Group.project)
                 .selectinload(Project.domains),
-                selectinload(User.supervisor_profile)
-                .selectinload(Supervisor.co_supervised_groups)
+                selectinload(User.faculty_profile)
+                .selectinload(Faculty.co_supervised_groups)
                 .selectinload(Group.project)
                 .selectinload(Project.domains),
             )

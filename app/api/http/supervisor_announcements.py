@@ -163,12 +163,12 @@ async def get_supervisor_announcements(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: List all regular announcements created by me."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     base_filters = [
         Announcement.created_by == current_user.user_id,
-        Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
+        Announcement.created_by_role == AnnouncementRoleEnum.faculty,
         Announcement.is_submission_request == False,  # noqa: E712
     ]
 
@@ -220,7 +220,7 @@ async def get_admin_announcements_for_supervisor(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: List admin announcements targeted at supervisors (all_supervisors / both)."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     # Only admin-created, non-submission announcements
@@ -279,7 +279,7 @@ async def get_supervisor_announcement_by_id(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: Get a single announcement by ID (ownership check)."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     result = await db.execute(
@@ -325,7 +325,7 @@ async def create_supervisor_announcement(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: Create a regular announcement for managed group(s)."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     # Resolve groups
@@ -351,7 +351,7 @@ async def create_supervisor_announcement(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.supervisor,
+        created_by_role=AnnouncementRoleEnum.faculty,
         title=title,
         description=description,
         is_submission_request=False,
@@ -428,7 +428,7 @@ async def delete_supervisor_announcement(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: Delete an announcement (ownership check + storage cleanup)."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     result = await db.execute(
@@ -486,7 +486,7 @@ async def update_supervisor_announcement(
     current_user: User = Depends(get_current_user),
 ):
     """Supervisor: Partially update an announcement."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(status_code=403, detail="Supervisor only")
 
     # Fetch

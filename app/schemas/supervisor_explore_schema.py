@@ -80,8 +80,8 @@ class SupervisorDetailedInfo(BaseModel):
 
 # Pagination response wrapper
 class PaginatedSupervisorResponse(BaseModel):
-    supervisors: List[SupervisorBasicInfo]
-    total: int = Field(description="Total number of supervisors")
+    faculty: List[SupervisorBasicInfo]
+    total: int = Field(description="Total number of faculty")
     page: int = Field(description="Current page number")
     per_page: int = Field(description="Items per page")
     total_pages: int = Field(description="Total number of pages")

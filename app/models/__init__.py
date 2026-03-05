@@ -10,6 +10,7 @@ from .announcement import (
     AnnouncementFile,
     AnnouncementRoleEnum,
     AnnouncementTarget,
+    TargetRoleEnum,
 )
 
 # Bulk import models
@@ -18,11 +19,15 @@ from .bulk_import import (
     BulkImportJob,
     BulkItemStatus,
     BulkJobStatus,
-    TargetRoleEnum,
 )
 
 # Domain and Industry models (base models)
 from .domain import Domain
+from .faculty import Faculty
+
+# Faculty relationship models (junction tables)
+from .faculty_domain import FacultyDomain
+from .faculty_industry import FacultyIndustry
 
 # Group models (depend on User and Student)
 from .group import Group, GroupInvite, GroupMember
@@ -47,14 +52,9 @@ from .submission import (
     SubmissionStatusEnum,
     SubmissionTypeEnum,
 )
-from .supervisor import Supervisor
+from .supervisor_evaluation import SupervisorEvaluation
 from .task import Task, TaskPriorityEnum, TaskStatusEnum
 from .task_attachment import TaskAttachment
-from .supervisor_evaluation import SupervisorEvaluation
-
-# Supervisor relationship models (junction tables)
-from .supervisor_domain import SupervisorDomain
-from .supervisor_industry import SupervisorIndustry
 
 # Base models first
 from .user import RoleEnum, User
@@ -69,7 +69,7 @@ __all__ = [
     "User",
     "RoleEnum",
     "Student",
-    "Supervisor",
+    "Faculty",
     "Admin",
     "Group",
     "GroupMember",
@@ -78,7 +78,6 @@ __all__ = [
     "RequestTypeEnum",
     "ShortlistedSupervisor",
     "Project",
-    "ProjectDomain",
     "ProjectDomain",
     "AdminMilestone",
     "GroupMilestone",
@@ -93,19 +92,19 @@ __all__ = [
     "AnnouncementFile",
     "AnnouncementTarget",
     "AnnouncementRoleEnum",
+    "TargetRoleEnum",
     "Submission",
     "SubmissionFile",
     "SubmissionTypeEnum",
     "SubmissionStatusEnum",
     "Domain",
     "Industry",
-    "SupervisorDomain",
-    "SupervisorIndustry",
+    "FacultyDomain",
+    "FacultyIndustry",
     "PasswordResetToken",
     # Bulk import models
     "BulkImportJob",
     "BulkImportItem",
     "BulkJobStatus",
     "BulkItemStatus",
-    "TargetRoleEnum",
 ]

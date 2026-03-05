@@ -68,7 +68,7 @@ class UserRepository(BaseRepository[User]):
             select(User)
             .options(
                 selectinload(User.student_profile),
-                selectinload(User.supervisor_profile),
+                selectinload(User.faculty_profile),
                 selectinload(User.admin_profile),
             )
             .where(User.user_id == user_id)
@@ -93,7 +93,7 @@ class UserRepository(BaseRepository[User]):
             select(User)
             .options(
                 selectinload(User.student_profile),
-                selectinload(User.supervisor_profile),
+                selectinload(User.faculty_profile),
                 selectinload(User.admin_profile),
             )
             .where(User.email == email)

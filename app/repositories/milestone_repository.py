@@ -8,9 +8,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.models.faculty import Faculty
 from app.models.group import FYPCycleEnum, Group
 from app.models.milestone import AdminMilestone
-from app.models.supervisor import Supervisor
 from app.models.supervisor_evaluation import SupervisorEvaluation
 from app.schemas.admin_milestone_schema import (
     AdminEvaluationResponse,
@@ -29,7 +29,7 @@ async def list_evaluations_for_milestone(
     result = await db.execute(
         select(SupervisorEvaluation)
         .options(
-            joinedload(SupervisorEvaluation.supervisor).joinedload(Supervisor.user),
+            joinedload(SupervisorEvaluation.supervisor).joinedload(Faculty.user),
             joinedload(SupervisorEvaluation.group).joinedload(Group.project),
         )
         .where(SupervisorEvaluation.milestone_id == milestone_id)

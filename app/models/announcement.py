@@ -29,12 +29,13 @@ if TYPE_CHECKING:
 
 class AnnouncementRoleEnum(str, enum.Enum):
     admin = "admin"
-    supervisor = "supervisor"
+    faculty = "faculty"
 
 
 class TargetRoleEnum(str, enum.Enum):
     all_students = "all_students"
     all_supervisors = "all_supervisors"
+    all_faculty = "all_faculty"
     both = "both"  # Added from sumaiya-dev to preserve functionality
     fyp1_students = "fyp1_students"
     fyp2_students = "fyp2_students"

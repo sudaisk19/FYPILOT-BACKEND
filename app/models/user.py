@@ -11,10 +11,10 @@ from sqlalchemy.sql import func
 from app.db import Base
 
 
-# Must match your Postgres enum "role_enum"
+# Must match your Postgres enum "user_role_enum"
 class RoleEnum(str, enum.Enum):
     student = "student"
-    supervisor = "supervisor"
+    faculty = "faculty"
     admin = "admin"
 
 
@@ -41,12 +41,11 @@ class User(Base):
     )
 
     # 1-to-1 profiles (PK=FK to users.user_id)
-    # Using string references to avoid circular import issues
     student_profile = relationship(
         "Student", uselist=False, back_populates="user", cascade="all, delete-orphan"
     )
-    supervisor_profile = relationship(
-        "Supervisor", uselist=False, back_populates="user", cascade="all, delete-orphan"
+    faculty_profile = relationship(
+        "Faculty", uselist=False, back_populates="user", cascade="all, delete-orphan"
     )
     admin_profile = relationship(
         "Admin", uselist=False, back_populates="user", cascade="all, delete-orphan"

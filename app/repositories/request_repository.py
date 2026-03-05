@@ -12,9 +12,9 @@ from uuid import UUID
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.faculty import Faculty
 from app.models.group import Group, InviteStatusEnum
 from app.models.request import Request, RequestTypeEnum
-from app.models.supervisor import Supervisor
 from app.models.user import User
 
 from .base import BaseRepository
@@ -43,7 +43,7 @@ class RequestRepository(BaseRepository[Request]):
         self,
         db: AsyncSession,
         group_id: UUID,
-        supervisor_id: UUID,
+        faculty_id: UUID,
         request_type: RequestTypeEnum,
         message: Optional[str] = None,
     ) -> Request:
@@ -53,7 +53,7 @@ class RequestRepository(BaseRepository[Request]):
         Args:
             db: Database session
             group_id: Group's UUID
-            supervisor_id: Supervisor's user ID
+            faculty_id: Faculty's user ID
             request_type: Type of request (supervisor/cosupervisor)
             message: Optional message to supervisor
 
@@ -62,7 +62,7 @@ class RequestRepository(BaseRepository[Request]):
         """
         request_data = {
             "group_id": group_id,
-            "supervisor_id": supervisor_id,
+            "faculty_id": faculty_id,
             "request_type": request_type,
             "status": InviteStatusEnum.pending,
             "message": message,
@@ -73,14 +73,14 @@ class RequestRepository(BaseRepository[Request]):
     async def get_pending_for_supervisor(
         self,
         db: AsyncSession,
-        supervisor_id: UUID,
+        faculty_id: UUID,
     ) -> List[Tuple[Request, Group]]:
         """
         Get all pending requests for a supervisor.
 
         Args:
             db: Database session
-            supervisor_id: Supervisor's user ID
+            faculty_id: Faculty's user ID
 
         Returns:
             List of (Request, Group) tuples
@@ -89,7 +89,7 @@ class RequestRepository(BaseRepository[Request]):
             select(Request, Group)
             .join(Group, Group.group_id == Request.group_id)
             .where(
-                Request.supervisor_id == supervisor_id,
+                Request.faculty_id == faculty_id,
                 Request.status == InviteStatusEnum.pending,
             )
             .order_by(Request.created_at.desc())
@@ -102,7 +102,7 @@ class RequestRepository(BaseRepository[Request]):
         db: AsyncSession,
         group_id: UUID,
         exclude_cancelled: bool = True,
-    ) -> List[Tuple[Request, Supervisor, User]]:
+    ) -> List[Tuple[Request, Faculty, User]]:
         """
         Get all requests sent by a group.
 
@@ -112,12 +112,12 @@ class RequestRepository(BaseRepository[Request]):
             exclude_cancelled: Whether to exclude cancelled requests
 
         Returns:
-            List of (Request, Supervisor, User) tuples
+            List of (Request, Faculty, User) tuples
         """
         query = (
-            select(Request, Supervisor, User)
-            .join(Supervisor, Supervisor.user_id == Request.supervisor_id)
-            .join(User, User.user_id == Supervisor.user_id)
+            select(Request, Faculty, User)
+            .join(Faculty, Faculty.user_id == Request.faculty_id)
+            .join(User, User.user_id == Faculty.user_id)
             .where(Request.group_id == group_id)
         )
 
@@ -133,7 +133,7 @@ class RequestRepository(BaseRepository[Request]):
         self,
         db: AsyncSession,
         group_id: UUID,
-        supervisor_id: UUID,
+        faculty_id: UUID,
     ) -> bool:
         """
         Check if a pending request exists for a group-supervisor pair.
@@ -141,14 +141,14 @@ class RequestRepository(BaseRepository[Request]):
         Args:
             db: Database session
             group_id: Group's UUID
-            supervisor_id: Supervisor's user ID
+            faculty_id: Faculty's user ID
 
         Returns:
             True if pending request exists, False otherwise
         """
         query = select(Request).where(
             Request.group_id == group_id,
-            Request.supervisor_id == supervisor_id,
+            Request.faculty_id == faculty_id,
             Request.status == InviteStatusEnum.pending,
         )
         result = await db.execute(query)
@@ -158,7 +158,7 @@ class RequestRepository(BaseRepository[Request]):
         self,
         db: AsyncSession,
         group_id: UUID,
-        supervisor_id: UUID,
+        faculty_id: UUID,
     ) -> Optional[Request]:
         """
         Get a pending request for a specific group-supervisor pair.
@@ -166,14 +166,14 @@ class RequestRepository(BaseRepository[Request]):
         Args:
             db: Database session
             group_id: Group's UUID
-            supervisor_id: Supervisor's user ID
+            faculty_id: Faculty's user ID
 
         Returns:
             Request instance or None
         """
         query = select(Request).where(
             Request.group_id == group_id,
-            Request.supervisor_id == supervisor_id,
+            Request.faculty_id == faculty_id,
             Request.status == InviteStatusEnum.pending,
         )
         result = await db.execute(query)
@@ -226,7 +226,7 @@ class RequestRepository(BaseRepository[Request]):
         self,
         db: AsyncSession,
         request_id: UUID,
-        supervisor_id: UUID,
+        faculty_id: UUID,
     ) -> Optional[Request]:
         """
         Get a pending request that belongs to a specific supervisor.
@@ -235,14 +235,14 @@ class RequestRepository(BaseRepository[Request]):
         Args:
             db: Database session
             request_id: Request's UUID
-            supervisor_id: Supervisor's user ID
+            faculty_id: Faculty's user ID
 
         Returns:
             Request instance or None
         """
         query = select(Request).where(
             Request.request_id == request_id,
-            Request.supervisor_id == supervisor_id,
+            Request.faculty_id == faculty_id,
             Request.status == InviteStatusEnum.pending,
         )
         result = await db.execute(query)

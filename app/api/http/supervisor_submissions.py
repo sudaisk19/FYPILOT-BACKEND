@@ -255,7 +255,7 @@ async def download_announcement_file(
     """
     Download or view an announcement file for supervisor.
     """
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -329,7 +329,7 @@ async def create_supervisor_submission_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Supervisor: Create a new submission request for checking/grading."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -368,7 +368,7 @@ async def create_supervisor_submission_task(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.supervisor,
+        created_by_role=AnnouncementRoleEnum.faculty,
         title=title,
         description=description,
         is_submission_request=True,
@@ -463,7 +463,7 @@ async def get_supervisor_submission_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Supervisor: Get details of a specific submission task."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -510,7 +510,7 @@ async def edit_supervisor_submission_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Supervisor: Update an existing submission task."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -685,7 +685,7 @@ async def list_supervisor_submission_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """Supervisor: Fetch all submission tasks created by me."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -787,7 +787,7 @@ async def get_submission_responses(
     """
     Supervisor: Get all group submissions (responses) for a specific task.
     """
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -918,7 +918,7 @@ async def get_submission_evaluation(
     db: AsyncSession = Depends(get_db),
 ):
     """Supervisor: Get full submission details for grading."""
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -999,7 +999,7 @@ async def update_supervisor_grading(
     """
     Supervisor: Update marks and feedback.
     """
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )
@@ -1091,7 +1091,7 @@ async def download_submission_file(
     """
     Supervisor: Download or view a submission file from a student.
     """
-    if current_user.role != RoleEnum.supervisor:
+    if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
         )

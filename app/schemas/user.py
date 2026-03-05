@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic.config import ConfigDict
 
 # DB-enforced roles
-Role = Literal["student", "supervisor", "admin"]
+Role = Literal["student", "faculty", "admin"]
 
 
 class UserCreate(BaseModel):
@@ -95,6 +95,6 @@ class MeResponse(BaseModel):
     role: Role
     profile_avatar: Optional[str] = None
     has_student_profile: bool = False
-    has_supervisor_profile: bool = False
+    has_faculty_profile: bool = False
     has_admin_profile: bool = False
     model_config = ConfigDict(from_attributes=True)

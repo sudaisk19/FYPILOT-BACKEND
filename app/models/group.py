@@ -49,7 +49,7 @@ class Group(Base):
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
     supervisor_id = Column(
-        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+        PGUUID(as_uuid=True), ForeignKey("faculty.user_id"), nullable=True
     )
     # Multiple co-supervisors as ARRAY of UUIDs
     cosupervisor_ids = Column(
@@ -90,14 +90,14 @@ class Group(Base):
         secondaryjoin="group_members.c.student_id == Student.user_id",
     )
     supervisor = relationship(
-        "Supervisor",
+        "Faculty",
         foreign_keys=[supervisor_id],
     )
 
     # Added relationship for Co-Supervisors (using Array containment)
     co_supervisors = relationship(
-        "Supervisor",
-        primaryjoin="foreign(Supervisor.user_id) == func.any(Group.cosupervisor_ids)",
+        "Faculty",
+        primaryjoin="foreign(Faculty.user_id) == func.any(Group.cosupervisor_ids)",
         viewonly=True,
     )
 

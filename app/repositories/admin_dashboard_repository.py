@@ -6,12 +6,12 @@ from typing import List, Sequence, Tuple
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember
 from app.models.milestone import AdminMilestone
 from app.models.project import Project
 from app.models.student import Student
 from app.models.supervisor_evaluation import SupervisorEvaluation
-from app.models.supervisor import Supervisor
 from app.models.user import User
 
 
@@ -29,9 +29,9 @@ class AdminDashboardRepository:
         return await self._scalar_int(stmt)
 
     async def count_active_supervisors(self) -> int:
-        stmt = select(func.count(Supervisor.user_id)).where(
-            Supervisor.is_active.is_(True),
-            Supervisor.is_supervisor.is_(True),
+        stmt = select(func.count(Faculty.user_id)).where(
+            Faculty.is_active.is_(True),
+            Faculty.is_supervisor.is_(True),
         )
         return await self._scalar_int(stmt)
 
@@ -48,17 +48,17 @@ class AdminDashboardRepository:
     async def count_supervisors_per_department(self) -> List[Tuple[str, int]]:
         stmt = (
             select(
-                Supervisor.department,
-                func.count(Supervisor.user_id).label("supervisor_count"),
+                Faculty.department,
+                func.count(Faculty.user_id).label("supervisor_count"),
             )
             .where(
-                Supervisor.is_active.is_(True),
-                Supervisor.is_supervisor.is_(True),
+                Faculty.is_active.is_(True),
+                Faculty.is_supervisor.is_(True),
             )
-            .group_by(Supervisor.department)
+            .group_by(Faculty.department)
             .order_by(
-                func.count(Supervisor.user_id).desc(),
-                Supervisor.department.asc(),
+                func.count(Faculty.user_id).desc(),
+                Faculty.department.asc(),
             )
         )
         result = await self.db.execute(stmt)
@@ -70,26 +70,28 @@ class AdminDashboardRepository:
 
     async def supervisor_capacity_totals(self) -> Tuple[int, int]:
         stmt = select(
-            func.coalesce(func.sum(Supervisor.capacity_max), 0),
-            func.coalesce(func.sum(Supervisor.capacity_filled), 0),
+            func.coalesce(func.sum(Faculty.capacity_max), 0),
+            func.coalesce(func.sum(Faculty.capacity_filled), 0),
         ).where(
-            Supervisor.is_active.is_(True),
-            Supervisor.is_supervisor.is_(True),
+            Faculty.is_active.is_(True),
+            Faculty.is_supervisor.is_(True),
         )
         total_max, total_filled = (await self.db.execute(stmt)).one()
         return int(total_max or 0), int(total_filled or 0)
 
-    async def fetch_supervisor_workload(self, limit: int = 10) -> Sequence[Tuple[str, int]]:
+    async def fetch_supervisor_workload(
+        self, limit: int = 10
+    ) -> Sequence[Tuple[str, int]]:
         stmt = (
             select(
                 User.full_name,
                 func.count(Group.group_id).label("group_count"),
             )
-            .join(Supervisor, Supervisor.user_id == User.user_id)
-            .outerjoin(Group, Group.supervisor_id == Supervisor.user_id)
+            .join(Faculty, Faculty.user_id == User.user_id)
+            .outerjoin(Group, Group.supervisor_id == Faculty.user_id)
             .where(
-                Supervisor.is_active.is_(True),
-                Supervisor.is_supervisor.is_(True),
+                Faculty.is_active.is_(True),
+                Faculty.is_supervisor.is_(True),
             )
             .group_by(User.full_name)
             .order_by(func.count(Group.group_id).desc(), User.full_name.asc())
@@ -150,7 +152,10 @@ class AdminDashboardRepository:
         stmt = (
             select(AdminMilestone)
             .where(AdminMilestone.is_active.is_(True))
-            .order_by(AdminMilestone.activated_at.desc().nullslast(), AdminMilestone.updated_at.desc())
+            .order_by(
+                AdminMilestone.activated_at.desc().nullslast(),
+                AdminMilestone.updated_at.desc(),
+            )
             .limit(1)
         )
         return (await self.db.execute(stmt)).scalars().first()
@@ -170,12 +175,10 @@ class AdminDashboardRepository:
         )
         return await self._scalar_int(stmt)
 
-    async def count_evaluations_for_milestone(
-        self, milestone_id
-    ) -> Tuple[int, int]:
-        submitted_stmt = select(func.count(func.distinct(SupervisorEvaluation.group_id))).where(
-            SupervisorEvaluation.milestone_id == milestone_id
-        )
+    async def count_evaluations_for_milestone(self, milestone_id) -> Tuple[int, int]:
+        submitted_stmt = select(
+            func.count(func.distinct(SupervisorEvaluation.group_id))
+        ).where(SupervisorEvaluation.milestone_id == milestone_id)
         submitted = await self._scalar_int(submitted_stmt)
 
         wbs_stmt = select(func.count()).where(

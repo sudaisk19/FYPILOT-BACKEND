@@ -16,10 +16,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
+from app.models.faculty import Faculty
 from app.models.user import User
 from app.repositories import group_repository, shortlist_repository
 from app.schemas.shortlist_schema import (
@@ -60,13 +62,28 @@ async def add_to_shortlist(
             detail="You are not a member of this group",
         )
 
+    # Ensure faculty is a supervisor
+    faculty_result = await db.execute(
+        select(Faculty).where(Faculty.user_id == body.faculty_id)
+    )
+    faculty_obj = faculty_result.scalars().first()
+    if not faculty_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Faculty not found"
+        )
+    if not faculty_obj.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This faculty member cannot be selected as a supervisor",
+        )
+
     # Prevent duplicates - check if already shortlisted using repository
     already_exists = await shortlist_repository.exists(
-        db, body.group_id, body.supervisor_id
+        db, body.group_id, body.faculty_id
     )
     if not already_exists:
         await shortlist_repository.add(
-            db, body.group_id, body.supervisor_id, current_user.user_id
+            db, body.group_id, body.faculty_id, current_user.user_id
         )
         await db.commit()
 
@@ -117,7 +134,7 @@ async def list_shortlisted_supervisors(
     for sl, user, sup in rows:
         items.append(
             ShortlistItem(
-                supervisor_id=user.user_id,
+                faculty_id=user.user_id,
                 full_name=user.full_name,
                 profile_avatar=user.profile_avatar,
                 department=sup.department,
@@ -127,7 +144,7 @@ async def list_shortlisted_supervisors(
             )
         )
 
-    response = ShortlistListResponse(group_id=group_id, supervisors=items)
+    response = ShortlistListResponse(group_id=group_id, faculty=items)
 
     # Cache
     await cache.set_json(cache_key, response.model_dump(), ttl_seconds=300)
@@ -135,10 +152,10 @@ async def list_shortlisted_supervisors(
     return response
 
 
-@router.delete("/supervisors/{supervisor_id}", status_code=status.HTTP_200_OK)
+@router.delete("/supervisors/{faculty_id}", status_code=status.HTTP_200_OK)
 async def remove_from_shortlist(
-    supervisor_id: UUID = Path(
-        ..., description="Supervisor user_id to remove from shortlist"
+    faculty_id: UUID = Path(
+        ..., description="Faculty user_id to remove from shortlist"
     ),
     group_id: UUID = Query(..., description="Group id"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -167,7 +184,7 @@ async def remove_from_shortlist(
         )
 
     # Check if supervisor is in shortlist using repository
-    exists = await shortlist_repository.exists(db, group_id, supervisor_id)
+    exists = await shortlist_repository.exists(db, group_id, faculty_id)
     if not exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -175,7 +192,7 @@ async def remove_from_shortlist(
         )
 
     # Delete from shortlist using repository
-    await shortlist_repository.remove(db, group_id, supervisor_id)
+    await shortlist_repository.remove(db, group_id, faculty_id)
     await db.commit()
 
     # Invalidate cache for this group's shortlist

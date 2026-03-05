@@ -1,7 +1,14 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, Numeric, Text, UniqueConstraint
-from sqlalchemy import TIMESTAMP, ForeignKey
+from sqlalchemy import (
+    TIMESTAMP,
+    Boolean,
+    Column,
+    ForeignKey,
+    Numeric,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -29,7 +36,7 @@ class SupervisorEvaluation(Base):
     )
     supervisor_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("supervisors.user_id", ondelete="CASCADE"),
+        ForeignKey("faculty.user_id", ondelete="CASCADE"),
         nullable=False,
     )
     marks = Column(Numeric, nullable=True)
@@ -50,10 +57,13 @@ class SupervisorEvaluation(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "milestone_id", "group_id", "supervisor_id", name="uq_supervisor_eval_unique"
+            "milestone_id",
+            "group_id",
+            "supervisor_id",
+            name="uq_supervisor_eval_unique",
         ),
     )
 
     milestone = relationship("AdminMilestone", back_populates="evaluations")
     group = relationship("Group")
-    supervisor = relationship("Supervisor")
+    supervisor = relationship("Faculty")
