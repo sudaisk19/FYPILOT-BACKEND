@@ -43,9 +43,7 @@ from app.services.storage_service import (
     upload_file_to_supabase,
 )
 
-router = APIRouter(
-    prefix="/supervisors/announcements", tags=["supervisor-announcements"]
-)
+router = APIRouter(tags=["faculty-announcements"])
 
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────

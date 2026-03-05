@@ -58,7 +58,7 @@ from app.services.storage_service import (
     upload_file_to_supabase,
 )
 
-router = APIRouter(prefix="/supervisors/submissions", tags=["supervisor-submissions"])
+router = APIRouter(tags=["faculty-submissions"])
 logger = logging.getLogger(__name__)
 
 SUBMISSION_FILES_BUCKET = ANNOUNCEMENTS_BUCKET

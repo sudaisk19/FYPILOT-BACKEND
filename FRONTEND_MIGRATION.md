@@ -150,6 +150,8 @@ Swagger UI groupings have changed. Update any generated client SDKs if tags are 
 |---------|---------|
 | `admin-supervisors` | `admin-faculty` |
 | `supervisor-milestones` | `faculty-milestones` |
+| `supervisor-announcements` | `faculty-announcements` |
+| `supervisor-submissions` | `faculty-submissions` |
 
 ---
 
@@ -168,7 +170,30 @@ Some error message strings in API responses have changed. If the frontend displa
 
 ---
 
-## 9. Other Faculty Routes (No URL change)
+## 9. Faculty Announcements & Submissions Routes
+
+Faculty announcements and submissions routes have moved from `/supervisors/` prefix to `/faculty/`.
+
+| Old URL | New URL | Method |
+|---------|---------|--------|
+| `GET /api/supervisors/announcements` | `GET /api/faculty/announcements` | List announcements |
+| `POST /api/supervisors/announcements` | `POST /api/faculty/announcements` | Create announcement |
+| `GET /api/supervisors/announcements/{id}` | `GET /api/faculty/announcements/{id}` | Get announcement |
+| `PATCH /api/supervisors/announcements/{id}` | `PATCH /api/faculty/announcements/{id}` | Update announcement |
+| `DELETE /api/supervisors/announcements/{id}` | `DELETE /api/faculty/announcements/{id}` | Delete announcement |
+| `GET /api/supervisors/submissions/submission-list` | `GET /api/faculty/submissions/submission-list` | List submission tasks |
+| `POST /api/supervisors/submissions/submission-create` | `POST /api/faculty/submissions/submission-create` | Create submission task |
+| `GET /api/supervisors/submissions/submission-details/{id}` | `GET /api/faculty/submissions/submission-details/{id}` | Get submission details |
+| `PATCH /api/supervisors/submissions/submission-update/{id}` | `PATCH /api/faculty/submissions/submission-update/{id}` | Update submission task |
+| `GET /api/supervisors/submissions/submission-responses/{id}` | `GET /api/faculty/submissions/submission-responses/{id}` | Get submission responses |
+| `GET /api/supervisors/submissions/submission-evaluation/{id}` | `GET /api/faculty/submissions/submission-evaluation/{id}` | Get evaluation details |
+| `POST /api/supervisors/submissions/submission-evaluation-update/{id}` | `POST /api/faculty/submissions/submission-evaluation-update/{id}` | Update evaluation |
+| `GET /api/supervisors/submissions/announcement-files/{file_id}/download` | `GET /api/faculty/submissions/announcement-files/{file_id}/download` | Download file |
+| `GET /api/supervisors/submissions/submission-files/{submission_id}/{file_id}/download` | `GET /api/faculty/submissions/submission-files/{submission_id}/{file_id}/download` | Download submission file |
+
+---
+
+## 10. Other Faculty Routes (No URL change)
 
 The following routes still use `/supervisors/` paths but this is intentional. These are for faculty who act in a supervision capacity and the URLs remain unchanged:
 
@@ -182,7 +207,7 @@ The following routes still use `/supervisors/` paths but this is intentional. Th
 
 ---
 
-## 10. No-Change Reference (Group-Role Labels)
+## 11. Shortlist Response Key
 
 `GET /api/shortlist/supervisors` response body:
 
@@ -238,6 +263,8 @@ The following DB columns were renamed. Backend schemas already reflect these cha
 - [ ] Update admin dropdown URL: `/admin/supervisors/dropdown` → `/admin/faculty/dropdown`
 - [ ] Read `response.faculty` instead of `response.supervisors` in the admin paginated list response
 - [ ] Update faculty milestone URLs: `/supervisors/milestones/...` → `/faculty/milestones/...`
+- [ ] Update faculty announcements URLs: `/supervisors/announcements/...` → `/faculty/announcements/...`
+- [ ] Update faculty submissions URLs: `/supervisors/submissions/...` → `/faculty/submissions/...`
 - [ ] **Explore page**: read `response.faculty` instead of `response.supervisors` (`GET /api/explore/supervisors`)
 - [ ] **Shortlist**: read `response.faculty` instead of `response.supervisors` (`GET /api/shortlist/supervisors`)
 - [ ] **Invite send**: confirm request body uses `faculty_id` (not `supervisor_id`)
