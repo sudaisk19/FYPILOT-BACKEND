@@ -130,6 +130,16 @@ from app.api.http.supervisor_announcements import (
 
 router.include_router(supervisor_announcements_router, prefix="/faculty/announcements")
 
+from app.api.http.student_announcements import (
+    router as student_announcements_router,
+)
+
+router.include_router(
+    student_announcements_router,
+    prefix="/students/announcements",
+    tags=["student-announcements"],
+)
+
 # Mount jury matching router
 from app.api.http.jury_matching import router as jury_matching_router
 

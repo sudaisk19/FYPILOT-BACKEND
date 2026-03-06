@@ -1,33 +1,34 @@
 # app/repositories/announcement_repository.py
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence, Tuple, List
 from datetime import datetime
+from typing import Iterable, List, Optional, Sequence, Tuple
 from uuid import UUID
-
-from app.db import supabase 
-from app.services.storage_service import delete_file_from_supabase
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.db import supabase
 from app.models.announcement import (
     Announcement,
     AnnouncementFile,
-    AnnouncementTarget,
     AnnouncementRoleEnum,
+    AnnouncementTarget,
     FileTypeEnum,
     TargetRoleEnum,
 )
 from app.repositories.base import BaseRepository
+from app.services.storage_service import delete_file_from_supabase
 
 
 class AnnouncementRepository(BaseRepository[Announcement]):
 
     def __init__(self) -> None:
         super().__init__(Announcement)
-    
+
+    # ─── SHARED / ADMIN METHODS ───────────────────────────────────────────────
+
     async def get_by_id(
         self, db: AsyncSession, announcement_id: UUID
     ) -> Optional[Announcement]:
@@ -62,7 +63,9 @@ class AnnouncementRepository(BaseRepository[Announcement]):
             .limit(size)
         )
         rows = (await db.execute(query)).scalars().all()
-        total_query = select(func.count(Announcement.announcement_id)).where(*base_filters)
+        total_query = select(func.count(Announcement.announcement_id)).where(
+            *base_filters
+        )
         total = (await db.execute(total_query)).scalar_one()
         return rows, total
 
@@ -77,7 +80,9 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         target_role: TargetRoleEnum,
         is_submission_request: bool = False,
         targets: Optional[Iterable[UUID | None]] = None,
-        files: Optional[Iterable[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]]] = None,
+        files: Optional[
+            Iterable[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]]
+        ] = None,
         due_at: Optional[datetime] = None,
         total_marks: Optional[float] = None,
     ) -> Announcement:
@@ -99,9 +104,7 @@ class AnnouncementRepository(BaseRepository[Announcement]):
             ]
 
         if not target_rows:
-            target_rows = [
-                AnnouncementTarget(group_id=None, target_role=target_role)
-            ]
+            target_rows = [AnnouncementTarget(group_id=None, target_role=target_role)]
 
         announcement.targets = target_rows
 
@@ -144,49 +147,118 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         if total_marks is not None:
             announcement.total_marks = total_marks
         if keep_file_ids is not None:
-        # Loop through current files
-         for existing_file in list(announcement.files):
-            if existing_file.file_id not in keep_file_ids:
-                # A. Storage se mitaein
-                try:
-                    await delete_file_from_supabase(
-                        supabase, 
-                        bucket="announcement_files", 
-                        storage_key=existing_file.storage_key
-                    )
-                except Exception as e:
-                    print(f"PATCH Storage Error: {e}")
-
-                # B. Database se mitaein
-                await db.delete(existing_file)
+            for existing_file in list(announcement.files):
+                if existing_file.file_id not in keep_file_ids:
+                    try:
+                        await delete_file_from_supabase(
+                            supabase,
+                            bucket="announcement_files",
+                            storage_key=existing_file.storage_key,
+                        )
+                    except Exception as e:
+                        print(f"PATCH Storage Error: {e}")
+                    await db.delete(existing_file)
         await db.flush()
         return announcement
 
     async def delete(self, db: AsyncSession, announcement: Announcement) -> None:
-    # 1. Pehle Storage saaf karein (Database se mitaane se pehle)
-    # Agar announcement mein files hain, toh unpar loop chalayein
-     if announcement.files:
-        for file_record in announcement.files:
-           
-            
-            try:
-                # Supabase Storage cleanup logic
-                await delete_file_from_supabase(
-                    supabase, 
-                    bucket="announcement_files",
-                    storage_key=file_record.storage_key
-                )
-            except Exception as e:
-                # Agar cloud se delete na bhi ho, toh log karein taake DB delete na ruke
-                print(f"Error deleting file from storage: {e}")
+        """Delete an announcement and clean up its storage files."""
+        if announcement.files:
+            for file_record in announcement.files:
+                try:
+                    await delete_file_from_supabase(
+                        supabase,
+                        bucket="announcement_files",
+                        storage_key=file_record.storage_key,
+                    )
+                except Exception as e:
+                    print(f"Error deleting file from storage: {e}")
+        await db.delete(announcement)
+        await db.flush()
 
-    # 2. Ab Database se mitaayein
-    # Kyunki aapne model mein cascade="all, delete-orphan" lagaya hai,
-    # toh targets aur file ki database rows khud hi mita di jayengi.
-     await db.delete(announcement)
-     await db.flush()
+    # ─── STUDENT ANNOUNCEMENT QUERIES ─────────────────────────────────────────
+
+    async def get_supervisor_announcements_for_student(
+        self,
+        db: AsyncSession,
+        *,
+        group_id: UUID,
+        page: int,
+        per_page: int,
+        search: Optional[str] = None,
+    ) -> Tuple[List[Announcement], int]:
+        """
+        Paginated faculty announcements targeted at a specific group_id.
+        Used for the student's 'Supervisor Announcements' tab.
+        """
+        base_query = (
+            select(Announcement)
+            .join(AnnouncementTarget)
+            .options(
+                selectinload(Announcement.files),
+                selectinload(Announcement.creator),
+            )
+            .where(
+                Announcement.created_by_role == AnnouncementRoleEnum.faculty,
+                Announcement.is_submission_request == False,  # noqa: E712
+                AnnouncementTarget.group_id == group_id,
+            )
+        )
+
+        if search:
+            base_query = base_query.where(Announcement.title.ilike(f"%{search}%"))
+
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_items = (await db.execute(count_query)).scalar_one()
+
+        offset = (page - 1) * per_page
+        paginated_query = (
+            base_query.order_by(Announcement.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+        result = await db.execute(paginated_query)
+        return list(result.scalars().unique().all()), total_items
+
+    async def get_admin_announcements_for_student(
+        self,
+        db: AsyncSession,
+        *,
+        target_roles: List[TargetRoleEnum],
+        page: int,
+        per_page: int,
+    ) -> Tuple[List[Announcement], int]:
+        """
+        Paginated admin announcements filtered by the provided target_roles.
+        Used for the student's 'Admin Announcements' tab.
+        Caller determines the role list based on the student's fyp cycle.
+        """
+        base_query = (
+            select(Announcement)
+            .join(AnnouncementTarget)
+            .options(
+                selectinload(Announcement.targets),
+                selectinload(Announcement.files),
+            )
+            .where(
+                Announcement.created_by_role == AnnouncementRoleEnum.admin,
+                Announcement.is_submission_request == False,  # noqa: E712
+                AnnouncementTarget.target_role.in_(target_roles),
+            )
+        )
+
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_items = (await db.execute(count_query)).scalar_one()
+
+        offset = (page - 1) * per_page
+        paginated_query = (
+            base_query.order_by(Announcement.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+        result = await db.execute(paginated_query)
+        return list(result.scalars().unique().all()), total_items
+
 
 # Singleton instance for convenience
 announcement_repository = AnnouncementRepository()
-
-
