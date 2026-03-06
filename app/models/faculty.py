@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Integer, Text, event
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -124,3 +124,21 @@ class Faculty(Base):
         primaryjoin="Faculty.user_id == func.any(foreign(Group.cosupervisor_ids))",
         viewonly=True,
     )
+
+
+# ─── AUTO-CALCULATE is_active ────────────────────────────────────────────────
+# is_active = is_supervisor OR is_jury
+# When both are False, the faculty account becomes inactive and most APIs
+# are locked until an admin re-activates at least one flag.
+
+
+@event.listens_for(Faculty, "before_insert")
+def _set_is_active_on_insert(mapper, connection, target):
+    """Auto-calculate is_active before a new faculty record is created."""
+    target.is_active = target.is_supervisor or target.is_jury
+
+
+@event.listens_for(Faculty, "before_update")
+def _set_is_active_on_update(mapper, connection, target):
+    """Auto-calculate is_active whenever a faculty record is updated."""
+    target.is_active = target.is_supervisor or target.is_jury

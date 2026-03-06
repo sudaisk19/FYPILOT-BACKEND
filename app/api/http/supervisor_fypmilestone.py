@@ -84,7 +84,24 @@ async def list_supervisor_milestones(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can access milestones",
         )
 
     # When cycle is omitted, return both FYP1 and FYP2 milestones.
@@ -99,7 +116,24 @@ async def get_supervisor_milestone(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can access milestone details",
         )
 
     milestone = await milestone_repository.get_milestone(db, milestone_id)
@@ -121,7 +155,24 @@ async def get_group_evaluation(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can access group evaluations",
         )
 
     await _validate_milestone_and_group(
@@ -156,7 +207,24 @@ async def list_supervisor_evaluations_for_milestone(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can list evaluations",
         )
 
     milestone = await milestone_repository.get_milestone(db, milestone_id)
@@ -187,7 +255,24 @@ async def create_group_evaluation(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can create evaluations",
         )
 
     change_set = payload.model_dump(exclude_unset=True)
@@ -240,7 +325,24 @@ async def update_group_evaluation(
 ):
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor OR jury privileges
+    if (
+        not current_user.faculty_profile.is_supervisor
+        and not current_user.faculty_profile.is_jury
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor or jury privileges can update evaluations",
         )
 
     change_set = payload.model_dump(exclude_unset=True)

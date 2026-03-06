@@ -1,8 +1,9 @@
 # Frontend Migration Guide: `supervisor` → `faculty`
 
 > **Source of truth:** [`implementation_plan.md.resolved`](implementation_plan.md.resolved)  
-> **Backend status:** Migration complete — database, models, auth, and all API endpoints updated.  
-> **Date:** 2026-03-05
+> **Backend status:** Migration complete — database, models, auth, all API endpoints, and security updated.  
+> **Date:** 2026-03-05  
+> **Security update:** All faculty endpoints now verify `is_supervisor=true` to prevent jury-only access.
 
 This document lists every breaking change the frontend must update. Changes are grouped by impact level.
 
@@ -270,3 +271,55 @@ The following DB columns were renamed. Backend schemas already reflect these cha
 - [ ] **Invite send**: confirm request body uses `faculty_id` (not `supervisor_id`)
 - [ ] Clear cached user role values on next login
 - [ ] Update any generated API client (OpenAPI SDK) if used
+
+---
+
+## 14. Security Enhancement Summary
+
+All faculty endpoints now enforce a **3-layer security model**:
+
+```
+Layer 1: role == "faculty"           → Basic role gate
+Layer 2: is_active == true           → Account is active (auto-calculated)
+Layer 3: is_supervisor / is_jury     → Specific privilege gate
+```
+
+### Faculty Active State
+
+`is_active` is **auto-calculated** from the formula:
+
+```
+is_active = is_supervisor OR is_jury
+```
+
+- When both `is_supervisor=false` AND `is_jury=false` → `is_active=false` → **all APIs locked** (except profile/dashboard)
+- Only an admin can re-enable `is_supervisor` or `is_jury` to reactivate a faculty account
+
+### Frontend Handling
+
+When `is_active=false`, locked endpoints return:
+
+```json
+{
+  "detail": "Your faculty account is inactive. Contact an administrator."
+}
+```
+
+**Frontend should**: detect this 403 response and show an "Account Inactive" banner/modal directing the faculty to contact an admin.
+
+### Exempt Endpoints (always accessible by any faculty)
+- `GET /api/supervisors/profile` — View own profile
+- `POST /api/supervisors/profile` — Complete profile wizard
+- `PATCH /api/supervisors/profile` — Update profile
+- `GET /api/profile-completion` — Check profile completion status
+
+### Supervisor-Only Endpoints (require `is_active=true` + `is_supervisor=true`)
+- **My Groups**: `/faculty/my-groups/*` (3 endpoints)
+- **Announcements**: `/faculty/announcements/*` (6 endpoints)
+- **Submissions**: `/faculty/submissions/*` (9 endpoints)
+- **Invites**: `/supervisors/invites/supervisor/*` (4 endpoints)
+
+### Supervisor OR Jury Endpoints (require `is_active=true` + `is_supervisor=true` OR `is_jury=true`)
+- **Milestones**: `/faculty/milestones/*` (6 endpoints)
+
+**Total**: 28 faculty endpoints protected with `is_active` check.

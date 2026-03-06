@@ -93,7 +93,24 @@ async def get_supervisor_groups(
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can access this endpoint",
+            detail="Faculty only",
+        )
+
+    # 2. Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # 3. Supervisor privilege check
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view their supervised groups",
         )
 
     # 2. Query groups with members + project eager-loaded
@@ -208,7 +225,24 @@ async def get_supervisor_groups_dropdown(
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can access this endpoint",
+            detail="Faculty only",
+        )
+
+    # 2. Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # 3. Supervisor privilege check
+    if (
+        not current_user.faculty_profile
+        or not current_user.faculty_profile.is_supervisor
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can access groups dropdown",
         )
 
     # 2. Query groups
@@ -282,7 +316,21 @@ async def get_supervisor_group_profile(
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only supervisors can access this endpoint",
+            detail="Faculty only",
+        )
+
+    # 2. Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # 3. Supervisor privilege check
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view group details",
         )
 
     # 2. Fetch the group with all relationships eager-loaded

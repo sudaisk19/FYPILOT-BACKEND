@@ -162,7 +162,21 @@ async def get_supervisor_announcements(
 ):
     """Supervisor: List all regular announcements created by me."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can manage announcements",
+        )
 
     base_filters = [
         Announcement.created_by == current_user.user_id,
@@ -219,7 +233,21 @@ async def get_admin_announcements_for_supervisor(
 ):
     """Supervisor: List admin announcements targeted at supervisors (all_supervisors / both)."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can view announcements",
+        )
 
     # Only admin-created, non-submission announcements
     # whose target_role is all_supervisors or both
@@ -278,7 +306,21 @@ async def get_supervisor_announcement_by_id(
 ):
     """Supervisor: Get a single announcement by ID (ownership check)."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can manage announcements",
+        )
 
     result = await db.execute(
         select(Announcement)
@@ -324,7 +366,21 @@ async def create_supervisor_announcement(
 ):
     """Supervisor: Create a regular announcement for managed group(s)."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can create announcements",
+        )
 
     # Resolve groups
     managed_groups = await _get_managed_groups(current_user.user_id, db)
@@ -427,7 +483,21 @@ async def delete_supervisor_announcement(
 ):
     """Supervisor: Delete an announcement (ownership check + storage cleanup)."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can delete announcements",
+        )
 
     result = await db.execute(
         select(Announcement)
@@ -485,7 +555,21 @@ async def update_supervisor_announcement(
 ):
     """Supervisor: Partially update an announcement."""
     if current_user.role != RoleEnum.faculty:
-        raise HTTPException(status_code=403, detail="Supervisor only")
+        raise HTTPException(status_code=403, detail="Faculty only")
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=403,
+            detail="Only faculty with supervisor privileges can update announcements",
+        )
 
     # Fetch
     result = await db.execute(

@@ -257,7 +257,21 @@ async def download_announcement_file(
     """
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can access submission files",
         )
 
     # Fetch file metadata
@@ -331,7 +345,21 @@ async def create_supervisor_submission_task(
     """Supervisor: Create a new submission request for checking/grading."""
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can create submission tasks",
         )
 
     # Validate Due Date
@@ -465,7 +493,21 @@ async def get_supervisor_submission_task(
     """Supervisor: Get details of a specific submission task."""
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view submission tasks",
         )
 
     result = await db.execute(
@@ -512,7 +554,21 @@ async def edit_supervisor_submission_task(
     """Supervisor: Update an existing submission task."""
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can update submission tasks",
         )
 
     # Fetch Announcement
@@ -687,7 +743,21 @@ async def list_supervisor_submission_tasks(
     """Supervisor: Fetch all submission tasks created by me."""
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view submission tasks",
         )
 
     # Query
@@ -789,7 +859,21 @@ async def get_submission_responses(
     """
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can view group submissions",
         )
 
     # Data Fetch: Announcement
@@ -920,7 +1004,21 @@ async def get_submission_evaluation(
     """Supervisor: Get full submission details for grading."""
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can evaluate submissions",
         )
 
     result = await db.execute(
@@ -1001,7 +1099,21 @@ async def update_supervisor_grading(
     """
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can update grading",
         )
 
     result = await db.execute(
@@ -1093,7 +1205,21 @@ async def download_submission_file(
     """
     if current_user.role != RoleEnum.faculty:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor only"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+
+    # Active check
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+    # Check if faculty has supervisor privileges
+    if not current_user.faculty_profile.is_supervisor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty with supervisor privileges can access submission files",
         )
 
     # Fetch file record and check access

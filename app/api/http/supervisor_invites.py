@@ -238,10 +238,12 @@ async def list_pending_invites_for_supervisor(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty can view invites",
         )
-    if (
-        not current_user.faculty_profile
-        or not current_user.faculty_profile.is_supervisor
-    ):
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+    if not current_user.faculty_profile.is_supervisor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty with supervisor privileges can view invites",
@@ -352,10 +354,12 @@ async def accept_supervisor_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty can accept invites",
         )
-    if (
-        not current_user.faculty_profile
-        or not current_user.faculty_profile.is_supervisor
-    ):
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+    if not current_user.faculty_profile.is_supervisor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty with supervisor privileges can accept invites",
@@ -478,10 +482,12 @@ async def reject_invite(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty can reject invites",
         )
-    if (
-        not current_user.faculty_profile
-        or not current_user.faculty_profile.is_supervisor
-    ):
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+    if not current_user.faculty_profile.is_supervisor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty with supervisor privileges can reject invites",
@@ -626,10 +632,12 @@ async def get_request_details_for_supervisor(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty can view request details",
         )
-    if (
-        not current_user.faculty_profile
-        or not current_user.faculty_profile.is_supervisor
-    ):
+    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+    if not current_user.faculty_profile.is_supervisor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only faculty with supervisor privileges can view request details",
