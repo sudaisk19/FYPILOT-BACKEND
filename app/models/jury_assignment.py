@@ -1,10 +1,10 @@
 # app/models/jury_assignment.py
 
 """
-Jury Assignment Models (Lean Schema).
+Jury Assignment Models (Pair-Based Schema).
 
 - JuryAssignmentBatch: tracker for background job + container for easy deletion
-- JuryAssignment: the actual jury↔project assignment data
+- JuryAssignment: maps a jury pair to a project
 """
 
 import enum
@@ -12,7 +12,7 @@ import uuid
 
 from sqlalchemy import TIMESTAMP, Column
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Float, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -48,8 +48,20 @@ class JuryAssignmentBatch(Base):
         default=JuryBatchStatusEnum.processing,
     )
 
+    # ─── Config captured at assignment time ───
+    fyp_cycle = Column(String(10), nullable=True)
+    max_groups_per_pair = Column(Integer, nullable=True)
+    min_jury_per_project = Column(Integer, nullable=True, default=1)
+
     # Error details (if failed)
     error_log = Column(Text, nullable=True)
+
+    # Who triggered this batch
+    created_by = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=True,
+    )
 
     # Timestamp
     created_at = Column(
@@ -62,13 +74,14 @@ class JuryAssignmentBatch(Base):
         back_populates="batch",
         cascade="all, delete-orphan",
     )
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class JuryAssignment(Base):
     """
-    A single jury↔project assignment.
+    A single jury-pair ↔ project assignment.
 
-    One row = "Supervisor X is assigned to evaluate Project Y".
+    One row = "Jury Pair X is assigned to evaluate Project Y".
     """
 
     __tablename__ = "jury_assignments"
@@ -90,11 +103,11 @@ class JuryAssignment(Base):
         nullable=False,
     )
 
-    # The supervisor acting as jury
-    jury_id = Column(
+    # The jury pair assigned (replaces old jury_id → users)
+    pair_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("users.user_id"),
-        nullable=False,
+        ForeignKey("jury_pairs.jury_id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
 
@@ -105,11 +118,14 @@ class JuryAssignment(Base):
     # Table constraints
     __table_args__ = (
         UniqueConstraint(
-            "project_id", "jury_id", name="uq_jury_assignment_project_jury"
+            "batch_id",
+            "project_id",
+            "pair_id",
+            name="uq_jury_assignment_batch_project_pair",
         ),
     )
 
     # Relationships
     batch = relationship("JuryAssignmentBatch", back_populates="assignments")
     project = relationship("Project", foreign_keys=[project_id])
-    jury_user = relationship("User", foreign_keys=[jury_id])
+    jury_pair = relationship("JuryPair", back_populates="assignments")

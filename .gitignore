@@ -62,5 +62,10 @@ profiler-out.*
 # === Jupyter ===
 .ipynb_checkpoints/
 
+# === Backups & database dumps ===
+*.dump
+*.sql.gz
+backup_*
+
 # === Docs (internal notes, not tracked) ===
 docs/
