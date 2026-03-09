@@ -16,6 +16,9 @@ class FacultyCardInfo(BaseModel):
     capacity_filled: int
     free_slots: int
     status: str
+    is_supervisor: bool
+    is_jury: bool
+    is_active: bool
 
 
 class PaginatedFacultyResponse(BaseModel):
@@ -52,6 +55,9 @@ class AdminFacultyProfileOut(BaseModel):
     project_type: Optional[str]
     capacity_max: int
     capacity_filled: int
+    is_supervisor: bool
+    is_jury: bool
+    is_active: bool
     domains: List[str]
     industries: List[str]
     projects: List[SupervisedProjectInfo]
@@ -59,8 +65,14 @@ class AdminFacultyProfileOut(BaseModel):
 
 # For the "Save" button on capacity
 class CapacityUpdateReq(BaseModel):
-    capacity_max: int = Field(
-        ..., ge=0, description="Maximum groups a faculty member can take"
+    capacity_max: Optional[int] = Field(
+        None, ge=0, description="Maximum groups a faculty member can take"
+    )
+    is_supervisor: Optional[bool] = Field(
+        None, description="Toggle faculty availability for supervision"
+    )
+    is_jury: Optional[bool] = Field(
+        None, description="Toggle faculty availability for jury duties"
     )
 
 

@@ -258,8 +258,6 @@ async def complete_student_wizard_profile(
         student_updates = {}
         if profile_data.roll_number is not None and profile_data.roll_number.strip():
             student_updates["roll_number"] = profile_data.roll_number.strip()
-        if profile_data.department is not None and profile_data.department.strip():
-            student_updates["department"] = profile_data.department.strip()
         if profile_data.cgpa is not None:
             student_updates["cgpa"] = profile_data.cgpa
         if profile_data.interests is not None and profile_data.interests:
@@ -450,8 +448,6 @@ async def update_student_profile(
         # Prepare student updates - only include non-empty values (excluding required fields)
         student_updates = {}
         # Note: roll_number is required and should not be updated via PATCH
-        if profile_data.department is not None and profile_data.department.strip():
-            student_updates["department"] = profile_data.department.strip()
         if profile_data.cgpa is not None:
             student_updates["cgpa"] = profile_data.cgpa
         if profile_data.interests is not None and profile_data.interests:

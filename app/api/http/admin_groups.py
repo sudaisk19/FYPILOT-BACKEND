@@ -3,22 +3,23 @@ from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.domain import Domain
 from app.models.faculty import Faculty
 from app.models.group import FYPCycleEnum, Group, GroupMember
-from app.models.project import Project, ProjectDomain
+from app.models.project import Project
 from app.models.student import Student
 from app.models.user import RoleEnum, User
 from app.schemas.admin_groups_schema import (
     AdminGroupMemberInfo,
     AdminGroupProfileResponse,
+    CohortCycleUpdateRequest,
+    CohortCycleUpdateResponse,
     GroupCardInfo,
     PaginatedGroupResponse,
 )
@@ -35,13 +36,13 @@ router = APIRouter(prefix="/admin", tags=["admin-groups"])
 @router.get("/groups", response_model=PaginatedGroupResponse)
 async def list_groups(
     batch: Optional[int] = Query(None, description="Cohort year e.g., 2025"),
+    cohort: Optional[str] = Query(None, description="Cohort code e.g., F24"),
     cycle: Optional[FYPCycleEnum] = Query(None, description="fyp1 or fyp2"),
     supervisor: Literal["all", "assigned", "unassigned"] = Query(
         "all",
         description="Filter by supervisor assignment status",
     ),
     members: Optional[int] = Query(None, ge=1, le=3, description="Members count 1-3"),
-    domain: Optional[str] = Query(None, description="Domain name filter"),
     search: Optional[str] = Query(None, description="Search by project/supervisor"),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -54,8 +55,8 @@ async def list_groups(
 
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
     cache_key = (
-        f"admin:groups:{batch}:{cycle}:{supervisor}:{members}:"
-        f"{domain}:{search}:{page}:{per_page}"
+        f"admin:groups:{batch}:{cohort}:{cycle}:{supervisor}:{members}:"
+        f"{search}:{page}:{per_page}"
     )
     from app.services.cache import cache
 
@@ -82,29 +83,23 @@ async def list_groups(
             Group.group_id,
             Group.fyp_cycle,
             Group.fyp_stage,
-            Group.cohort_year,
+            Group.cohort,
             func.coalesce(member_counts_sq.c.members_count, 0).label("members_count"),
             Project.name.label("project_name"),
-            Project.description.label("project_description"),
-            Project.tech_stack.label("tech_stack"),
             sup_user.full_name.label("supervisor_name"),
             # For now, just return None or empty string for copuservisor in list view
             # Since it's an array now, we'd need complex aggregation
             literal(None).label("cosupervisor_name"),
-            func.array_agg(func.distinct(Domain.name)).label("domains"),
         )
         .select_from(Group)
         .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
         .outerjoin(Project, Project.group_id == Group.group_id)
         .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
         # .outerjoin(cosup_user) <--- Removed broken join
-        .outerjoin(ProjectDomain, ProjectDomain.project_id == Project.project_id)
-        .outerjoin(Domain, Domain.domain_id == ProjectDomain.domain_id)
         .group_by(
             Group.group_id,
             Project.name,
-            Project.description,
-            Project.tech_stack,
+            Group.cohort,
             sup_user.full_name,
             # cosup_user.full_name, <--- Removed
             member_counts_sq.c.members_count,
@@ -130,9 +125,9 @@ async def list_groups(
     if members is not None:
         filters.append(func.coalesce(member_counts_sq.c.members_count, 0) == members)
 
-    # Domain filter
-    if domain:
-        filters.append(Domain.name.ilike(f"%{domain}%"))
+    # Cohort string filter
+    if cohort:
+        filters.append(func.upper(Group.cohort) == cohort.upper())
 
     # Search
     if search:
@@ -141,7 +136,6 @@ async def list_groups(
             or_(
                 Project.name.ilike(s),
                 sup_user.full_name.ilike(s),
-                # cosup_user.full_name.ilike(s), <--- Removed search on co-supervisor name
                 Group.name.ilike(s),
             )
         )
@@ -156,8 +150,6 @@ async def list_groups(
         .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
         .outerjoin(Project, Project.group_id == Group.group_id)
         .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
-        .outerjoin(ProjectDomain, ProjectDomain.project_id == Project.project_id)
-        .outerjoin(Domain, Domain.domain_id == ProjectDomain.domain_id)
     )
     if filters:
         count_query = count_query.where(and_(*filters))
@@ -166,7 +158,6 @@ async def list_groups(
 
     offset = (page - 1) * per_page
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
     query = query.order_by(Group.updated_at.desc()).offset(offset).limit(per_page)
     rows = (await db.execute(query)).all()
 
@@ -175,39 +166,23 @@ async def list_groups(
         group_id,
         fyp_cycle,
         fyp_stage,
-        cohort_year,
+        cohort_value,
         members_count,
         project_name,
-        project_description,
-        tech_stack,
         supervisor_name,
         cosupervisor_name,
-        domains,
     ) in rows:
-
-        # tech_stack JSONB -> tags list (safe)
-        tech_tags = []
-        if isinstance(tech_stack, list):
-            tech_tags = [str(x) for x in tech_stack]
-        elif isinstance(tech_stack, dict):
-            # if saved as {"frontend": [...], "backend": [...]}
-            for v in tech_stack.values():
-                if isinstance(v, list):
-                    tech_tags.extend([str(x) for x in v])
 
         groups_out.append(
             GroupCardInfo(
                 group_id=str(group_id),
                 project_name=project_name,
-                project_description=project_description,
                 fyp_cycle=fyp_cycle.value if fyp_cycle else None,
                 fyp_stage=fyp_stage,
-                cohort_year=cohort_year,
+                cohort=cohort_value,
                 members_count=int(members_count or 0),
                 supervisor_name=supervisor_name or "Not assigned",
                 cosupervisor_name=cosupervisor_name or "Not assigned",
-                domains=[d for d in (domains or []) if d],
-                tech_tags=tech_tags[:6],  # show first 6 tags
             )
         )
 
@@ -225,6 +200,56 @@ async def list_groups(
     await cache.set_json(cache_key, response.model_dump(), ttl_seconds=60)
 
     return response
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BULK UPDATE COHORT CYCLE
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/groups/cohort/{cohort}/cycle",
+    response_model=CohortCycleUpdateResponse,
+    summary="Bulk update FYP cycle for a cohort",
+)
+async def update_cohort_cycle(
+    cohort: str,
+    payload: CohortCycleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role != RoleEnum.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    normalized = cohort.upper()
+
+    match_query = select(func.count(Group.group_id)).where(
+        func.upper(Group.cohort) == normalized
+    )
+    total = (await db.execute(match_query)).scalar() or 0
+
+    if total == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No groups found for cohort {normalized}",
+        )
+
+    await db.execute(
+        update(Group)
+        .where(func.upper(Group.cohort) == normalized)
+        .values(fyp_cycle=payload.target_cycle, updated_at=datetime.utcnow())
+    )
+
+    await db.commit()
+
+    return CohortCycleUpdateResponse(
+        message=(
+            f"Updated {total} group{'s' if total == 1 else 's'} to {payload.target_cycle.value.upper()}"
+        ),
+        cohort=normalized,
+        target_cycle=payload.target_cycle,
+        updated_count=total,
+    )
 
 
 # app/api/http/admin_groups.py
@@ -350,8 +375,6 @@ async def get_admin_group_profile(
         invites={"pending_count": 0, "pending": []},
     )
 
-
-from sqlalchemy import update
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ADMIN SUPERVISOR ASSIGNMENT - Direct assignment without invite flow

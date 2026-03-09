@@ -33,7 +33,7 @@ All `/admin/supervisors/...` routes are now `/admin/faculty/...`.
 | `GET /api/admin/supervisors/dropdown` | `GET /api/admin/faculty/dropdown` | Get faculty dropdown list |
 | `GET /api/admin/supervisors` | `GET /api/admin/faculty` | Paginated faculty list |
 | `GET /api/admin/supervisors/{supervisor_id}` | `GET /api/admin/faculty/{faculty_id}` | Individual faculty profile |
-| `PATCH /api/admin/supervisors/{supervisor_id}/capacity` | `PATCH /api/admin/faculty/{faculty_id}/capacity` | Update capacity |
+| `PATCH /api/admin/supervisors/{supervisor_id}/capacity` | `PATCH /api/admin/faculty/{faculty_id}/settings` | Update capacity & role flags |
 
 ### ⚠️ Breaking: JSON response key rename in paginated list
 
@@ -163,7 +163,7 @@ Some error message strings in API responses have changed. If the frontend displa
 | Old message | New message | Endpoint |
 |-------------|-------------|----------|
 | `"Supervisor not found"` | `"Faculty not found"` | `GET /api/admin/faculty/{faculty_id}` |
-| `"Supervisor already has N assigned groups."` | `"Faculty member already has N assigned groups."` | `PATCH /api/admin/faculty/{faculty_id}/capacity` |
+| `"Supervisor already has N assigned groups."` | `"Faculty member already has N assigned groups."` | `PATCH /api/admin/faculty/{faculty_id}/settings` |
 | `"Only supervisors can view invites"` | `"Only faculty with supervisor privileges can view invites"` | Invite endpoints |
 | `"Only supervisors can accept invites"` | `"Only faculty with supervisor privileges can accept invites"` | Accept endpoint |
 | `"Only supervisors can reject invites"` | `"Only faculty with supervisor privileges can reject invites"` | Reject endpoint |

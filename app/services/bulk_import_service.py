@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.utils import hash_password
 from app.core.config import settings
+from app.core.departments import normalize_department
 from app.models.bulk_import import (
     BulkImportItem,
     BulkImportJob,
@@ -50,6 +51,7 @@ STUDENT_REQUIRED_COLUMNS = {
     "roll_number",
     "fyp_start_semester",
     "fyp_start_year",
+    "department",
 }
 SUPERVISOR_REQUIRED_COLUMNS = {"full_name", "email", "department", "designation"}
 
@@ -261,11 +263,23 @@ def validate_row(row: dict, target_role: RoleEnum) -> Optional[str]:
         except (ValueError, TypeError):
             return f"Invalid fyp_start_year: '{year_str}'. Must be a valid year number"
 
+        department = row.get("department", "").strip()
+        if not department:
+            return "department is required for students"
+        try:
+            row["department"] = normalize_department(department)
+        except ValueError as exc:
+            return str(exc)
+
     # Validate department and designation for supervisors
     if target_role == RoleEnum.faculty:
         department = row.get("department", "").strip()
         if not department:
             return "department is required for supervisors"
+        try:
+            row["department"] = normalize_department(department)
+        except ValueError as exc:
+            return str(exc)
         designation = row.get("designation", "").strip()
         if not designation:
             return "designation is required for supervisors"
@@ -412,10 +426,17 @@ async def process_single_item(
         except (ValueError, TypeError):
             fyp_year = None
 
+        try:
+            student_department = normalize_department(payload.get("department", ""))
+        except ValueError as exc:
+            item.status = BulkItemStatus.failed
+            item.error = str(exc)
+            return "failed"
+
         student = Student(
             user_id=user.user_id,
             roll_number=payload["roll_number"].strip(),
-            department=payload.get("department", "").strip() or None,
+            department=student_department,
             cgpa=None,
             interests=[],
             skills=[],
@@ -427,9 +448,16 @@ async def process_single_item(
         )
         db.add(student)
     else:
+        try:
+            faculty_department = normalize_department(payload.get("department", ""))
+        except ValueError as exc:
+            item.status = BulkItemStatus.failed
+            item.error = str(exc)
+            return "failed"
+
         faculty_member = Faculty(
             user_id=user.user_id,
-            department=payload["department"].strip(),
+            department=faculty_department,
             designation=payload["designation"].strip(),
             project_type="research",  # Default
             capacity_max=8,
@@ -897,7 +925,7 @@ async def create_single_student(
     roll_number: str,
     fyp_start_semester: str,
     fyp_start_year: int,
-    department: str | None = None,
+    department: str,
 ) -> tuple[User, str]:
     """
     Create a single student user with profile.
@@ -922,6 +950,8 @@ async def create_single_student(
     if existing_roll.scalar_one_or_none():
         raise ValueError(f"Roll number already exists: {roll_number}")
 
+    normalized_department = normalize_department(department)
+
     # Generate temp password
     temp_password = generate_temp_password()
     password_hash = hash_password(temp_password)
@@ -940,7 +970,7 @@ async def create_single_student(
     student = Student(
         user_id=user.user_id,
         roll_number=roll_number.strip(),
-        department=department.strip() if department else None,
+        department=normalized_department,
         cgpa=None,
         interests=[],
         skills=[],
@@ -981,6 +1011,8 @@ async def create_single_supervisor(
     if existing.scalar_one_or_none():
         raise ValueError(f"Email already registered: {email}")
 
+    normalized_department = normalize_department(department)
+
     # Generate temp password
     temp_password = generate_temp_password()
     password_hash = hash_password(temp_password)
@@ -998,7 +1030,7 @@ async def create_single_supervisor(
     # Create faculty profile
     faculty_member = Faculty(
         user_id=user.user_id,
-        department=department.strip(),
+        department=normalized_department,
         designation=designation.strip(),
         project_type="research",
         capacity_max=8,
