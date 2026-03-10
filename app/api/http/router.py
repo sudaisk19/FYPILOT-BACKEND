@@ -140,6 +140,24 @@ router.include_router(
     tags=["student-announcements"],
 )
 
+from app.api.http.student_dashboard import router as student_dashboard_router
+
+router.include_router(
+    student_dashboard_router,
+    prefix="/students/dashboard",
+    tags=["student-dashboard"],
+)
+
+from app.api.http.student_submissions import (
+    router as student_submissions_router,
+)
+
+router.include_router(
+    student_submissions_router,
+    prefix="/students/submissions",
+    tags=["student-submissions"],
+)
+
 # Mount jury matching router
 from app.api.http.jury_matching import router as jury_matching_router
 
