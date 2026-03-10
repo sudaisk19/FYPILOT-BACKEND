@@ -27,6 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS
 from app.db import get_db
 from app.models.bulk_import import (
     BulkImportItem,
@@ -44,6 +45,7 @@ from app.schemas.bulk_import_schema import (
     BulkImportReportItemDetail,
     BulkImportReportResponse,
     BulkImportUploadResponse,
+    DepartmentListResponse,
     CreateStudentRequest,
     CreateSupervisorRequest,
     ProcessorResponse,
@@ -82,6 +84,23 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+# ─── Reference Data ────────────────────────────────────────────
+
+
+@router.get(
+    "/departments",
+    response_model=DepartmentListResponse,
+    summary="List allowed departments",
+    description="Return the canonical list of departments for dropdown population.",
+)
+async def get_departments(
+    current_user: User = Depends(require_admin),
+):
+    """Expose canonical departments so FE dropdowns stay in sync with backend validation."""
+
+    return DepartmentListResponse(departments=COMMON_UNIVERSITY_DEPARTMENTS)
+
+
 # ─── Upload + Auto-Process ──────────────────────────────────────
 
 
@@ -107,9 +126,10 @@ async def upload_bulk_import(
     The admin gets an immediate 201 response with the job_id, then can
     poll GET /{job_id} or GET /{job_id}/report for progress and results.
 
-    Required columns for students: full_name, email, roll_number, fyp_start_semester, fyp_start_year
-    Required columns for supervisors: full_name, email, department, designation
-    Optional columns for students: department
+    Required columns for students: full_name, email, roll_number, department,
+    fyp_start_semester, fyp_start_year
+    Required columns for faculty: full_name, email, department, designation
+    Departments must match the predefined dropdown options (case-insensitive).
     """
     # Validate target_role
     try:

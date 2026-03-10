@@ -45,6 +45,11 @@ class Group(Base):
         default=FYPCycleEnum.fyp1,
     )
     cohort_year = Column(Integer, nullable=True)
+    cohort = Column(
+        Text,
+        nullable=True,
+        comment="Short cohort code like F24 or S25",
+    )
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
@@ -73,6 +78,10 @@ class Group(Base):
     __table_args__ = (
         CheckConstraint(
             "max_members >= 1 AND max_members <= 3", name="check_max_members_range"
+        ),
+        CheckConstraint(
+            "cohort ~ '^[FS][0-9]{2}$'",
+            name="groups_cohort_format_check",
         ),
     )
 

@@ -4,21 +4,19 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 import app.schemas.group_schema as gs
+from app.models.group import FYPCycleEnum
 
 
 # --- Existing Pagination Schemas (Keep as is) ---
 class GroupCardInfo(BaseModel):
     group_id: str
     project_name: Optional[str] = None
-    project_description: Optional[str] = None
     fyp_cycle: Optional[str] = None
     fyp_stage: Optional[str] = None
-    cohort_year: Optional[int] = None
     members_count: int = 0
     supervisor_name: Optional[str] = None
     cosupervisor_name: Optional[str] = None
-    domains: List[str] = []
-    tech_tags: List[str] = []
+    cohort: Optional[str] = None
 
 
 class PaginatedGroupResponse(BaseModel):
@@ -80,3 +78,16 @@ class AssignSupervisorResponse(BaseModel):
     supervisor_id: str
     supervisor_name: str
     role: str
+
+
+class CohortCycleUpdateRequest(BaseModel):
+    target_cycle: FYPCycleEnum = Field(
+        ..., description="Cycle to apply to every group in the cohort"
+    )
+
+
+class CohortCycleUpdateResponse(BaseModel):
+    message: str
+    cohort: str
+    target_cycle: FYPCycleEnum
+    updated_count: int

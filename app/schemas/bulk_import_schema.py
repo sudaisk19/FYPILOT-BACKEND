@@ -8,7 +8,9 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS, normalize_department
 
 # === Single User Registration Schemas ===
 
@@ -21,7 +23,20 @@ class CreateStudentRequest(BaseModel):
     roll_number: str = Field(..., min_length=1, max_length=50)
     fyp_start_semester: Literal["fall", "spring", "summer"]
     fyp_start_year: int = Field(..., ge=2000, le=2100)
-    department: Optional[str] = None
+    department: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description=(
+            "Department must be one of: "
+            + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
+        ),
+    )
+
+    @field_validator("department")
+    @classmethod
+    def validate_department(cls, value: str) -> str:
+        return normalize_department(value)
 
 
 class CreateSupervisorRequest(BaseModel):
@@ -29,8 +44,21 @@ class CreateSupervisorRequest(BaseModel):
 
     full_name: str = Field(..., min_length=1, max_length=200)
     email: EmailStr
-    department: str = Field(..., min_length=1, max_length=200)
+    department: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description=(
+            "Department must be one of: "
+            + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
+        ),
+    )
     designation: str = Field(..., min_length=1, max_length=200)
+
+    @field_validator("department")
+    @classmethod
+    def validate_department(cls, value: str) -> str:
+        return normalize_department(value)
 
 
 class SingleUserResponse(BaseModel):
@@ -42,6 +70,12 @@ class SingleUserResponse(BaseModel):
     role: str
     temp_password: str
     message: str
+
+
+class DepartmentListResponse(BaseModel):
+    """Allowed departments for dropdown population."""
+
+    departments: list[str]
 
 
 # === Enums (mirrors model enums) ===

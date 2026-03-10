@@ -160,8 +160,6 @@ async def complete_supervisor_wizard_profile(
 
         # Prepare faculty updates
         faculty_updates = {}
-        if profile_data.department is not None:
-            faculty_updates["department"] = profile_data.department
         if profile_data.designation is not None:
             faculty_updates["designation"] = profile_data.designation
         if profile_data.office is not None:
@@ -349,8 +347,6 @@ async def update_supervisor_profile(
         # Prepare faculty updates - only include non-empty values
         faculty_updates = {}
 
-        if profile_data.department is not None and profile_data.department.strip():
-            faculty_updates["department"] = profile_data.department.strip()
         if profile_data.designation is not None and profile_data.designation.strip():
             faculty_updates["designation"] = profile_data.designation.strip()
         if profile_data.office is not None and profile_data.office.strip():

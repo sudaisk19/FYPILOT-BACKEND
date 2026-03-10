@@ -21,6 +21,8 @@ from app.schemas.admin_supervisors_schema import (
 )
 from app.services.cache import cache
 
+DEFAULT_SUPERVISOR_CAPACITY = 8
+
 router = APIRouter()
 
 
@@ -131,6 +133,7 @@ async def get_faculty_dropdown(
 async def list_faculty(
     department: Optional[str] = Query(None),
     availability: Literal["all", "available", "full"] = Query("all"),
+    status_filter: Literal["all", "active", "inactive"] = Query("all"),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -142,7 +145,8 @@ async def list_faculty(
 
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
     cache_key = (
-        f"admin:faculty:{department}:{availability}:" f"{search}:{page}:{per_page}"
+        "admin:faculty:"
+        f"{department}:{availability}:{status_filter}:{search}:{page}:{per_page}"
     )
     cached = await cache.get_json(cache_key)
     if cached:
@@ -164,6 +168,11 @@ async def list_faculty(
         filters.append(Faculty.capacity_filled < Faculty.capacity_max)
     elif availability == "full":
         filters.append(Faculty.capacity_filled >= Faculty.capacity_max)
+
+    if status_filter == "active":
+        filters.append(Faculty.is_active == True)
+    elif status_filter == "inactive":
+        filters.append(Faculty.is_active == False)
 
     if search:
         s = f"%{search}%"
@@ -211,6 +220,9 @@ async def list_faculty(
                 capacity_filled=faculty_member.capacity_filled,
                 free_slots=free,
                 status="AVAILABLE" if free > 0 else "FULL",
+                is_supervisor=faculty_member.is_supervisor,
+                is_jury=faculty_member.is_jury,
+                is_active=faculty_member.is_active,
             )
         )
 
@@ -293,18 +305,20 @@ async def get_admin_faculty_profile(
         project_type=sp.project_type if sp.project_type else None,
         capacity_max=sp.capacity_max,
         capacity_filled=sp.capacity_filled,
+        is_supervisor=sp.is_supervisor,
+        is_jury=sp.is_jury,
+        is_active=sp.is_active,
         domains=[d.name for d in sp.domains],
         industries=[i.name for i in sp.industries],
         projects=projects_data,
     )
 
 
-# 2. UPDATE Capacity (For the 'Save' button in screenshot)
-# app/api/http/admin_supervisors.py
+# 2. UPDATE Faculty profile (capacity & roles)
 
 
-@router.patch("/faculty/{faculty_id}/capacity")
-async def update_faculty_capacity(
+@router.patch("/faculty/{faculty_id}/profile-update")
+async def update_faculty_profile(
     faculty_id: UUID,
     data: CapacityUpdateReq,
     db: AsyncSession = Depends(get_db),
@@ -313,6 +327,16 @@ async def update_faculty_capacity(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
+    if (
+        data.capacity_max is None
+        and data.is_supervisor is None
+        and data.is_jury is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one field to update.",
+        )
+
     # 1. Fetch faculty to get current filled capacity
     user = await supervisor_repository.get_full_profile(db, faculty_id)
     if not user or not user.faculty_profile:
@@ -320,20 +344,78 @@ async def update_faculty_capacity(
 
     sp = user.faculty_profile
 
-    # 2. Business Logic: Check if new capacity is enough for already assigned groups
-    if data.capacity_max < sp.capacity_filled:
+    # Resolve final flag states so we can enforce business rules
+    new_is_supervisor = (
+        sp.is_supervisor if data.is_supervisor is None else data.is_supervisor
+    )
+    new_is_jury = sp.is_jury if data.is_jury is None else data.is_jury
+    new_is_active = new_is_supervisor or new_is_jury
+
+    supervisor_flag_changed = (
+        data.is_supervisor is not None and data.is_supervisor != sp.is_supervisor
+    )
+
+    update_payload: dict[str, object] = {}
+    capacity_to_apply: Optional[int] = None
+    final_capacity_max = sp.capacity_max
+
+    if data.capacity_max is not None and not new_is_supervisor:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot reduce capacity to {data.capacity_max}. Faculty member already has {sp.capacity_filled} assigned groups.",
+            detail="Capacity changes are only allowed while supervision is enabled.",
+        )
+
+    if not new_is_supervisor:
+        if sp.capacity_filled > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot disable supervision while faculty has assigned groups.",
+            )
+        capacity_to_apply = 0
+    elif supervisor_flag_changed and data.is_supervisor:
+        capacity_to_apply = (
+            data.capacity_max
+            if data.capacity_max is not None
+            else DEFAULT_SUPERVISOR_CAPACITY
+        )
+    elif data.capacity_max is not None:
+        capacity_to_apply = data.capacity_max
+
+    if capacity_to_apply is not None:
+        if capacity_to_apply < sp.capacity_filled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Cannot reduce capacity to {capacity_to_apply}. Faculty member already has {sp.capacity_filled} assigned groups."
+                ),
+            )
+        update_payload["capacity_max"] = capacity_to_apply
+        final_capacity_max = capacity_to_apply
+
+    if data.is_supervisor is not None:
+        update_payload["is_supervisor"] = data.is_supervisor
+
+    if data.is_jury is not None:
+        update_payload["is_jury"] = data.is_jury
+
+    if data.is_supervisor is not None or data.is_jury is not None:
+        update_payload["is_active"] = new_is_active
+
+    if not update_payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No changes detected in the request payload.",
         )
 
     # 3. Apply update
-    await supervisor_repository.update(
-        db, faculty_id, {"capacity_max": data.capacity_max}
-    )
+    await supervisor_repository.update(db, faculty_id, update_payload)
     await db.commit()
 
     return {
-        "message": "Capacity updated successfully",
-        "new_capacity": data.capacity_max,
+        "message": "Faculty profile updated successfully",
+        "capacity_max": final_capacity_max,
+        "capacity_filled": sp.capacity_filled,
+        "is_supervisor": new_is_supervisor,
+        "is_jury": new_is_jury,
+        "is_active": new_is_active,
     }
