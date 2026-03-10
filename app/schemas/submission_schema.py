@@ -172,3 +172,117 @@ class EditSubmissionAnnouncementRequest(BaseModel):
     files: Optional[List[FileOutput]] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+# ─── STUDENT SUBMISSION SCHEMAS ───────────────────────────────────────────────
+
+
+class StudentSubmissionFileResponse(BaseModel):
+    """A single file attached to a student's submission."""
+    file_id: UUID
+    file_name: str
+    url: Optional[str] = None
+    storage_key: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    uploaded_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentAnnouncementTemplateFile(BaseModel):
+    """A template/reference file attached to the linked announcement."""
+    file_id: UUID
+    file_name: str
+    storage_key: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentOfficialSubmissionListItem(BaseModel):
+    """Lightweight item for the Official Submissions list view."""
+    submission_id: UUID
+    title: str
+    status: SubmissionStatusEnum
+    due_date: Optional[datetime] = None   # from linked announcement
+    total_marks: Optional[float] = None   # from linked announcement
+    file_count: int = 0                   # number of student-uploaded files
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedStudentOfficialSubmissions(BaseModel):
+    submissions: List[StudentOfficialSubmissionListItem]
+    total_items: int
+    total_pages: int
+    current_page: int
+    per_page: int
+
+
+class StudentOfficialSubmissionDetail(BaseModel):
+    """Full detail for a single Official Submission."""
+    submission_id: UUID
+    title: str
+    note: Optional[str] = None
+    status: SubmissionStatusEnum
+    submitted_at: Optional[datetime] = None
+    updated_at: datetime
+
+    # From the linked announcement
+    due_date: Optional[datetime] = None
+    total_marks: Optional[float] = None
+    announcement_description: Optional[str] = None
+    template_files: List[StudentAnnouncementTemplateFile] = []
+
+    # Grading (read-only for student)
+    supervisor_marks: Optional[float] = None
+    supervisor_feedback: Optional[str] = None
+    admin_marks: Optional[float] = None
+    admin_feedback: Optional[str] = None
+
+    # Student-uploaded files
+    files: List[StudentSubmissionFileResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ─── STUDENT UNOFFICIAL SUBMISSION SCHEMAS ────────────────────────────────────
+
+
+class StudentUnofficialSubmissionListItem(BaseModel):
+    """Lightweight item for the Unofficial Submissions list view."""
+    submission_id: UUID
+    title: str
+    status: SubmissionStatusEnum
+    file_count: int = 0
+    submitted_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedStudentUnofficialSubmissions(BaseModel):
+    submissions: List[StudentUnofficialSubmissionListItem]
+    total_items: int
+    total_pages: int
+    current_page: int
+    per_page: int
+
+
+class StudentUnofficialSubmissionDetail(BaseModel):
+    """Full detail for a single Unofficial Submission."""
+    submission_id: UUID
+    title: str
+    note: Optional[str] = None
+    status: SubmissionStatusEnum
+    submitted_at: datetime
+    updated_at: datetime
+
+    # Grading (read-only for student)
+    supervisor_marks: Optional[float] = None
+    supervisor_feedback: Optional[str] = None
+
+    files: List[StudentSubmissionFileResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
