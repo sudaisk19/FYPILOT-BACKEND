@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.announcement import AnnouncementRoleEnum
 from app.models.submission import SubmissionStatusEnum, SubmissionTypeEnum
 
 
@@ -209,6 +210,7 @@ class StudentOfficialSubmissionListItem(BaseModel):
     due_date: Optional[datetime] = None   # from linked announcement
     total_marks: Optional[float] = None   # from linked announcement
     file_count: int = 0                   # number of student-uploaded files
+    created_by_role: Optional[AnnouncementRoleEnum] = None  # admin or supervisor
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -236,10 +238,8 @@ class StudentOfficialSubmissionDetail(BaseModel):
     announcement_description: Optional[str] = None
     template_files: List[StudentAnnouncementTemplateFile] = []
 
-    # Grading (read-only for student)
-    supervisor_marks: Optional[float] = None
+    # Grading feedback (marks hidden on student view)
     supervisor_feedback: Optional[str] = None
-    admin_marks: Optional[float] = None
     admin_feedback: Optional[str] = None
 
     # Student-uploaded files
@@ -279,8 +279,7 @@ class StudentUnofficialSubmissionDetail(BaseModel):
     submitted_at: datetime
     updated_at: datetime
 
-    # Grading (read-only for student)
-    supervisor_marks: Optional[float] = None
+    # Grading feedback (marks hidden on student view)
     supervisor_feedback: Optional[str] = None
 
     files: List[StudentSubmissionFileResponse] = []

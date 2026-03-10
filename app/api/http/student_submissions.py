@@ -103,6 +103,11 @@ async def list_official_submissions(
                 else None
             ),
             file_count=len(s.files),
+            created_by_role=(
+                s.linked_announcement.created_by_role
+                if s.linked_announcement
+                else None
+            ),
         )
         for s in submissions
     ]
@@ -198,13 +203,7 @@ async def get_official_submission(
         ),
         announcement_description=announcement.description if announcement else None,
         template_files=template_files,
-        supervisor_marks=(
-            float(submission.supervisor_marks) if submission.supervisor_marks else None
-        ),
         supervisor_feedback=submission.supervisor_feedback,
-        admin_marks=(
-            float(submission.admin_marks) if submission.admin_marks else None
-        ),
         admin_feedback=submission.admin_feedback,
         files=uploaded_files,
     )
@@ -370,13 +369,7 @@ async def submit_official_submission(
         ),
         announcement_description=announcement.description if announcement else None,
         template_files=template_files,
-        supervisor_marks=(
-            float(submission.supervisor_marks) if submission.supervisor_marks else None
-        ),
         supervisor_feedback=submission.supervisor_feedback,
-        admin_marks=(
-            float(submission.admin_marks) if submission.admin_marks else None
-        ),
         admin_feedback=submission.admin_feedback,
         files=uploaded_files,
     )
@@ -498,9 +491,6 @@ async def get_unofficial_submission(
         status=submission.status,
         submitted_at=submission.submitted_at or submission.updated_at,
         updated_at=submission.updated_at,
-        supervisor_marks=(
-            float(submission.supervisor_marks) if submission.supervisor_marks else None
-        ),
         supervisor_feedback=submission.supervisor_feedback,
         files=uploaded_files,
     )
@@ -540,7 +530,7 @@ async def create_unofficial_submission(
         title=title.strip(),
         note=note.strip() if note else None,
         type=SubmissionTypeEnum.unofficial,
-        status=SubmissionStatusEnum.pending,  # Default to pending
+        status=SubmissionStatusEnum.submitted,
         submitted_at=datetime.now(timezone.utc),
     )
     db.add(new_sub)
@@ -610,9 +600,6 @@ async def create_unofficial_submission(
         status=populated_sub.status,
         submitted_at=populated_sub.submitted_at or populated_sub.updated_at,
         updated_at=populated_sub.updated_at,
-        supervisor_marks=(
-            float(populated_sub.supervisor_marks) if populated_sub.supervisor_marks else None
-        ),
         supervisor_feedback=populated_sub.supervisor_feedback,
         files=uploaded_files,
     )
@@ -745,9 +732,6 @@ async def edit_unofficial_submission(
         status=populated_sub.status,
         submitted_at=populated_sub.submitted_at or populated_sub.updated_at,
         updated_at=populated_sub.updated_at,
-        supervisor_marks=(
-            float(populated_sub.supervisor_marks) if populated_sub.supervisor_marks else None
-        ),
         supervisor_feedback=populated_sub.supervisor_feedback,
         files=uploaded_files,
     )
