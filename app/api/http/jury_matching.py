@@ -13,12 +13,11 @@ from app.db import get_db
 from app.middleware.ai_service import ai_service_circuit
 from app.models.user import User
 from app.schemas.jury_matching_schema import (
-    JuryAssignmentDetail,
     JuryAssignmentPatchRequest,
     JuryAssignmentPatchResponse,
+    JuryAssignmentsResponse,
     JuryAssignRequest,
     JuryAssignResponse,
-    JuryBatchStatusResponse,
     JuryDeleteResponse,
     JuryPairDropdownItem,
     JuryReindexResponse,
@@ -230,19 +229,25 @@ async def trigger_jury_assignment(
     """
     _require_admin(current_user)
 
-    if request.fyp_cycle not in ("fyp1", "fyp2"):
+    # Validate cycles
+    valid_cycles = {"fyp1", "fyp2"}
+    invalid_cycles = [c for c in request.fyp_cycles if c not in valid_cycles]
+    if invalid_cycles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="fyp_cycle must be 'fyp1' or 'fyp2'",
+            detail=f"Invalid fyp_cycles: {invalid_cycles}. Allowed values are 'fyp1', 'fyp2'.",
+        )
+    if not request.fyp_cycles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fyp_cycles list cannot be empty.",
         )
 
     try:
         # Create the batch (the "ticket")
         batch = await jury_matching_service.create_assignment_batch(
             db=db,
-            fyp_cycle=request.fyp_cycle,
-            max_groups_per_pair=request.max_groups_per_pair,
-            min_jury_per_project=request.min_jury_per_project,
+            fyp_cycles=request.fyp_cycles,
             created_by=(
                 current_user.user_id if hasattr(current_user, "user_id") else None
             ),
@@ -252,9 +257,7 @@ async def trigger_jury_assignment(
         background_tasks.add_task(
             jury_matching_service.run_assignment_job,
             batch.batch_id,
-            request.max_groups_per_pair,
-            request.min_jury_per_project,
-            request.fyp_cycle,
+            request.fyp_cycles,
         )
 
         logger.info(
@@ -283,7 +286,7 @@ async def trigger_jury_assignment(
 
 @router.get(
     "/assign/{batch_id}/status",
-    response_model=JuryBatchStatusResponse,
+    response_model=JuryAssignmentsResponse,
     summary="Poll jury assignment status",
 )
 async def get_assignment_status(
@@ -291,80 +294,27 @@ async def get_assignment_status(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Poll the status of a jury assignment batch."""
+    """Poll the status of a jury assignment batch (grouped by jury pair)."""
     _require_admin(current_user)
 
-    batch = await jury_matching_service.get_batch_status(db, batch_id)
-    if not batch:
+    result = await jury_matching_service.get_jury_matches(db, batch_id)
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Jury assignment batch not found",
         )
 
-    # Build assignment details (only when completed)
-    assignment_details = []
-    if batch.status.value == "completed" and batch.assignments:
-        # Pre-fetch faculty names for all pairs in one query
-        faculty_name_map: dict[str, str] = {}
-        pair_faculty_ids: set[str] = set()
-        for a in batch.assignments:
-            if a.jury_pair:
-                pair_faculty_ids.add(str(a.jury_pair.faculty_1_id))
-                pair_faculty_ids.add(str(a.jury_pair.faculty_2_id))
+    batch = result["batch"]
+    jury_matches = result["jury_matches"]
 
-        if pair_faculty_ids:
-            from sqlalchemy import select as sa_select
-
-            from app.models.user import User as UserModel
-
-            uid_list = [UUID(uid) for uid in pair_faculty_ids]
-            name_query = sa_select(UserModel.user_id, UserModel.full_name).where(
-                UserModel.user_id.in_(uid_list)
-            )
-            name_result = await db.execute(name_query)
-            for row in name_result.all():
-                faculty_name_map[str(row.user_id)] = row.full_name
-
-        for a in batch.assignments:
-            project_name = None
-            if a.project:
-                project_name = (
-                    a.project.name
-                    if hasattr(a.project, "name")
-                    else getattr(a.project, "title", None)
-                )
-
-            # Get pair info
-            jury_number = None
-            f1_name = None
-            f2_name = None
-            if a.jury_pair:
-                jury_number = a.jury_pair.jury_number
-                f1_name = faculty_name_map.get(str(a.jury_pair.faculty_1_id), "Unknown")
-                f2_name = faculty_name_map.get(str(a.jury_pair.faculty_2_id), "Unknown")
-
-            assignment_details.append(
-                JuryAssignmentDetail(
-                    id=str(a.id),
-                    project_id=str(a.project_id),
-                    project_name=project_name,
-                    pair_id=str(a.pair_id) if a.pair_id else None,
-                    jury_number=jury_number,
-                    faculty_1_name=f1_name,
-                    faculty_2_name=f2_name,
-                    score=a.score,
-                    reason=a.reason,
-                )
-            )
-
-    return JuryBatchStatusResponse(
+    return JuryAssignmentsResponse(
         batch_id=str(batch.batch_id),
         status=batch.status.value,
-        fyp_cycle=batch.fyp_cycle,
+        fyp_cycles=batch.fyp_cycles,
         error_log=batch.error_log,
         created_at=batch.created_at,
-        total_assigned=len(assignment_details),
-        assignments=assignment_details,
+        total_assigned=sum(len(m["groups"]) for m in jury_matches),
+        jury_matches=jury_matches,
     )
 
 
@@ -480,27 +430,44 @@ async def patch_assignment_jury(
 
 @router.get(
     "/assignments",
-    response_model=list[JuryBatchStatusResponse],
-    summary="List all jury assignment batches",
+    response_model=JuryAssignmentsResponse,
+    summary="Get jury assignment results",
 )
-async def list_assignment_batches(
+async def list_jury_assignments(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """List all jury assignment batches (most recent first)."""
+    """
+    Get the latest jury assignment results grouped by jury pair.
+
+    Returns assignments in the format expected by the frontend:
+    each jury pair with its supervisors (name + department) and
+    assigned groups (project name, FYP ID, cycle, members with roll numbers).
+
+    Each group's ``id`` is the assignment ID — use it for
+    ``PATCH /assignments/{id}/jury`` to change that group's jury.
+    """
     _require_admin(current_user)
 
-    batches = await jury_matching_service.get_all_batches(db)
+    result = await jury_matching_service.get_jury_matches(db)
 
-    return [
-        JuryBatchStatusResponse(
-            batch_id=str(b.batch_id),
-            status=b.status.value,
-            fyp_cycle=b.fyp_cycle,
-            error_log=b.error_log,
-            created_at=b.created_at,
+    if not result:
+        return JuryAssignmentsResponse(
+            batch_id="",
+            status="none",
             total_assigned=0,
-            assignments=[],
+            jury_matches=[],
         )
-        for b in batches
-    ]
+
+    batch = result["batch"]
+    jury_matches = result["jury_matches"]
+
+    return JuryAssignmentsResponse(
+        batch_id=str(batch.batch_id),
+        status=batch.status.value,
+        fyp_cycles=batch.fyp_cycles,
+        error_log=batch.error_log,
+        created_at=batch.created_at,
+        total_assigned=sum(len(m["groups"]) for m in jury_matches),
+        jury_matches=jury_matches,
+    )

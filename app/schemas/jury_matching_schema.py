@@ -32,9 +32,9 @@ class JuryAssignRequest(BaseModel):
         le=5,
         description="Minimum number of jury pairs per project",
     )
-    fyp_cycle: str = Field(
+    fyp_cycles: List[str] = Field(
         ...,
-        description="Which FYP cycle to assign for: 'fyp1' or 'fyp2'",
+        description="Which FYP cycles to assign for, e.g. ['fyp1'], ['fyp2'], or ['fyp1','fyp2']",
     )
 
     class Config:
@@ -42,7 +42,7 @@ class JuryAssignRequest(BaseModel):
             "example": {
                 "max_groups_per_pair": 5,
                 "min_jury_per_project": 1,
-                "fyp_cycle": "fyp2",
+                "fyp_cycles": ["fyp1"],
             }
         }
 
@@ -142,3 +142,58 @@ class JuryDeleteResponse(BaseModel):
     deleted_assignments: int = 0
     deleted_pairs: int = 0
     deleted_batches: int = 0
+
+
+# ─── Frontend-Matched Grouped Response Schemas ──────────────────────
+
+
+class GroupMemberInfo(BaseModel):
+    """A student member of a group."""
+
+    name: str
+    rollNumber: str
+
+
+class AssignedGroupInfo(BaseModel):
+    """A group/project assigned to a jury pair (maps to a JuryAssignment row)."""
+
+    id: str = Field(
+        ..., description="Assignment ID (use for PATCH /assignments/{id}/jury)"
+    )
+    projectName: str
+    fypId: Optional[str] = None
+    fypCycle: Optional[str] = None
+    members: List[GroupMemberInfo] = Field(default_factory=list)
+
+
+class JurySupervisorInfo(BaseModel):
+    """Faculty member info within a jury pair."""
+
+    name: str
+    department: Optional[str] = None
+
+
+class JuryMatchItem(BaseModel):
+    """A jury pair with its assigned groups — matches frontend MOCK_JURY_MATCHES."""
+
+    id: str = Field(..., description="Jury pair ID")
+    jury_number: Optional[int] = Field(
+        None, description="Sequential number: Jury 1, 2, …"
+    )
+    supervisors: List[JurySupervisorInfo] = Field(default_factory=list)
+    groups: List[AssignedGroupInfo] = Field(default_factory=list)
+
+
+class JuryAssignmentsResponse(BaseModel):
+    """Response for jury assignment endpoints — grouped by jury pair."""
+
+    batch_id: str
+    status: str = Field(..., description="processing / completed / failed / none")
+    fyp_cycles: Optional[List[str]] = None
+    error_log: Optional[str] = None
+    created_at: Optional[datetime] = None
+    total_assigned: int = 0
+    jury_matches: List[JuryMatchItem] = Field(
+        default_factory=list,
+        description="Assignments grouped by jury pair (populated when completed)",
+    )

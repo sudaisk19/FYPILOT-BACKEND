@@ -22,12 +22,15 @@ from sqlalchemy.orm import selectinload
 
 from app.db import AsyncSessionLocal
 from app.middleware.ai_service import ai_service_circuit
+from app.models.faculty import Faculty
+from app.models.group import Group, GroupMember
 from app.models.jury_assignment import (
     JuryAssignment,
     JuryAssignmentBatch,
     JuryBatchStatusEnum,
 )
 from app.models.jury_pair import JuryPair
+from app.models.student import Student
 from app.models.user import User
 from app.services.jury_matching_client import (
     JuryMatchingServiceError,
@@ -49,7 +52,9 @@ class JuryMatchingService:
         """Check if the Jury Matching AI service is available."""
         return await self._client.health_check()
 
-    async def get_batch_matches(self) -> List[Dict[str, Any]]:
+    async def get_batch_matches(
+        self, fyp_cycles: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get jury recommendations for ALL projects in a single batch call.
 
@@ -59,7 +64,7 @@ class JuryMatchingService:
         self._circuit.check_and_raise()
 
         try:
-            results = await self._client.batch_match()
+            results = await self._client.batch_match(fyp_cycles=fyp_cycles)
             self._circuit.record_success()
             logger.info(f"Received jury matches for {len(results)} projects")
             return results
@@ -116,9 +121,7 @@ class JuryMatchingService:
     async def create_assignment_batch(
         self,
         db: AsyncSession,
-        fyp_cycle: str,
-        max_groups_per_pair: int,
-        min_jury_per_project: int,
+        fyp_cycles: List[str],
         created_by: Optional[UUID] = None,
     ) -> JuryAssignmentBatch:
         """
@@ -129,9 +132,7 @@ class JuryMatchingService:
         batch = JuryAssignmentBatch(
             batch_id=uuid.uuid4(),
             status=JuryBatchStatusEnum.processing,
-            fyp_cycle=fyp_cycle,
-            max_groups_per_pair=max_groups_per_pair,
-            min_jury_per_project=min_jury_per_project,
+            fyp_cycles=fyp_cycles,
             created_by=created_by,
         )
         db.add(batch)
@@ -144,9 +145,7 @@ class JuryMatchingService:
     async def run_assignment_job(
         self,
         batch_id: UUID,
-        max_groups_per_pair: int,
-        min_jury_per_project: int,
-        fyp_cycle: str,
+        fyp_cycles: List[str],
     ) -> None:
         """
         Background task: execute the full jury assignment flow.
@@ -174,16 +173,14 @@ class JuryMatchingService:
                     batch = JuryAssignmentBatch(
                         batch_id=batch_id,
                         status=JuryBatchStatusEnum.processing,
-                        fyp_cycle=fyp_cycle,
-                        max_groups_per_pair=max_groups_per_pair,
-                        min_jury_per_project=min_jury_per_project,
+                        fyp_cycles=fyp_cycles,
                     )
                     db.add(batch)
                     await db.commit()
 
                 # ── Step 2: Call AI service for jury pairs + assignments ──
                 logger.info(f"Batch {batch_id}: calling AI service")
-                ai_results = await self.get_batch_matches()
+                ai_results = await self.get_batch_matches(fyp_cycles=fyp_cycles)
 
                 if not ai_results:
                     await self._fail_batch(
@@ -335,6 +332,173 @@ class JuryMatchingService:
             }
             for r in rows
         ]
+
+    # ─────────────────────────────────────────────────────────────
+    # Grouped Assignments — Frontend-facing response builder
+    # ─────────────────────────────────────────────────────────────
+
+    async def get_jury_matches(
+        self,
+        db: AsyncSession,
+        batch_id: Optional[UUID] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get jury assignments grouped by pair with full details.
+
+        If *batch_id* is ``None``, the latest batch is used.
+        Returns ``{"batch": <JuryAssignmentBatch>, "jury_matches": [...]}``
+        where each match follows the frontend ``MOCK_JURY_MATCHES`` shape.
+        """
+        # ── Resolve batch_id ──
+        if batch_id is None:
+            latest_q = (
+                select(JuryAssignmentBatch)
+                .order_by(JuryAssignmentBatch.created_at.desc())
+                .limit(1)
+            )
+            latest_r = await db.execute(latest_q)
+            latest_batch = latest_r.scalar_one_or_none()
+            if not latest_batch:
+                return None
+            batch_id = latest_batch.batch_id
+
+        # ── Load batch with assignments (project + jury_pair) ──
+        query = (
+            select(JuryAssignmentBatch)
+            .where(JuryAssignmentBatch.batch_id == batch_id)
+            .options(
+                selectinload(JuryAssignmentBatch.assignments).selectinload(
+                    JuryAssignment.project
+                ),
+                selectinload(JuryAssignmentBatch.assignments).selectinload(
+                    JuryAssignment.jury_pair
+                ),
+            )
+        )
+        result = await db.execute(query)
+        batch = result.scalar_one_or_none()
+
+        if not batch:
+            return None
+
+        # Not completed yet or empty → return batch meta only
+        if batch.status != JuryBatchStatusEnum.completed or not batch.assignments:
+            return {"batch": batch, "jury_matches": []}
+
+        # ── Collect IDs for batch queries ──
+        group_ids: set = set()
+        faculty_ids: set = set()
+        for a in batch.assignments:
+            if a.project and a.project.group_id:
+                group_ids.add(a.project.group_id)
+            if a.jury_pair:
+                faculty_ids.add(a.jury_pair.faculty_1_id)
+                faculty_ids.add(a.jury_pair.faculty_2_id)
+
+        # ── Batch-fetch groups → members → student → user ──
+        groups_map: Dict[str, Any] = {}
+        if group_ids:
+            grp_query = (
+                select(Group)
+                .where(Group.group_id.in_(list(group_ids)))
+                .options(
+                    selectinload(Group.members)
+                    .selectinload(GroupMember.student)
+                    .selectinload(Student.user)
+                )
+            )
+            grp_result = await db.execute(grp_query)
+            for g in grp_result.scalars().all():
+                groups_map[str(g.group_id)] = g
+
+        # ── Batch-fetch faculty info (name + department) ──
+        faculty_map: Dict[str, Dict[str, Any]] = {}
+        if faculty_ids:
+            fac_t = Faculty.__table__
+            usr_t = User.__table__
+            fac_query = (
+                select(fac_t.c.user_id, usr_t.c.full_name, fac_t.c.department)
+                .join(usr_t, fac_t.c.user_id == usr_t.c.user_id)
+                .where(fac_t.c.user_id.in_(list(faculty_ids)))
+            )
+            fac_result = await db.execute(fac_query)
+            for row in fac_result.all():
+                faculty_map[str(row.user_id)] = {
+                    "name": row.full_name or "Unknown",
+                    "department": row.department,
+                }
+
+        # ── Group assignments by pair_id ──
+        pair_assignments: Dict[str, Dict[str, Any]] = {}
+        for a in batch.assignments:
+            pk = str(a.pair_id) if a.pair_id else None
+            if pk is None:
+                continue
+            if pk not in pair_assignments:
+                pair_assignments[pk] = {"pair": a.jury_pair, "items": []}
+            pair_assignments[pk]["items"].append(a)
+
+        # ── Build jury_matches list ──
+        jury_matches: List[Dict[str, Any]] = []
+        for data in pair_assignments.values():
+            pair = data["pair"]
+            if not pair:
+                continue
+
+            supervisors = []
+            for fid in [str(pair.faculty_1_id), str(pair.faculty_2_id)]:
+                info = faculty_map.get(fid, {"name": "Unknown", "department": None})
+                supervisors.append(info)
+
+            groups: List[Dict[str, Any]] = []
+            for a in data["items"]:
+                project = a.project
+                gid = str(project.group_id) if project and project.group_id else None
+                group = groups_map.get(gid) if gid else None
+
+                members = []
+                if group:
+                    for m in group.members:
+                        student = m.student
+                        user = student.user if student else None
+                        members.append(
+                            {
+                                "name": (user.full_name if user else "Unknown"),
+                                "rollNumber": (
+                                    student.roll_number if student else "N/A"
+                                ),
+                            }
+                        )
+
+                fyp_cycle_val = None
+                if group and group.fyp_cycle:
+                    fyp_cycle_val = (
+                        group.fyp_cycle.value
+                        if hasattr(group.fyp_cycle, "value")
+                        else str(group.fyp_cycle)
+                    )
+
+                groups.append(
+                    {
+                        "id": str(a.id),
+                        "projectName": (project.name if project else "Unknown"),
+                        "fypId": (project.fyp_id if project else None),
+                        "fypCycle": fyp_cycle_val,
+                        "members": members,
+                    }
+                )
+
+            jury_matches.append(
+                {
+                    "id": str(pair.jury_id),
+                    "jury_number": pair.jury_number,
+                    "supervisors": supervisors,
+                    "groups": groups,
+                }
+            )
+
+        jury_matches.sort(key=lambda x: x.get("jury_number") or 999)
+        return {"batch": batch, "jury_matches": jury_matches}
 
     # ─────────────────────────────────────────────────────────────
     # Patch — Change jury pair for a specific assignment

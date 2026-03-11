@@ -364,6 +364,7 @@ async def get_admin_group_profile(
     return AdminGroupProfileResponse(
         group={
             "group_id": str(group.group_id),
+            "fyp_id": project_info.fyp_id if project_info else None,
             "project_name": project_info.name if project_info else "Unknown Project",
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle.value if group.fyp_cycle else None,

@@ -19,6 +19,7 @@ class SupervisorGroupInfo(BaseModel):
     """Basic group metadata shown on a directory card."""
 
     group_id: str
+    fyp_id: Optional[str] = None
     project_name: str
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
@@ -66,6 +67,7 @@ class GroupProfileGroupInfo(BaseModel):
     """Group metadata for the detailed profile view."""
 
     group_id: str
+    fyp_id: Optional[str] = None
     project_name: str
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None

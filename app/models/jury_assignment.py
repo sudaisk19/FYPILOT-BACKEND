@@ -12,7 +12,8 @@ import uuid
 
 from sqlalchemy import TIMESTAMP, Column
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -49,9 +50,7 @@ class JuryAssignmentBatch(Base):
     )
 
     # ─── Config captured at assignment time ───
-    fyp_cycle = Column(String(10), nullable=True)
-    max_groups_per_pair = Column(Integer, nullable=True)
-    min_jury_per_project = Column(Integer, nullable=True, default=1)
+    fyp_cycles = Column(ARRAY(String), nullable=True)
 
     # Error details (if failed)
     error_log = Column(Text, nullable=True)

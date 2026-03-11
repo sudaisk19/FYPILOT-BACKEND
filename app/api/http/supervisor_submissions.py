@@ -48,9 +48,9 @@ from app.schemas.submission_schema import (
     GroupSubmissionStatus,
     PaginatedSubmissionTasksResponse,
     SubmissionAnnouncementResponse,
-    SubmissionEvaluationResponse,
     SubmissionFileInfo,
     SubmissionTaskInfo,
+    SupervisorSubmissionEvaluationResponse,
 )
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
@@ -142,11 +142,21 @@ def _assign_to_label(
         if len(managed_group_ids) > 0 and len(target_group_ids) == len(
             managed_group_ids
         ):
-            return "all"
+            return "All Groups"
 
     # If a single group is targeted
     if len(target_group_ids) == 1:
-        return str(list(target_group_ids)[0])
+        target_id = list(target_group_ids)[0]
+        # Find the group object
+        group = next((g for g in managed_groups if g.group_id == target_id), None)
+        if group:
+            if group.project and group.project.name:
+                return group.project.name
+
+            fyp_id = group.fyp_id or f"P-{str(group.group_id)[:8]}"
+            return f"Group {fyp_id}"
+
+        return str(target_id)
 
     return "Multiple Groups"  # Fallback
 
@@ -184,7 +194,9 @@ def _build_response(
 async def _get_managed_groups(user_id: UUID, db: AsyncSession) -> List[Group]:
     """Fetch all groups managed by the supervisor."""
     result = await db.execute(
-        select(Group).where(
+        select(Group)
+        .options(selectinload(Group.project))
+        .where(
             or_(
                 Group.supervisor_id == user_id,
                 Group.cosupervisor_ids.contains([user_id]),
@@ -993,7 +1005,7 @@ async def get_submission_responses(
 
 @router.get(
     "/submission-evaluation/{submission_id}",
-    response_model=SubmissionEvaluationResponse,
+    response_model=SupervisorSubmissionEvaluationResponse,
     summary="Get submission details for evaluation",
 )
 async def get_submission_evaluation(
@@ -1059,13 +1071,14 @@ async def get_submission_evaluation(
             storageKey=f.storage_key,
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
+            supervisorComment=f.supervisor_comment,
             uploadedAt=f.uploaded_at,
         )
         for f in submission.files
     ]
 
     # Return only supervisor marks (admin marks hidden from supervisor)
-    return SubmissionEvaluationResponse(
+    return SupervisorSubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
@@ -1085,7 +1098,7 @@ async def get_submission_evaluation(
 
 @router.post(
     "/submission-evaluation-update/{submission_id}",
-    response_model=SubmissionEvaluationResponse,
+    response_model=SupervisorSubmissionEvaluationResponse,
     summary="Update supervisor grading",
 )
 async def update_supervisor_grading(
@@ -1166,13 +1179,14 @@ async def update_supervisor_grading(
             storageKey=f.storage_key,
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
+            supervisorComment=f.supervisor_comment,
             uploadedAt=f.uploaded_at,
         )
         for f in submission.files
     ]
 
     # Return only supervisor marks (admin marks hidden from supervisor)
-    return SubmissionEvaluationResponse(
+    return SupervisorSubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
         totalMarks=total_marks,
