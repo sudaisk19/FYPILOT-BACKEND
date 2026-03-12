@@ -1,7 +1,9 @@
 # app/schemas/admin_students_schema.py
-#this schema is for the admin_students.py api that is displaying all the stidents to the admin 
-from pydantic import BaseModel
+# this schema is for the admin_students.py api that is displaying all the stidents to the admin
 from typing import List, Optional
+
+from pydantic import BaseModel
+
 
 class StudentCardInfo(BaseModel):
     user_id: str
@@ -13,6 +15,12 @@ class StudentCardInfo(BaseModel):
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
     assigned: bool = False
+    is_active: bool = True
+
+
+class StudentActiveToggleRequest(BaseModel):
+    is_active: bool
+
 
 class PaginatedStudentResponse(BaseModel):
     students: List[StudentCardInfo]

@@ -69,3 +69,7 @@ backup_*
 
 # === Docs (internal notes, not tracked) ===
 docs/
+
+# === Markdown Files ===
+*.md
+!README.md

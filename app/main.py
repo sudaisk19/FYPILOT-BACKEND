@@ -28,6 +28,10 @@ from app.services.cache import cache  # Redis cache
 from app.services.jury_matching_client import (  # Jury Matching HTTP client
     jury_matching_client,
 )
+from app.services.student_lifecycle_scheduler import (
+    create_scheduler,
+    run_student_lifecycle_job,
+)
 from app.services.supervisor_recommendation_client import (  # Supervisor Recommendation HTTP client
     supervisor_recommendation_client,
 )
@@ -36,6 +40,9 @@ from app.services.supervisor_recommendation_client import (  # Supervisor Recomm
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="FYPilot Backend")
+
+# Initialize Scheduler
+scheduler = create_scheduler()
 
 # CORS origins
 origins = [
@@ -124,6 +131,15 @@ async def on_startup():
     # Run database test in background (fire and forget)
     asyncio.create_task(test_db_connection())
 
+    # Start the background scheduler
+    try:
+        scheduler.start()
+        logger.info("✅ Student lifecycle scheduler started.")
+        # Run the deactivation job once on startup to catch up
+        asyncio.create_task(run_student_lifecycle_job())
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -135,6 +151,10 @@ async def on_shutdown():
 
     # Close Jury Matching HTTP client
     await jury_matching_client.close()
+
+    # Shutdown scheduler
+    scheduler.shutdown()
+    logger.info("Student lifecycle scheduler shut down.")
 
     logger.info("Application shutdown complete.")
 
