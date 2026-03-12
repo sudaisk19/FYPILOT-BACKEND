@@ -22,6 +22,7 @@ class FileResponse(BaseModel):
     file_type: FileTypeEnum
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
+    is_template: bool = False
 
     class Config:
         from_attributes = True

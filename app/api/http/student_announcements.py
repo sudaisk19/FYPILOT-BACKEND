@@ -101,6 +101,7 @@ async def get_supervisor_announcements_for_student(
                     file_type=f.file_type,
                     mime_type=f.mime_type,
                     size_bytes=f.size_bytes,
+                    is_template=getattr(f, "is_template", False),
                 )
                 for f in a.files
             ],

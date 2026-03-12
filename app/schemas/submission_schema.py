@@ -37,6 +37,7 @@ class FileOutput(BaseModel):
     module: Optional[str] = None
     mimeType: Optional[str] = None
     size: Optional[int] = None
+    isTemplate: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -198,6 +199,7 @@ class StudentAnnouncementTemplateFile(BaseModel):
     storage_key: str
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
+    is_template: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -64,7 +64,9 @@ def _build_storage_key(user_id: UUID, filename: str) -> str:
 
 def _resolve_file_type(raw: Optional[str]) -> FileTypeEnum:
     if raw and raw.strip().lower() == "template":
-        return FileTypeEnum.Template
+        raise HTTPException(
+            status_code=403, detail="Only admins can upload template files"
+        )
     return FileTypeEnum.Document
 
 
@@ -133,6 +135,7 @@ def _build_response(
             file_type=f.file_type,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,
+            is_template=getattr(f, "is_template", False),
         )
         for f in announcement.files
     ]
@@ -180,7 +183,7 @@ async def get_supervisor_announcements(
 
     base_filters = [
         Announcement.created_by == current_user.user_id,
-        Announcement.created_by_role == AnnouncementRoleEnum.faculty,
+        Announcement.created_by_role.in_(AnnouncementRoleEnum.supervisor_values()),
         Announcement.is_submission_request == False,  # noqa: E712
     ]
 
@@ -405,7 +408,7 @@ async def create_supervisor_announcement(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.faculty,
+        created_by_role=AnnouncementRoleEnum.supervisor,
         title=title,
         description=description,
         is_submission_request=False,
@@ -453,6 +456,7 @@ async def create_supervisor_announcement(
                 mime_type=upload.content_type or "application/octet-stream",
                 size_bytes=size_bytes,
                 file_type=ftype,
+                is_template=False,
             )
         )
 
@@ -686,6 +690,7 @@ async def update_supervisor_announcement(
                 mime_type=upload.content_type or "application/octet-stream",
                 size_bytes=size_bytes,
                 file_type=ftype,
+                is_template=False,
             )
         )
 

@@ -173,6 +173,7 @@ def _build_response(
                 type=f.file_type.value,
                 mimeType=f.mime_type,
                 size=f.size_bytes,
+                isTemplate=getattr(f, "is_template", False),
             )
             for f in announcement.files
         ],
@@ -396,7 +397,7 @@ async def create_supervisor_submission_task(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.faculty,
+        created_by_role=AnnouncementRoleEnum.supervisor,
         title=title,
         description=description,
         is_submission_request=True,
@@ -437,11 +438,12 @@ async def create_supervisor_submission_task(
             )
 
             ftype_str = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = (
-                FileTypeEnum.Template
-                if ftype_str.lower() == "template"
-                else FileTypeEnum.Document
-            )
+            if ftype_str.lower() == "template":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admins can upload template files",
+                )
+            ftype = FileTypeEnum.Document
 
             db.add(
                 AnnouncementFile(
@@ -451,6 +453,7 @@ async def create_supervisor_submission_task(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
+                    is_template=False,
                 )
             )
 
@@ -695,11 +698,12 @@ async def edit_supervisor_submission_task(
             )
 
             ftype_str = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = (
-                FileTypeEnum.Template
-                if ftype_str.lower() == "template"
-                else FileTypeEnum.Document
-            )
+            if ftype_str.lower() == "template":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admins can upload template files",
+                )
+            ftype = FileTypeEnum.Document
 
             db.add(
                 AnnouncementFile(
@@ -709,6 +713,7 @@ async def edit_supervisor_submission_task(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
+                    is_template=False,
                 )
             )
 

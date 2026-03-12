@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db, supabase
+from app.models.announcement import AnnouncementRoleEnum
 from app.models.submission import SubmissionStatusEnum
 from app.models.user import RoleEnum, User
 from app.repositories.submission_repository import submission_repository
@@ -104,7 +105,9 @@ async def list_official_submissions(
             ),
             file_count=len(s.files),
             created_by_role=(
-                s.linked_announcement.created_by_role
+                AnnouncementRoleEnum.normalize(
+                    s.linked_announcement.created_by_role
+                )
                 if s.linked_announcement
                 else None
             ),
@@ -160,8 +163,10 @@ async def get_official_submission(
                 storage_key=f.storage_key,
                 mime_type=f.mime_type,
                 size_bytes=f.size_bytes,
+                is_template=True,
             )
             for f in announcement.files
+            if getattr(f, "is_template", False)
         ]
 
     # Student-uploaded files
@@ -327,8 +332,10 @@ async def submit_official_submission(
             storage_key=f.storage_key,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,
+            is_template=True,
         )
         for f in (announcement.files if announcement and announcement.files else [])
+        if getattr(f, "is_template", False)
     ]
 
     uploaded_files = []

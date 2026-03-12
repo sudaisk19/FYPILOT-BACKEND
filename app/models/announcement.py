@@ -30,6 +30,21 @@ if TYPE_CHECKING:
 class AnnouncementRoleEnum(str, enum.Enum):
     admin = "admin"
     supervisor = "supervisor"
+    faculty = "faculty"  # legacy value retained for backward compatibility
+
+    @classmethod
+    def supervisor_values(cls):
+        """Return all enum values that should be treated as supervisor roles."""
+        return (cls.supervisor, cls.faculty)
+
+    @classmethod
+    def normalize(cls, value):
+        """Map legacy values to the canonical enum used by the API."""
+        if value is None:
+            return None
+        if value == cls.faculty:
+            return cls.supervisor
+        return value
 
 
 class TargetRoleEnum(str, enum.Enum):
@@ -146,6 +161,7 @@ class AnnouncementFile(Base):
     file_type: Mapped[FileTypeEnum] = mapped_column(
         Enum(FileTypeEnum, name="file_type_enum"), default=FileTypeEnum.Document
     )
+    is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
