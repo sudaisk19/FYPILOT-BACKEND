@@ -408,7 +408,7 @@ async def create_supervisor_submission_task(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.faculty,
+        created_by_role=AnnouncementRoleEnum.supervisor,
         title=title,
         description=description,
         is_submission_request=True,
@@ -778,6 +778,7 @@ async def list_supervisor_submission_tasks(
         .where(
             Announcement.created_by == current_user.user_id,
             Announcement.is_submission_request == True,
+            Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
         )
         .options(
             selectinload(Announcement.targets),

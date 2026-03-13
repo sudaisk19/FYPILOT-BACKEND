@@ -180,7 +180,7 @@ async def get_supervisor_announcements(
 
     base_filters = [
         Announcement.created_by == current_user.user_id,
-        Announcement.created_by_role == AnnouncementRoleEnum.faculty,
+        Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
         Announcement.is_submission_request == False,  # noqa: E712
     ]
 
@@ -405,7 +405,7 @@ async def create_supervisor_announcement(
     # 1. Create Announcement
     announcement = Announcement(
         created_by=current_user.user_id,
-        created_by_role=AnnouncementRoleEnum.faculty,
+        created_by_role=AnnouncementRoleEnum.supervisor,
         title=title,
         description=description,
         is_submission_request=False,

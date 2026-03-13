@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 class AnnouncementRoleEnum(str, enum.Enum):
     admin = "admin"
-    faculty = "faculty"
+    supervisor = "supervisor"
 
 
 class TargetRoleEnum(str, enum.Enum):

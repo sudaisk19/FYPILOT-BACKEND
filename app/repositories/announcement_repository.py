@@ -199,7 +199,7 @@ class AnnouncementRepository(BaseRepository[Announcement]):
                 selectinload(Announcement.creator),
             )
             .where(
-                Announcement.created_by_role == AnnouncementRoleEnum.faculty,
+                Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
                 Announcement.is_submission_request == False,  # noqa: E712
                 AnnouncementTarget.group_id == group_id,
             )
