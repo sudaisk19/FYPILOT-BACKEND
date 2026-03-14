@@ -75,7 +75,9 @@ class JuryMatchingClient:
             logger.error(f"Unexpected error during jury health check: {e}")
             return False
 
-    async def batch_match(self) -> List[Dict[str, Any]]:
+    async def batch_match(
+        self, fyp_cycles: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get jury recommendations for ALL projects in one call.
 
@@ -91,7 +93,11 @@ class JuryMatchingClient:
         logger.info("Requesting batch jury matching from AI service")
 
         try:
-            response = await self.client.post("/api/v1/jury/batch")
+            payload = {}
+            if fyp_cycles:
+                payload["fyp_cycles"] = fyp_cycles
+
+            response = await self.client.post("/api/v1/jury/batch", json=payload)
 
             if response.status_code == 200:
                 result = response.json()

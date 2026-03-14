@@ -1,10 +1,10 @@
 # app/models/jury_assignment.py
 
 """
-Jury Assignment Models (Lean Schema).
+Jury Assignment Models (Pair-Based Schema).
 
 - JuryAssignmentBatch: tracker for background job + container for easy deletion
-- JuryAssignment: the actual jury↔project assignment data
+- JuryAssignment: maps a jury pair to a project
 """
 
 import enum
@@ -12,7 +12,8 @@ import uuid
 
 from sqlalchemy import CheckConstraint, Integer, TIMESTAMP, Column
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Float, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -48,8 +49,18 @@ class JuryAssignmentBatch(Base):
         default=JuryBatchStatusEnum.processing,
     )
 
+    # ─── Config captured at assignment time ───
+    fyp_cycles = Column(ARRAY(String), nullable=True)
+
     # Error details (if failed)
     error_log = Column(Text, nullable=True)
+
+    # Who triggered this batch
+    created_by = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=True,
+    )
 
     # Timestamp
     created_at = Column(
@@ -62,6 +73,7 @@ class JuryAssignmentBatch(Base):
         back_populates="batch",
         cascade="all, delete-orphan",
     )
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class JuryPair(Base):

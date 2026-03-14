@@ -122,6 +122,7 @@ class SubmissionFileInfo(BaseModel):
     storageKey: str
     mimeType: Optional[str] = None
     sizeBytes: Optional[int] = None
+    supervisorComment: Optional[str] = None
     uploadedAt: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -137,6 +138,22 @@ class SubmissionEvaluationResponse(BaseModel):
     adminFeedback: Optional[str] = None
     adminGradedAt: Optional[datetime] = None
     # Supervisor grading (editable for supervisor, read-only for admin)
+    supervisorMarks: Optional[float] = None
+    supervisorFeedback: Optional[str] = None
+    supervisorGradedAt: Optional[datetime] = None
+    files: List[SubmissionFileInfo] = Field(default_factory=list)
+    submittedAt: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class SupervisorSubmissionEvaluationResponse(BaseModel):
+    """Evaluation response for supervisor — no admin grading fields."""
+
+    submissionId: UUID
+    title: str
+    totalMarks: Optional[float] = None
+    note: Optional[str] = None
     supervisorMarks: Optional[float] = None
     supervisorFeedback: Optional[str] = None
     supervisorGradedAt: Optional[datetime] = None

@@ -890,6 +890,7 @@ async def get_group_profile(
         # Build group basic info
         group_info = {
             "group_id": str(group.group_id),
+            "fyp_id": project.fyp_id if project else None,
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle,
             "cohort_year": group.cohort_year,

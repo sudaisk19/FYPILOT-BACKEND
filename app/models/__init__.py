@@ -34,6 +34,10 @@ from .group import Group, GroupInvite, GroupMember
 from .group_milestone import GroupMilestone, SprintStatusEnum
 from .industry import Industry
 
+# Jury Assignment models
+from .jury_assignment import JuryAssignment, JuryAssignmentBatch, JuryBatchStatusEnum
+from .jury_pair import JuryPair
+
 # Other models
 from .password_reset import PasswordResetToken
 
@@ -60,8 +64,6 @@ from .task_attachment import TaskAttachment
 from .user import RoleEnum, User
 
 # Milestone Model
-
-# Jury Assignment models
 
 
 # Export all models
@@ -107,4 +109,9 @@ __all__ = [
     "BulkImportItem",
     "BulkJobStatus",
     "BulkItemStatus",
+    # Jury models
+    "JuryPair",
+    "JuryAssignment",
+    "JuryAssignmentBatch",
+    "JuryBatchStatusEnum",
 ]

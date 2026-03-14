@@ -12,7 +12,11 @@ from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.project import Project
 from app.models.student import Student
 from app.models.user import RoleEnum, User
-from app.schemas.admin_students_schema import PaginatedStudentResponse, StudentCardInfo
+from app.schemas.admin_students_schema import (
+    PaginatedStudentResponse,
+    StudentActiveToggleRequest,
+    StudentCardInfo,
+)
 
 router = APIRouter()
 
@@ -131,6 +135,7 @@ async def list_students(
                 fyp_cycle=group.fyp_cycle.value if group else None,
                 cohort_year=group.cohort_year if group else None,
                 assigned=assigned,
+                is_active=student.is_active,
             )
         )
 
@@ -148,3 +153,40 @@ async def list_students(
     await cache.set_json(cache_key, response.model_dump(), ttl_seconds=60)
 
     return response
+
+
+@router.patch("/students/{user_id}/toggle-active")
+async def toggle_student_active(
+    user_id: str,
+    payload: StudentActiveToggleRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manual override for student active status."""
+    if current_user.role != RoleEnum.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    # Fetch the student
+    from uuid import UUID
+
+    try:
+        uuid_id = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+
+    student = await db.get(Student, uuid_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Update status
+    student.is_active = payload.is_active
+    await db.commit()
+
+    # Clear cache for this admin view
+    from app.services.cache import cache
+
+    await cache.clear_pattern("admin:students:*")
+
+    return {
+        "message": f"Student {'activated' if payload.is_active else 'deactivated'} successfully"
+    }

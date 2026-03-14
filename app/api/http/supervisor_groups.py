@@ -162,6 +162,7 @@ async def get_supervisor_groups(
     for group in groups:
         group_info = SupervisorGroupInfo(
             group_id=str(group.group_id),
+            fyp_id=group.project.fyp_id if group.project else None,
             project_name=group.project.name if group.project else "Unknown Project",
             fyp_stage=group.fyp_stage,
             fyp_cycle=group.fyp_cycle.value if group.fyp_cycle else None,
@@ -373,6 +374,7 @@ async def get_supervisor_group_profile(
     # 4. Build group info
     group_info = GroupProfileGroupInfo(
         group_id=str(group.group_id),
+        fyp_id=group.project.fyp_id if group.project else None,
         project_name=group.project.name if group.project else "Unknown Project",
         fyp_stage=group.fyp_stage,
         fyp_cycle=group.fyp_cycle.value if group.fyp_cycle else None,
