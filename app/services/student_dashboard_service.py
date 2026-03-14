@@ -3,18 +3,17 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, select, and_, or_, cast, Date
+from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.announcement import Announcement, AnnouncementTarget
 from app.models.faculty import Faculty
-from app.models.group import FYPCycleEnum, Group, GroupMember
+from app.models.group import Group, GroupMember
 from app.models.group_milestone import GroupMilestone, SprintStatusEnum
 from app.models.submission import Submission
 from app.models.task import Task, TaskStatusEnum
 from app.models.user import User
-
 from app.schemas.student_dashboard_schema import (
     DashboardGroupMember,
     ProjectVelocityWidget,
@@ -51,7 +50,7 @@ class StudentDashboardService:
         # 2. Fetch all widgets concurrently (or sequentially if easier)
         profile = await self._get_profile(group)
         deadlines = await self._get_upcoming_deadlines(group_id, fyp_cycle)
-        alignment = await self._get_skill_alignment() # Mocked for now
+        alignment = await self._get_skill_alignment()  # Mocked for now
         tasks = await self._get_tasks_overview(group_id)
         trends = await self._get_submission_trends(group_id)
         velocity = await self._get_project_velocity(group_id)
@@ -81,7 +80,7 @@ class StudentDashboardService:
                 selectinload(Group.supervisor).selectinload(Faculty.user),
                 selectinload(Group.co_supervisors).selectinload(Faculty.user),
                 selectinload(Group.project),
-                selectinload(Group.members)
+                selectinload(Group.members),
             )
             .limit(1)
         )
@@ -97,7 +96,9 @@ class StudentDashboardService:
                     fyp_stage="ideation",
                 ),
                 upcoming_deadlines=UpcomingDeadlinesWidget(deadlines=[]),
-                skill_alignment=SkillDomainAlignmentWidget(individual_scores=[], group_scores=[]),
+                skill_alignment=SkillDomainAlignmentWidget(
+                    individual_scores=[], group_scores=[]
+                ),
                 tasks_overview=StudentTasksOverviewWidget(
                     completion_percentage=0.0,
                     status_distribution=TaskStatusDistribution(
@@ -115,11 +116,19 @@ class StudentDashboardService:
 
     async def _get_profile(self, group: Group) -> StudentDashboardProfile:
         project_name = group.project.name if group.project else "No Project Assigned"
-        
-        super_name = group.supervisor.user.full_name if group.supervisor and group.supervisor.user else None
-        co_super_names = [cs.user.full_name for cs in group.co_supervisors if cs.user] if group.co_supervisors else []
 
-        # Get member names directly from users table using a subquery/join in actual DB call, 
+        super_name = (
+            group.supervisor.user.full_name
+            if group.supervisor and group.supervisor.user
+            else None
+        )
+        co_super_names = (
+            [cs.user.full_name for cs in group.co_supervisors if cs.user]
+            if group.co_supervisors
+            else []
+        )
+
+        # Get member names directly from users table using a subquery/join in actual DB call,
         # but here we can just query them using the student IDs in group.members
         member_ids = [m.student_id for m in group.members]
         members = []
@@ -128,11 +137,11 @@ class StudentDashboardService:
             res = await self.db.execute(stmt)
             users = res.scalars().all()
             for u in users:
-                members.append(DashboardGroupMember(
-                    user_id=u.user_id,
-                    full_name=u.full_name,
-                    role="Student"
-                ))
+                members.append(
+                    DashboardGroupMember(
+                        user_id=u.user_id, full_name=u.full_name, role="Student"
+                    )
+                )
 
         return StudentDashboardProfile(
             project_name=project_name,
@@ -144,35 +153,44 @@ class StudentDashboardService:
             group_members=members,
         )
 
-    async def _get_upcoming_deadlines(self, group_id: UUID, fyp_cycle: str) -> List[UpcomingDeadlineItem]:
+    async def _get_upcoming_deadlines(
+        self, group_id: UUID, fyp_cycle: str
+    ) -> List[UpcomingDeadlineItem]:
         now = datetime.now(timezone.utc)
         items = []
 
         # 1. Milestones
-        stmt_ms = select(GroupMilestone).where(
-            GroupMilestone.group_id == group_id,
-            GroupMilestone.end_date >= now.date(),
-            GroupMilestone.status != SprintStatusEnum.Completed
-        ).order_by(GroupMilestone.end_date.asc())
-        
+        stmt_ms = (
+            select(GroupMilestone)
+            .where(
+                GroupMilestone.group_id == group_id,
+                GroupMilestone.end_date >= now.date(),
+                GroupMilestone.status != SprintStatusEnum.Completed,
+            )
+            .order_by(GroupMilestone.end_date.asc())
+        )
+
         res_ms = await self.db.execute(stmt_ms)
         milestones = res_ms.scalars().all()
 
         for ms in milestones:
             if ms.end_date:
                 days_left = (ms.end_date - now.date()).days
-                items.append(UpcomingDeadlineItem(
-                    id=ms.milestone_id,
-                    title=ms.title,
-                    date=ms.end_date.strftime("%d %b %Y"),
-                    days_left=days_left,
-                    description=ms.sprint_goal or "Complete sprint tasks",
-                    type="milestone"
-                ))
+                items.append(
+                    UpcomingDeadlineItem(
+                        id=ms.milestone_id,
+                        title=ms.title,
+                        date=ms.end_date.strftime("%d %b %Y"),
+                        days_left=days_left,
+                        description=ms.sprint_goal or "Complete sprint tasks",
+                        type="milestone",
+                    )
+                )
 
         # 2. Submission Requests (Admin Announcements)
         # Using the same logic as the admin announcement tab for students
         from app.models.announcement import TargetRoleEnum
+
         valid_targets = [TargetRoleEnum.all_students.value, TargetRoleEnum.both.value]
         if fyp_cycle.lower() == "fyp1":
             valid_targets.append(TargetRoleEnum.fyp1_students.value)
@@ -181,14 +199,17 @@ class StudentDashboardService:
 
         stmt_ann = (
             select(Announcement)
-            .join(AnnouncementTarget, AnnouncementTarget.announcement_id == Announcement.announcement_id)
+            .join(
+                AnnouncementTarget,
+                AnnouncementTarget.announcement_id == Announcement.announcement_id,
+            )
             .where(
                 Announcement.is_submission_request == True,
                 Announcement.due_at >= now,
                 or_(
                     AnnouncementTarget.group_id == group_id,
-                    AnnouncementTarget.target_role.in_(valid_targets)
-                )
+                    AnnouncementTarget.target_role.in_(valid_targets),
+                ),
             )
         )
         res_ann = await self.db.execute(stmt_ann)
@@ -197,21 +218,22 @@ class StudentDashboardService:
         for ann in announcements:
             if ann.due_at:
                 days_left = (ann.due_at - now).days
-                items.append(UpcomingDeadlineItem(
-                    id=ann.announcement_id,
-                    title=ann.title,
-                    date=ann.due_at.strftime("%d %b %Y"),
-                    days_left=days_left,
-                    description=ann.description or "Submit required documents",
-                    type="submission_request"
-                ))
+                items.append(
+                    UpcomingDeadlineItem(
+                        id=ann.announcement_id,
+                        title=ann.title,
+                        date=ann.due_at.strftime("%d %b %Y"),
+                        days_left=days_left,
+                        description=ann.description or "Submit required documents",
+                        type="submission_request",
+                    )
+                )
 
         # Sort combined by days_left
         items.sort(key=lambda x: x.days_left)
-        
+
         # Return top 4
         return items[:4]
-
 
     async def _get_skill_alignment(self) -> SkillDomainAlignmentWidget:
         # Mocking this out as requested. In the future, this should pull from:
@@ -229,17 +251,19 @@ class StudentDashboardService:
                 SkillAlignmentScore(domain="AI", score=4.0),
                 SkillAlignmentScore(domain="Web Development", score=3.7),
                 SkillAlignmentScore(domain="Data Science", score=3.0),
-            ]
+            ],
         )
 
     async def _get_tasks_overview(self, group_id: UUID) -> StudentTasksOverviewWidget:
-        stmt = select(Task.status, func.count(Task.task_id)).where(
-            Task.group_id == group_id
-        ).group_by(Task.status)
-        
+        stmt = (
+            select(Task.status, func.count(Task.task_id))
+            .where(Task.group_id == group_id)
+            .group_by(Task.status)
+        )
+
         res = await self.db.execute(stmt)
-        counts = res.all() # list of tuples (status, count)
-        
+        counts = res.all()  # list of tuples (status, count)
+
         total = 0
         done = 0
         dist = {"not_started": 0, "in_progress": 0, "completed": 0, "blocked": 0}
@@ -265,69 +289,69 @@ class StudentDashboardService:
                 in_progress=dist["in_progress"],
                 completed=dist["completed"],
                 blocked=dist["blocked"],
-            )
+            ),
         )
 
     async def _get_submission_trends(self, group_id: UUID) -> SubmissionTrendsWidget:
         now = datetime.now(timezone.utc)
         thirty_days_ago = now - timedelta(days=30)
-        
+
         stmt = (
             select(
-                cast(Submission.submitted_at, Date).label('sub_date'),
-                func.count(Submission.submission_id).label('count')
+                cast(Submission.submitted_at, Date).label("sub_date"),
+                func.count(Submission.submission_id).label("count"),
             )
             .where(
                 Submission.group_id == group_id,
-                Submission.submitted_at >= thirty_days_ago
+                Submission.submitted_at >= thirty_days_ago,
             )
-            .group_by('sub_date')
-            .order_by('sub_date')
+            .group_by("sub_date")
+            .order_by("sub_date")
         )
-        
+
         res = await self.db.execute(stmt)
         rows = res.all()
-        
+
         # Fill in missing dates to make the chart smooth
         date_map = {row.sub_date: row.count for row in rows}
-        
+
         points = []
         # Let's generate a point every 3 days for the UI to be clean (matching the screenshot's ~7 points)
-        for i in range(29, -1, -4): 
+        for i in range(29, -1, -4):
             target_date = (now - timedelta(days=i)).date()
             # Try to find submissions in a 3 day window
             window_count = 0
             for j in range(4):
                 d = target_date + timedelta(days=j)
                 window_count += date_map.get(d, 0)
-                
-            points.append(TrendDataPoint(
-                date_label=target_date.strftime("%b %d"),
-                count=window_count
-            ))
+
+            points.append(
+                TrendDataPoint(
+                    date_label=target_date.strftime("%b %d"), count=window_count
+                )
+            )
 
         return SubmissionTrendsWidget(points=points)
 
     async def _get_project_velocity(self, group_id: UUID) -> ProjectVelocityWidget:
         now = datetime.now(timezone.utc)
-        
+
         points = []
         for week in range(4, 0, -1):
             start_date = now - timedelta(weeks=week)
-            end_date = now - timedelta(weeks=week-1)
-            
+            end_date = now - timedelta(weeks=week - 1)
+
             stmt = select(func.count(Task.task_id)).where(
                 Task.group_id == group_id,
                 Task.status == TaskStatusEnum.Done,
                 Task.updated_at >= start_date,
-                Task.updated_at < end_date
+                Task.updated_at < end_date,
             )
             res = await self.db.execute(stmt)
             count = res.scalar_one() or 0
-            
-            points.append(VelocityDataPoint(
-                week_label=f"Week {5 - week}",
-                tasks_completed=count
-            ))
-            
+
+            points.append(
+                VelocityDataPoint(week_label=f"Week {5 - week}", tasks_completed=count)
+            )
+
         return ProjectVelocityWidget(points=points)

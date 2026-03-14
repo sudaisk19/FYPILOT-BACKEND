@@ -8,12 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.announcement import Announcement, AnnouncementFile
+from app.models.announcement import Announcement
 from app.models.group import Group, GroupMember
 from app.models.submission import (
     Submission,
-    SubmissionFile,
-    SubmissionStatusEnum,
     SubmissionTypeEnum,
 )
 from app.repositories.base import BaseRepository

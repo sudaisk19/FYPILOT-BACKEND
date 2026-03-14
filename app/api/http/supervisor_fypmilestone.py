@@ -2,30 +2,28 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.group import FYPCycleEnum, Group, GroupMember
-from app.models.jury_assignment import JuryAssignment, JuryPair
+from app.models.jury_assignment import JuryAssignment
+from app.models.jury_pair import JuryPair
 from app.models.milestone import JuryFormTypeEnum
 from app.models.project import Project
 from app.models.student import Student
 from app.models.user import RoleEnum, User
 from app.repositories import (
+    jury_evaluation_repository,
     milestone_repository,
     proposal_evaluation_repository,
     supervisor_evaluation_repository,
-    jury_evaluation_repository,
 )
 from app.schemas.admin_milestone_schema import (
     MilestoneListItem,
     SupervisorMilestoneResponse,
-)
-from app.schemas.supervisor_evaluation_schema import (
-    SupervisorEvaluationPayload,
-    SupervisorEvaluationResponse,
 )
 from app.schemas.jury_evaluation_schema import (
     JuryAssignedGroupResponse,
@@ -35,7 +33,10 @@ from app.schemas.jury_evaluation_schema import (
     ProposalEvaluationPayload,
     ProposalEvaluationResponse,
 )
-from pydantic import ValidationError
+from app.schemas.supervisor_evaluation_schema import (
+    SupervisorEvaluationPayload,
+    SupervisorEvaluationResponse,
+)
 
 router = APIRouter(prefix="/milestones")
 

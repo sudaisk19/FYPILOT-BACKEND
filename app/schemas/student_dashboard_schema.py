@@ -1,12 +1,11 @@
 # app/schemas/student_dashboard_schema.py
-from datetime import date
 from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
 
-
 # ─── 1. PROFILE / HEADER ──────────────────────────────────────────────────────
+
 
 class DashboardGroupMember(BaseModel):
     user_id: UUID
@@ -16,6 +15,7 @@ class DashboardGroupMember(BaseModel):
 
 class StudentDashboardProfile(BaseModel):
     """Headline information for the student dashboard."""
+
     project_name: str
     project_description: Optional[str] = None
     fyp_cycle: str
@@ -26,6 +26,7 @@ class StudentDashboardProfile(BaseModel):
 
 
 # ─── 2. UPCOMING DEADLINES ────────────────────────────────────────────────────
+
 
 class UpcomingDeadlineItem(BaseModel):
     id: UUID
@@ -43,9 +44,10 @@ class UpcomingDeadlinesWidget(BaseModel):
 
 # ─── 3. SKILL-DOMAIN ALIGNMENT ────────────────────────────────────────────────
 
+
 class SkillAlignmentScore(BaseModel):
     domain: str  # e.g., "AI", "Cybersecurity", "Web Development"
-    score: float # 0 to 5
+    score: float  # 0 to 5
 
 
 class SkillDomainAlignmentWidget(BaseModel):
@@ -55,6 +57,7 @@ class SkillDomainAlignmentWidget(BaseModel):
 
 
 # ─── 4. TASKS OVERVIEW ────────────────────────────────────────────────────────
+
 
 class TaskStatusDistribution(BaseModel):
     not_started: int
@@ -71,6 +74,7 @@ class StudentTasksOverviewWidget(BaseModel):
 
 # ─── 5. SUBMISSION TRENDS ─────────────────────────────────────────────────────
 
+
 class TrendDataPoint(BaseModel):
     date_label: str  # e.g., "Sep 8", "Sep 10"
     count: int
@@ -82,6 +86,7 @@ class SubmissionTrendsWidget(BaseModel):
 
 
 # ─── 6. PROJECT VELOCITY ──────────────────────────────────────────────────────
+
 
 class VelocityDataPoint(BaseModel):
     week_label: str  # e.g., "1", "2", "3", "4"
@@ -95,8 +100,10 @@ class ProjectVelocityWidget(BaseModel):
 
 # ─── ENVELOPE ─────────────────────────────────────────────────────────────────
 
+
 class StudentDashboardInsights(BaseModel):
     """Aggregated collection of all student dashboard widgets."""
+
     profile: StudentDashboardProfile
     upcoming_deadlines: UpcomingDeadlinesWidget
     skill_alignment: SkillDomainAlignmentWidget
@@ -107,4 +114,5 @@ class StudentDashboardInsights(BaseModel):
 
 class StudentDashboardEnvelope(BaseModel):
     """Final payload returned to the frontend for student dashboards."""
+
     student_dashboard: StudentDashboardInsights

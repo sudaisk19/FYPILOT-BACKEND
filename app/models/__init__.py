@@ -7,6 +7,7 @@ from .admin import Admin
 
 # Submission and Announcement models
 from .announcement import (
+    Announcement,
     AnnouncementFile,
     AnnouncementRoleEnum,
     AnnouncementTarget,
@@ -37,6 +38,7 @@ from .industry import Industry
 # Jury Assignment models
 from .jury_assignment import JuryAssignment, JuryAssignmentBatch, JuryBatchStatusEnum
 from .jury_pair import JuryPair
+from .milestone import AdminMilestone
 
 # Other models
 from .password_reset import PasswordResetToken

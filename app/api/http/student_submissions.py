@@ -15,7 +15,16 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, status, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -32,7 +41,6 @@ from app.schemas.submission_schema import (
     StudentOfficialSubmissionListItem,
     StudentSubmissionFileResponse,
     StudentUnofficialSubmissionDetail,
-    StudentUnofficialSubmissionListItem,
 )
 from app.services.storage_service import (
     delete_file_from_supabase,
@@ -105,9 +113,7 @@ async def list_official_submissions(
             ),
             file_count=len(s.files),
             created_by_role=(
-                AnnouncementRoleEnum.normalize(
-                    s.linked_announcement.created_by_role
-                )
+                AnnouncementRoleEnum.normalize(s.linked_announcement.created_by_role)
                 if s.linked_announcement
                 else None
             ),
@@ -127,9 +133,7 @@ async def list_official_submissions(
 # ─── GET BY ID ────────────────────────────────────────────────────────────────
 
 
-@router.get(
-    "/official/{submission_id}", response_model=StudentOfficialSubmissionDetail
-)
+@router.get("/official/{submission_id}", response_model=StudentOfficialSubmissionDetail)
 async def get_official_submission(
     submission_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -221,7 +225,9 @@ async def get_official_submission(
 )
 async def submit_official_submission(
     submission_id: UUID,
-    note: Optional[str] = Form(None, description="Optional note/comment for the submission"),
+    note: Optional[str] = Form(
+        None, description="Optional note/comment for the submission"
+    ),
     keep_file_ids: Optional[str] = Form(
         None,
         description=(
@@ -270,9 +276,7 @@ async def submit_official_submission(
                 UUID(fid.strip()) for fid in keep_file_ids.split(",") if fid.strip()
             }
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid UUID in keep_file_ids"
-            )
+            raise HTTPException(status_code=400, detail="Invalid UUID in keep_file_ids")
 
         for existing_file in list(submission.files):
             if existing_file.file_id not in keep_ids:
@@ -623,9 +627,7 @@ async def edit_unofficial_submission(
     keep_file_ids: Optional[str] = Form(
         None, description="Comma-separated IDs of existing files to keep"
     ),
-    files: List[UploadFile] = File(
-        default=[], description="New files to append"
-    ),
+    files: List[UploadFile] = File(default=[], description="New files to append"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
