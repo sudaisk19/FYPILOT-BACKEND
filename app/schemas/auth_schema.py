@@ -140,7 +140,7 @@ class GroupInfo(BaseModel):
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
     supervisor_id: Optional[UUID] = None
-    cosupervisor_id: Optional[UUID] = None
+    cosupervisor_ids: List[UUID] = Field(default_factory=list)
     project_id: Optional[UUID] = None
 
 

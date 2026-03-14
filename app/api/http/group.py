@@ -997,8 +997,8 @@ async def update_group_profile(
                 group_updates["cohort_year"] = update_data.group.cohort_year
             if update_data.group.supervisor_id is not None:
                 group_updates["supervisor_id"] = update_data.group.supervisor_id
-            if update_data.group.cosupervisor_id is not None:
-                group_updates["cosupervisor_ids"] = [update_data.group.cosupervisor_id]
+            if update_data.group.cosupervisor_ids is not None:
+                group_updates["cosupervisor_ids"] = update_data.group.cosupervisor_ids
 
             if group_updates:
                 group_updates["updated_at"] = updated_at

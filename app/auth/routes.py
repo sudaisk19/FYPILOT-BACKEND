@@ -461,11 +461,7 @@ async def get_student_group_info(
             ),
             cohort_year=group.cohort_year,
             supervisor_id=group.supervisor_id,
-            cosupervisor_id=(
-                group.cosupervisor_ids[0]
-                if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0
-                else None
-            ),
+            cosupervisor_ids=group.cosupervisor_ids or [],
             project_id=project.project_id if project else None,
         )
     except Exception as e:

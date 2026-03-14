@@ -369,7 +369,7 @@ class GroupRepository(BaseRepository[Group]):
         query = select(Group).where(
             or_(
                 Group.supervisor_id == supervisor_id,
-                Group.cosupervisor_id == supervisor_id,
+                Group.cosupervisor_ids.contains([supervisor_id]),
             )
         )
         result = await db.execute(query)
@@ -411,7 +411,16 @@ class GroupRepository(BaseRepository[Group]):
         Returns:
             Updated Group instance or None
         """
-        return await self.update(db, group_id, {"cosupervisor_id": cosupervisor_id})
+        group = await self.get_by_id(db, group_id)
+        if not group:
+            return None
+
+        # If the array doesn't exist, start a new one
+        current_ids = list(group.cosupervisor_ids) if group.cosupervisor_ids else []
+        if cosupervisor_id not in current_ids:
+            current_ids.append(cosupervisor_id)
+
+        return await self.update(db, group_id, {"cosupervisor_ids": current_ids})
 
 
 # Singleton instance for convenience
