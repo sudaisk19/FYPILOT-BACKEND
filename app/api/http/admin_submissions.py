@@ -464,6 +464,7 @@ async def create_submission_announcement(
 
     # 4. Link existing files from body.files (if using pre-uploaded files)
     for f in body.files:
+        linked_file_type = FileTypeEnum(f.type)
         db.add(
             AnnouncementFile(
                 announcement_id=announcement.announcement_id,
@@ -471,7 +472,7 @@ async def create_submission_announcement(
                 storage_key=f.url,
                 mime_type=f.mimeType,
                 size_bytes=f.size,
-                file_type=FileTypeEnum(f.type),
+                file_type=linked_file_type,
             )
         )
 

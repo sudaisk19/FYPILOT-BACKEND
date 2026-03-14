@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean,
+    Boolean as SQLBoolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -30,6 +30,21 @@ if TYPE_CHECKING:
 class AnnouncementRoleEnum(str, enum.Enum):
     admin = "admin"
     supervisor = "supervisor"
+    faculty = "faculty"  # legacy value retained for backward compatibility
+
+    @classmethod
+    def supervisor_values(cls):
+        """Return all enum values that should be treated as supervisor roles."""
+        return (cls.supervisor, cls.faculty)
+
+    @classmethod
+    def normalize(cls, value):
+        """Map legacy values to the canonical enum used by the API."""
+        if value is None:
+            return None
+        if value == cls.faculty:
+            return cls.supervisor
+        return value
 
 
 class TargetRoleEnum(str, enum.Enum):
@@ -63,7 +78,7 @@ class Announcement(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
 
-    is_submission_request: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_submission_request: Mapped[bool] = mapped_column(SQLBoolean, default=False)
 
     # Submission request fields
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

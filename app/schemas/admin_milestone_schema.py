@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.group import FYPCycleEnum
+from app.models.milestone import JuryFormTypeEnum
 
 
 class AdminMilestoneBase(BaseModel):
@@ -29,6 +30,10 @@ class AdminMilestoneBase(BaseModel):
         False,
         description="If true, students can see marks released for this milestone",
     )
+    jury_form_type: Optional[JuryFormTypeEnum] = Field(
+        None,
+        description="Selected form layout when evaluator is configured as 'jury'",
+    )
 
 
 class MilestoneListItem(BaseModel):
@@ -40,6 +45,7 @@ class MilestoneListItem(BaseModel):
     is_active: bool
     due_date: Optional[date] = None
     weightage: Optional[float] = None
+    evaluator: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -59,6 +65,7 @@ class AdminMilestoneUpdate(BaseModel):
     fyp_cycle: Optional[FYPCycleEnum] = None
     is_active: Optional[bool] = None
     marks_visible_to_students: Optional[bool] = None
+    jury_form_type: Optional[JuryFormTypeEnum] = None
 
 
 class AdminMilestoneResponse(AdminMilestoneBase):

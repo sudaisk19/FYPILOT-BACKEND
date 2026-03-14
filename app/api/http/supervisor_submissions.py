@@ -61,7 +61,7 @@ from app.services.storage_service import (
 router = APIRouter(tags=["faculty-submissions"])
 logger = logging.getLogger(__name__)
 
-SUBMISSION_FILES_BUCKET = ANNOUNCEMENTS_BUCKET
+SUBMISSION_FILES_BUCKET = "submission_files"
 
 
 # ─── LOCAL SCHEMAS ────────────────────────────────────────────────────────────
@@ -449,11 +449,12 @@ async def create_supervisor_submission_task(
             )
 
             ftype_str = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = (
-                FileTypeEnum.Template
-                if ftype_str.lower() == "template"
-                else FileTypeEnum.Document
-            )
+            if ftype_str.lower() == "template":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admins can upload template files",
+                )
+            ftype = FileTypeEnum.Document
 
             db.add(
                 AnnouncementFile(
@@ -707,11 +708,12 @@ async def edit_supervisor_submission_task(
             )
 
             ftype_str = types_list[idx] if idx < len(types_list) else "Document"
-            ftype = (
-                FileTypeEnum.Template
-                if ftype_str.lower() == "template"
-                else FileTypeEnum.Document
-            )
+            if ftype_str.lower() == "template":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admins can upload template files",
+                )
+            ftype = FileTypeEnum.Document
 
             db.add(
                 AnnouncementFile(
@@ -1241,7 +1243,7 @@ async def download_submission_file(
     result = await db.execute(
         select(SubmissionFile)
         .join(Submission, SubmissionFile.submission_id == Submission.submission_id)
-        .options(selectinload(SubmissionFile.submission, Submission.group))
+        .options(selectinload(SubmissionFile.submission).selectinload(Submission.group))
         .where(
             and_(
                 SubmissionFile.file_id == file_id,

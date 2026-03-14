@@ -64,7 +64,9 @@ def _build_storage_key(user_id: UUID, filename: str) -> str:
 
 def _resolve_file_type(raw: Optional[str]) -> FileTypeEnum:
     if raw and raw.strip().lower() == "template":
-        return FileTypeEnum.Template
+        raise HTTPException(
+            status_code=403, detail="Only admins can upload template files"
+        )
     return FileTypeEnum.Document
 
 

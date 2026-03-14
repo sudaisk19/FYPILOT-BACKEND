@@ -1,4 +1,5 @@
 # app/models/milestone.py
+import enum
 import uuid
 
 from sqlalchemy import TIMESTAMP, Boolean, Column, Date
@@ -10,6 +11,13 @@ from sqlalchemy.sql import func
 
 from app.db import Base
 from app.models.group import FYPCycleEnum  # existing enum (“fyp1”, “fyp2”)
+
+
+class JuryFormTypeEnum(str, enum.Enum):
+    """Available form layouts when a milestone is evaluated by jury."""
+
+    normal = "normal"
+    proposal = "proposal"
 
 
 class AdminMilestone(Base):
@@ -34,6 +42,10 @@ class AdminMilestone(Base):
         SQLEnum(FYPCycleEnum, name="fyp_cycle_enum", create_type=False),
         nullable=False,
         default=FYPCycleEnum.fyp1,
+    )
+    jury_form_type = Column(
+        SQLEnum(JuryFormTypeEnum, name="jury_form_type_enum", create_type=False),
+        nullable=True,
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
