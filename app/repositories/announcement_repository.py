@@ -116,7 +116,6 @@ class AnnouncementRepository(BaseRepository[Announcement]):
                     file_type=file_type,
                     mime_type=mime_type,
                     size_bytes=size_bytes,
-                    is_template=file_type == FileTypeEnum.Template,
                 )
                 for file_name, storage_key, file_type, mime_type, size_bytes in files
             ]
@@ -200,9 +199,7 @@ class AnnouncementRepository(BaseRepository[Announcement]):
                 selectinload(Announcement.creator),
             )
             .where(
-                Announcement.created_by_role.in_(
-                    AnnouncementRoleEnum.supervisor_values()
-                ),
+                Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
                 Announcement.is_submission_request == False,  # noqa: E712
                 AnnouncementTarget.group_id == group_id,
             )

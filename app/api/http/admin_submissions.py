@@ -194,7 +194,6 @@ def _build_response(announcement: Announcement) -> SubmissionAnnouncementRespons
                 type=f.file_type.value,
                 mimeType=f.mime_type,
                 size=f.size_bytes,
-                isTemplate=getattr(f, "is_template", False),
             )
             for f in announcement.files
         ],
@@ -458,7 +457,6 @@ async def create_submission_announcement(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
-                    is_template=ftype == FileTypeEnum.Template,
                 )
             )
     else:
@@ -475,7 +473,6 @@ async def create_submission_announcement(
                 mime_type=f.mimeType,
                 size_bytes=f.size,
                 file_type=linked_file_type,
-                is_template=linked_file_type == FileTypeEnum.Template,
             )
         )
 
@@ -766,7 +763,6 @@ async def edit_submission_announcement(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
-                    is_template=ftype == FileTypeEnum.Template,
                 )
             )
     else:

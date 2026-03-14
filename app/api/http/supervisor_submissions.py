@@ -173,7 +173,6 @@ def _build_response(
                 type=f.file_type.value,
                 mimeType=f.mime_type,
                 size=f.size_bytes,
-                isTemplate=getattr(f, "is_template", False),
             )
             for f in announcement.files
         ],
@@ -453,7 +452,6 @@ async def create_supervisor_submission_task(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
-                    is_template=False,
                 )
             )
 
@@ -713,7 +711,6 @@ async def edit_supervisor_submission_task(
                     mime_type=upload_file.content_type or "application/octet-stream",
                     size_bytes=size_bytes,
                     file_type=ftype,
-                    is_template=False,
                 )
             )
 

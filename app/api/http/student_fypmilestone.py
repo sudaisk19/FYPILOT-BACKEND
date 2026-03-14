@@ -10,7 +10,13 @@ from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.user import RoleEnum, User
-from app.repositories import milestone_repository, supervisor_evaluation_repository
+from app.models.milestone import JuryFormTypeEnum
+from app.repositories import (
+    milestone_repository,
+    supervisor_evaluation_repository,
+    jury_evaluation_repository,
+    proposal_evaluation_repository,
+)
 from app.schemas.admin_milestone_schema import StudentMilestoneListItem, StudentMilestoneResponse
 
 router = APIRouter(prefix="/milestones", tags=["student-milestones"])
@@ -85,9 +91,20 @@ async def get_student_milestone(
     marks = None
     if milestone.marks_visible_to_students:
         group_id = await _resolve_student_group_id(current_user.user_id, db)
-        marks = await supervisor_evaluation_repository.get_marks_for_group_milestone(
-            db, milestone_id=milestone_id, group_id=group_id
-        )
+        evaluator_value = (milestone.evaluator or "").strip().lower()
+        if evaluator_value == "jury":
+            if milestone.jury_form_type == JuryFormTypeEnum.normal:
+                marks = await jury_evaluation_repository.get_numeric_marks(
+                    db, milestone_id=milestone_id, group_id=group_id
+                )
+            else:
+                marks = await proposal_evaluation_repository.get_total_marks(
+                    db, milestone_id=milestone_id, group_id=group_id
+                )
+        else:
+            marks = await supervisor_evaluation_repository.get_marks_for_group_milestone(
+                db, milestone_id=milestone_id, group_id=group_id
+            )
 
     return StudentMilestoneResponse(
         milestone_id=milestone.milestone_id,

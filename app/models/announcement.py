@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean,
+    Boolean as SQLBoolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -78,7 +78,7 @@ class Announcement(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
 
-    is_submission_request: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_submission_request: Mapped[bool] = mapped_column(SQLBoolean, default=False)
 
     # Submission request fields
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -161,7 +161,6 @@ class AnnouncementFile(Base):
     file_type: Mapped[FileTypeEnum] = mapped_column(
         Enum(FileTypeEnum, name="file_type_enum"), default=FileTypeEnum.Document
     )
-    is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

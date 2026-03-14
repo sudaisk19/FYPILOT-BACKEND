@@ -135,7 +135,6 @@ def _build_response(
             file_type=f.file_type,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,
-            is_template=getattr(f, "is_template", False),
         )
         for f in announcement.files
     ]
@@ -183,7 +182,7 @@ async def get_supervisor_announcements(
 
     base_filters = [
         Announcement.created_by == current_user.user_id,
-        Announcement.created_by_role.in_(AnnouncementRoleEnum.supervisor_values()),
+        Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
         Announcement.is_submission_request == False,  # noqa: E712
     ]
 
@@ -456,7 +455,6 @@ async def create_supervisor_announcement(
                 mime_type=upload.content_type or "application/octet-stream",
                 size_bytes=size_bytes,
                 file_type=ftype,
-                is_template=False,
             )
         )
 
@@ -690,7 +688,6 @@ async def update_supervisor_announcement(
                 mime_type=upload.content_type or "application/octet-stream",
                 size_bytes=size_bytes,
                 file_type=ftype,
-                is_template=False,
             )
         )
 
