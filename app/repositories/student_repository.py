@@ -183,6 +183,31 @@ class StudentRepository(BaseRepository[Student]):
         student = await self.get_by_user_id(db, user_id)
         return student is not None and bool(student.roll_number)
 
+    async def deactivate_expired_students(self, db: AsyncSession) -> int:
+        """
+        Deactivate students whose FYP batch period has expired based on their start year and semester.
+        """
+        from sqlalchemy import text
+
+        _DEACTIVATION_SQL = text(
+            """
+            UPDATE students
+            SET is_active = false
+            WHERE is_active = true
+            AND fyp_start_semester IS NOT NULL
+            AND fyp_start_year IS NOT NULL
+            AND CURRENT_DATE >
+                CASE
+                    WHEN LOWER(fyp_start_semester) = 'fall'
+                        THEN make_date(fyp_start_year + 1, 6, 1)
+                    WHEN LOWER(fyp_start_semester) = 'spring'
+                        THEN make_date(fyp_start_year + 1, 1, 15)
+                END
+            """
+        )
+        result = await db.execute(_DEACTIVATION_SQL)
+        return result.rowcount
+
 
 # Singleton instance for convenience
 student_repository = StudentRepository()

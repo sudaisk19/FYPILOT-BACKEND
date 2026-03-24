@@ -3,17 +3,11 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.announcement import Announcement, AnnouncementTarget
-from app.models.faculty import Faculty
-from app.models.group import Group, GroupMember
-from app.models.group_milestone import GroupMilestone, SprintStatusEnum
-from app.models.submission import Submission
-from app.models.task import Task, TaskStatusEnum
-from app.models.user import User
+from app.models.group import Group
+from app.models.task import TaskStatusEnum
+from app.repositories.student_dashboard_repository import student_dashboard_repository
 from app.schemas.student_dashboard_schema import (
     DashboardGroupMember,
     ProjectVelocityWidget,
@@ -72,20 +66,7 @@ class StudentDashboardService:
     # ──────────────────────────────────────────────────────────────────────────
 
     async def _get_student_group(self, student_id: UUID) -> Optional[Group]:
-        stmt = (
-            select(Group)
-            .join(GroupMember, GroupMember.group_id == Group.group_id)
-            .where(GroupMember.student_id == student_id)
-            .options(
-                selectinload(Group.supervisor).selectinload(Faculty.user),
-                selectinload(Group.co_supervisors).selectinload(Faculty.user),
-                selectinload(Group.project),
-                selectinload(Group.members),
-            )
-            .limit(1)
-        )
-        result = await self.db.execute(stmt)
-        return result.scalars().first()
+        return await student_dashboard_repository.get_student_group(self.db, student_id)
 
     def _build_empty_envelope(self) -> StudentDashboardEnvelope:
         return StudentDashboardEnvelope(
@@ -133,9 +114,9 @@ class StudentDashboardService:
         member_ids = [m.student_id for m in group.members]
         members = []
         if member_ids:
-            stmt = select(User).where(User.user_id.in_(member_ids))
-            res = await self.db.execute(stmt)
-            users = res.scalars().all()
+            users = await student_dashboard_repository.get_group_members_as_users(
+                self.db, member_ids
+            )
             for u in users:
                 members.append(
                     DashboardGroupMember(
@@ -160,18 +141,9 @@ class StudentDashboardService:
         items = []
 
         # 1. Milestones
-        stmt_ms = (
-            select(GroupMilestone)
-            .where(
-                GroupMilestone.group_id == group_id,
-                GroupMilestone.end_date >= now.date(),
-                GroupMilestone.status != SprintStatusEnum.Completed,
-            )
-            .order_by(GroupMilestone.end_date.asc())
+        milestones = await student_dashboard_repository.get_upcoming_milestones(
+            self.db, group_id, now
         )
-
-        res_ms = await self.db.execute(stmt_ms)
-        milestones = res_ms.scalars().all()
 
         for ms in milestones:
             if ms.end_date:
@@ -197,23 +169,11 @@ class StudentDashboardService:
         elif fyp_cycle.lower() == "fyp2":
             valid_targets.append(TargetRoleEnum.fyp2_students.value)
 
-        stmt_ann = (
-            select(Announcement)
-            .join(
-                AnnouncementTarget,
-                AnnouncementTarget.announcement_id == Announcement.announcement_id,
-            )
-            .where(
-                Announcement.is_submission_request == True,
-                Announcement.due_at >= now,
-                or_(
-                    AnnouncementTarget.group_id == group_id,
-                    AnnouncementTarget.target_role.in_(valid_targets),
-                ),
+        announcements = (
+            await student_dashboard_repository.get_upcoming_submission_requests(
+                self.db, group_id, valid_targets, now
             )
         )
-        res_ann = await self.db.execute(stmt_ann)
-        announcements = res_ann.scalars().unique().all()
 
         for ann in announcements:
             if ann.due_at:
@@ -255,14 +215,9 @@ class StudentDashboardService:
         )
 
     async def _get_tasks_overview(self, group_id: UUID) -> StudentTasksOverviewWidget:
-        stmt = (
-            select(Task.status, func.count(Task.task_id))
-            .where(Task.group_id == group_id)
-            .group_by(Task.status)
+        counts = await student_dashboard_repository.get_task_status_counts(
+            self.db, group_id
         )
-
-        res = await self.db.execute(stmt)
-        counts = res.all()  # list of tuples (status, count)
 
         total = 0
         done = 0
@@ -296,24 +251,12 @@ class StudentDashboardService:
         now = datetime.now(timezone.utc)
         thirty_days_ago = now - timedelta(days=30)
 
-        stmt = (
-            select(
-                cast(Submission.submitted_at, Date).label("sub_date"),
-                func.count(Submission.submission_id).label("count"),
-            )
-            .where(
-                Submission.group_id == group_id,
-                Submission.submitted_at >= thirty_days_ago,
-            )
-            .group_by("sub_date")
-            .order_by("sub_date")
+        rows = await student_dashboard_repository.get_submission_trends(
+            self.db, group_id, thirty_days_ago
         )
 
-        res = await self.db.execute(stmt)
-        rows = res.all()
-
         # Fill in missing dates to make the chart smooth
-        date_map = {row.sub_date: row.count for row in rows}
+        date_map = {row.sub_date.date(): row.count for row in rows}
 
         points = []
         # Let's generate a point every 3 days for the UI to be clean (matching the screenshot's ~7 points)
@@ -341,14 +284,11 @@ class StudentDashboardService:
             start_date = now - timedelta(weeks=week)
             end_date = now - timedelta(weeks=week - 1)
 
-            stmt = select(func.count(Task.task_id)).where(
-                Task.group_id == group_id,
-                Task.status == TaskStatusEnum.Done,
-                Task.updated_at >= start_date,
-                Task.updated_at < end_date,
+            count = (
+                await student_dashboard_repository.get_project_velocity_for_daterange(
+                    self.db, group_id, start_date, end_date
+                )
             )
-            res = await self.db.execute(stmt)
-            count = res.scalar_one() or 0
 
             points.append(
                 VelocityDataPoint(week_label=f"Week {5 - week}", tasks_completed=count)

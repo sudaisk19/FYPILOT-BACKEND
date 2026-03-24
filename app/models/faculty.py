@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Column
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text, event
+from sqlalchemy import ForeignKey, Index, Integer, Text, event
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -91,11 +91,18 @@ class Faculty(Base):
         default=0,
     )
 
-    # Capacity Constraints
+    # Capacity Constraints + Performance Indexes
     __table_args__ = (
         CheckConstraint("capacity_max >= 0", name="check_capacity_max_positive"),
         CheckConstraint("capacity_filled >= 0", name="check_capacity_filled_positive"),
         CheckConstraint("capacity_filled <= capacity_max", name="check_capacity_valid"),
+        # ── Performance indexes ──────────────────────────────────────────
+        # Supervisor browse: active supervisors (most frequent faculty query)
+        Index("ix_faculty_is_supervisor_active", "is_supervisor", "is_active"),
+        # Jury assignment: active jury members
+        Index("ix_faculty_is_jury_active", "is_jury", "is_active"),
+        # Department-based filtering
+        Index("ix_faculty_department", "department"),
     )
 
     # Relationship to User model (bidirectional)

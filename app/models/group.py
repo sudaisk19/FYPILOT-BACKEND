@@ -4,7 +4,7 @@ import uuid
 
 from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text, func, text
+from sqlalchemy import ForeignKey, Index, Integer, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -74,7 +74,7 @@ class Group(Base):
         nullable=False,
     )
 
-    # Table constraints
+    # Table constraints + indexes
     __table_args__ = (
         CheckConstraint(
             "max_members >= 1 AND max_members <= 3", name="check_max_members_range"
@@ -83,6 +83,13 @@ class Group(Base):
             "cohort ~ '^[FS][0-9]{2}$'",
             name="groups_cohort_format_check",
         ),
+        # ── Performance indexes ───────────────────────────────────────────
+        # FK lookup: find all groups supervised by a given faculty member
+        Index("ix_groups_supervisor_id", "supervisor_id"),
+        # Common list filter: groups in a specific FYP cycle
+        Index("ix_groups_fyp_cycle", "fyp_cycle"),
+        # Common filter combo used in admin/supervisor group list queries
+        Index("ix_groups_fyp_stage_cycle", "fyp_stage", "fyp_cycle"),
     )
 
     members = relationship(

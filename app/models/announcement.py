@@ -5,12 +5,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import Boolean as SQLBoolean
 from sqlalchemy import (
-    Boolean as SQLBoolean,
     CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Numeric,
     Text,
     func,
@@ -107,6 +108,16 @@ class Announcement(Base):
         "Submission",
         back_populates="linked_announcement",
         foreign_keys="Submission.linked_announcement_id",
+    )
+
+    # ── Explicit indexes ──────────────────────────────────────────────────────
+    __table_args__ = (
+        # FK lookup: all announcements created by a specific admin/supervisor
+        Index("ix_announcements_created_by", "created_by"),
+        # Deadline queries: upcoming submission requests ordered by due_at
+        Index("ix_announcements_due_at", "due_at"),
+        # Combined: "show active submission requests with upcoming deadlines"
+        Index("ix_announcements_submission_due", "is_submission_request", "due_at"),
     )
 
 

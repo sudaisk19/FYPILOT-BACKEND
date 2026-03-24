@@ -1,49 +1,33 @@
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import text
 
 from app.db import AsyncSessionLocal
+from app.repositories.student_repository import student_repository
 
-logger = logging.getLogger(__name__)
-
-# SQL query to deactivate students whose FYP batch period has expired.
-# Fall 20XX batches expire after 1st June 20XX+1
-# Spring 20XX batches expire after 15th January 20XX+1
-# We use make_date(year, month, day) which is Postgres-specific.
-_DEACTIVATION_SQL = text(
-    """
-    UPDATE students
-    SET is_active = false
-    WHERE is_active = true
-    AND fyp_start_semester IS NOT NULL
-    AND fyp_start_year IS NOT NULL
-    AND CURRENT_DATE >
-        CASE
-            WHEN LOWER(fyp_start_semester) = 'fall'
-                THEN make_date(fyp_start_year + 1, 6, 1)
-            WHEN LOWER(fyp_start_semester) = 'spring'
-                THEN make_date(fyp_start_year + 1, 1, 15)
-        END
-"""
-)
+# Use the uvicorn.error logger so it shows up in your terminal
+logger = logging.getLogger("uvicorn.error")
 
 
 async def run_student_lifecycle_job():
     """
     Background job to deactivate students based on their FYP start batch.
-    This job runs a single bulk SQL UPDATE for efficiency.
+    This job runs a single bulk SQL UPDATE for efficiency via the repository.
     """
     try:
         async with AsyncSessionLocal() as db:
-            result = await db.execute(_DEACTIVATION_SQL)
+            rowcount = await student_repository.deactivate_expired_students(db)
             await db.commit()
-            if result.rowcount > 0:
+            if rowcount > 0:
                 logger.info(
-                    f"[StudentLifecycle] Automatically deactivated {result.rowcount} expired students."
+                    f"✅ [StudentLifecycle] Automatically deactivated {rowcount} expired students."
+                )
+            else:
+                logger.info(
+                    "ℹ️ [StudentLifecycle] No students were eligible for deactivation today."
                 )
     except Exception as e:
-        logger.error(f"[StudentLifecycle] Job failed: {e}")
+        logger.error(f"❌ [StudentLifecycle] Job failed: {e}")
 
 
 def create_scheduler() -> AsyncIOScheduler:
@@ -53,13 +37,13 @@ def create_scheduler() -> AsyncIOScheduler:
     """
     scheduler = AsyncIOScheduler(timezone="Asia/Karachi")
 
-    # Schedule the student deactivation job to run weekly every Monday at 2:00 AM
+    # Temporarily scheduled for test: Tuesday at 12:20 AM
     scheduler.add_job(
         run_student_lifecycle_job,
         trigger="cron",
-        day_of_week="mon",
-        hour=2,
-        minute=0,
+        day_of_week="tue",
+        hour=0,
+        minute=20,
         id="student_lifecycle_job",
         replace_existing=True,
     )

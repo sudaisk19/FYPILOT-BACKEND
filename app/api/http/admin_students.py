@@ -3,7 +3,7 @@
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -84,13 +84,26 @@ async def list_students(
 
     if search:
         s = f"%{search}%"
+        # SARGable fix: cohort_year is INTEGER — casting to String for ILIKE
+        # prevents index usage and causes a full table scan. Instead, we try to
+        # parse the search term as an integer and compare directly. We also
+        # search the text `cohort` column (e.g. "F24") with prefix matching.
+        cohort_year_filter = []
+        try:
+            cohort_year_int = int(search)
+            cohort_year_filter.append(Group.cohort_year == cohort_year_int)
+        except (ValueError, TypeError):
+            pass
+
         filters.append(
             or_(
                 User.full_name.ilike(s),
                 User.email.ilike(s),
                 Student.roll_number.ilike(s),
                 Project.name.ilike(s),  # project name search
-                cast(Group.cohort_year, String).ilike(s),
+                # Text cohort code (e.g. "F24") — trailing wildcard is SARGable
+                Group.cohort.ilike(f"{search}%"),
+                *cohort_year_filter,
             )
         )
 

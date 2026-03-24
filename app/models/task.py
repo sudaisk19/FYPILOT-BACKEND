@@ -1,9 +1,10 @@
 # app/models/task.py
 import enum
 import uuid
-from sqlalchemy import Column, Date, ForeignKey, Text
+
+from sqlalchemy import TIMESTAMP, Column, Date
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import TIMESTAMP
+from sqlalchemy import ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -82,4 +83,14 @@ class Task(Base):
         "TaskAttachment",
         back_populates="task",
         cascade="all, delete-orphan",
+    )
+
+    # ── Composite indexes ───────────────────────────────────────────────────
+    __table_args__ = (
+        # Most common query pattern: tasks for a group filtered by status
+        Index("ix_tasks_group_status", "group_id", "status"),
+        # Filter by assignee + status (my tasks board view)
+        Index("ix_tasks_assignee_status", "assignee_id", "status"),
+        # Due-date range queries for upcoming tasks
+        Index("ix_tasks_due_date", "due_date"),
     )

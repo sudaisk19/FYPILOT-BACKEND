@@ -1,14 +1,15 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import (
+from sqlalchemy import (  # SQLAlchemy column types
     Boolean,
     Column,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     Text,
-)  # SQLAlchemy column types
+)
 from sqlalchemy.dialects.postgresql import (
     ARRAY,
     JSONB,
@@ -100,6 +101,16 @@ class Student(Base):
         nullable=False,
         default=True,
         server_default="true",
+    )
+
+    # ── Explicit indexes ──────────────────────────────────────────────────────
+    __table_args__ = (
+        # Student lifecycle scheduler filters by is_active heavily
+        Index("ix_students_is_active", "is_active"),
+        # Department-based filtering for recommendations and admin views
+        Index("ix_students_department", "department"),
+        # Combined filter: active students in a department
+        Index("ix_students_is_active_dept", "is_active", "department"),
     )
 
     @hybrid_property

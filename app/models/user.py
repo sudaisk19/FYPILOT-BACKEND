@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import TIMESTAMP, Column
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import String, Text
+from sqlalchemy import Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -23,7 +23,7 @@ class User(Base):
 
     user_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     full_name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)  # unique=True implies an index
     password_hash = Column(String, nullable=False)
     role = Column(
         SAEnum(RoleEnum, name="user_role_enum", native_enum=True), nullable=False
@@ -38,6 +38,12 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    # ── Explicit indexes ──────────────────────────────────────────────────────
+    __table_args__ = (
+        # Supports filtering by role (e.g. get all students/faculty/admins)
+        Index("ix_users_role", "role"),
     )
 
     # 1-to-1 profiles (PK=FK to users.user_id)

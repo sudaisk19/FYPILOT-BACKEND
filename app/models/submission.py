@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Numeric,
     Text,
     func,
@@ -101,6 +102,17 @@ class Submission(Base):
     )
     files: Mapped[List["SubmissionFile"]] = relationship(
         "SubmissionFile", back_populates="submission", cascade="all, delete-orphan"
+    )
+
+    # ── Explicit indexes ──────────────────────────────────────────────────────
+    __table_args__ = (
+        # Most critical: submissions for a group filtered by status
+        # Avoids full table scan when loading a group's submission history
+        Index("ix_submissions_group_status", "group_id", "status"),
+        # Admin view: all submissions with a specific status (e.g., pending review)
+        Index("ix_submissions_status", "status"),
+        # Range queries on submitted_at — avoids CAST which breaks index usage
+        Index("ix_submissions_submitted_at", "submitted_at"),
     )
 
 

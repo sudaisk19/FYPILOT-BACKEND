@@ -17,11 +17,12 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from cryptography.fernet import Fernet
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.utils import hash_password
@@ -36,6 +37,10 @@ from app.models.bulk_import import (
 from app.models.faculty import Faculty
 from app.models.student import Student
 from app.models.user import RoleEnum, User
+
+# How many rows to accumulate before flushing as a single batch INSERT.
+# Row-by-row sqlite-style inserts are replaced with multi-row INSERT statements.
+FAST_BATCH_SIZE = 50
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +62,53 @@ SUPERVISOR_REQUIRED_COLUMNS = {"full_name", "email", "department", "designation"
 
 # Email validation regex
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+# ─── Batch Insert (Step 3 – Bulk Optimization) ──────────────────────────────
+
+
+async def batch_insert_users_and_profiles(
+    db: AsyncSession,
+    user_rows: List[dict],
+    student_rows: List[dict],
+    faculty_rows: List[dict],
+) -> None:
+    """
+    Insert multiple Users + profiles in a single multi-row INSERT each.
+
+    This replaces the previous N individual db.add() / await db.flush() cycles
+    with three bulk INSERT ... ON CONFLICT DO NOTHING statements — one for users,
+    one for students, one for faculty — regardless of batch size.
+
+    Args:
+        db: Async SQLAlchemy session (still within active transaction)
+        user_rows: Dicts of column values for the `users` table
+        student_rows: Dicts of column values for the `students` table
+        faculty_rows: Dicts of column values for the `faculty` table
+    """
+    if user_rows:
+        stmt = (
+            pg_insert(User.__table__)
+            .values(user_rows)
+            .on_conflict_do_nothing(index_elements=["email"])
+        )
+        await db.execute(stmt)
+
+    if student_rows:
+        stmt = (
+            pg_insert(Student.__table__)
+            .values(student_rows)
+            .on_conflict_do_nothing(index_elements=["roll_number"])
+        )
+        await db.execute(stmt)
+
+    if faculty_rows:
+        stmt = (
+            pg_insert(Faculty.__table__)
+            .values(faculty_rows)
+            .on_conflict_do_nothing(index_elements=["user_id"])
+        )
+        await db.execute(stmt)
 
 
 def get_fernet() -> Optional[Fernet]:

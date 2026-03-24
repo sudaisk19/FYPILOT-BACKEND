@@ -16,22 +16,17 @@ import uuid
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.db import AsyncSessionLocal
 from app.middleware.ai_service import ai_service_circuit
-from app.models.faculty import Faculty
-from app.models.group import Group, GroupMember
 from app.models.jury_assignment import (
     JuryAssignment,
     JuryAssignmentBatch,
     JuryBatchStatusEnum,
 )
 from app.models.jury_pair import JuryPair
-from app.models.student import Student
-from app.models.user import User
+from app.repositories.jury_matching_repository import jury_matching_repository
 from app.services.jury_matching_client import (
     JuryMatchingServiceError,
     jury_matching_client,
@@ -100,17 +95,9 @@ class JuryMatchingService:
 
         Returns counts of deleted rows.
         """
-        # Order matters: assignments → pairs → batches (FK dependencies)
-        del_assignments = await db.execute(delete(JuryAssignment))
-        del_pairs = await db.execute(delete(JuryPair))
-        del_batches = await db.execute(delete(JuryAssignmentBatch))
+        counts = await jury_matching_repository.reset_all_jury_data(db)
         await db.commit()
 
-        counts = {
-            "deleted_assignments": del_assignments.rowcount,
-            "deleted_pairs": del_pairs.rowcount,
-            "deleted_batches": del_batches.rowcount,
-        }
         logger.info(f"Reset all jury data: {counts}")
         return counts
 
@@ -271,28 +258,11 @@ class JuryMatchingService:
         """Get a batch with its assignments (for polling)."""
         from app.models.jury_pair import JuryPair  # noqa: F811
 
-        query = (
-            select(JuryAssignmentBatch)
-            .where(JuryAssignmentBatch.batch_id == batch_id)
-            .options(
-                selectinload(JuryAssignmentBatch.assignments).selectinload(
-                    JuryAssignment.project
-                ),
-                selectinload(JuryAssignmentBatch.assignments).selectinload(
-                    JuryAssignment.jury_pair
-                ),
-            )
-        )
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+        return await jury_matching_repository.get_batch_with_assignments(db, batch_id)
 
     async def get_all_batches(self, db: AsyncSession) -> List[JuryAssignmentBatch]:
         """Get all batches, most recent first."""
-        query = select(JuryAssignmentBatch).order_by(
-            JuryAssignmentBatch.created_at.desc()
-        )
-        result = await db.execute(query)
-        return list(result.scalars().all())
+        return await jury_matching_repository.get_all_batches(db)
 
     async def get_all_jury_pairs(self, db: AsyncSession) -> List[Dict[str, Any]]:
         """
@@ -301,25 +271,7 @@ class JuryMatchingService:
         Returns list of dicts with jury_id, jury_number,
         faculty_1_id, faculty_1_name, faculty_2_id, faculty_2_name.
         """
-        # Alias User for the two faculty members
-        F1 = User.__table__.alias("f1")
-        F2 = User.__table__.alias("f2")
-
-        query = (
-            select(
-                JuryPair.jury_id,
-                JuryPair.jury_number,
-                JuryPair.faculty_1_id,
-                F1.c.full_name.label("faculty_1_name"),
-                JuryPair.faculty_2_id,
-                F2.c.full_name.label("faculty_2_name"),
-            )
-            .outerjoin(F1, JuryPair.faculty_1_id == F1.c.user_id)
-            .outerjoin(F2, JuryPair.faculty_2_id == F2.c.user_id)
-            .order_by(JuryPair.jury_number)
-        )
-        result = await db.execute(query)
-        rows = result.all()
+        rows = await jury_matching_repository.get_all_jury_pairs_with_names(db)
 
         return [
             {
@@ -351,32 +303,13 @@ class JuryMatchingService:
         """
         # ── Resolve batch_id ──
         if batch_id is None:
-            latest_q = (
-                select(JuryAssignmentBatch)
-                .order_by(JuryAssignmentBatch.created_at.desc())
-                .limit(1)
-            )
-            latest_r = await db.execute(latest_q)
-            latest_batch = latest_r.scalar_one_or_none()
+            latest_batch = await jury_matching_repository.get_latest_batch(db)
             if not latest_batch:
                 return None
             batch_id = latest_batch.batch_id
 
         # ── Load batch with assignments (project + jury_pair) ──
-        query = (
-            select(JuryAssignmentBatch)
-            .where(JuryAssignmentBatch.batch_id == batch_id)
-            .options(
-                selectinload(JuryAssignmentBatch.assignments).selectinload(
-                    JuryAssignment.project
-                ),
-                selectinload(JuryAssignmentBatch.assignments).selectinload(
-                    JuryAssignment.jury_pair
-                ),
-            )
-        )
-        result = await db.execute(query)
-        batch = result.scalar_one_or_none()
+        batch = await jury_matching_repository.get_batch_with_assignments(db, batch_id)
 
         if not batch:
             return None
@@ -398,31 +331,19 @@ class JuryMatchingService:
         # ── Batch-fetch groups → members → student → user ──
         groups_map: Dict[str, Any] = {}
         if group_ids:
-            grp_query = (
-                select(Group)
-                .where(Group.group_id.in_(list(group_ids)))
-                .options(
-                    selectinload(Group.members)
-                    .selectinload(GroupMember.student)
-                    .selectinload(Student.user)
-                )
+            groups = await jury_matching_repository.get_groups_with_members(
+                db, list(group_ids)
             )
-            grp_result = await db.execute(grp_query)
-            for g in grp_result.scalars().all():
+            for g in groups:
                 groups_map[str(g.group_id)] = g
 
         # ── Batch-fetch faculty info (name + department) ──
         faculty_map: Dict[str, Dict[str, Any]] = {}
         if faculty_ids:
-            fac_t = Faculty.__table__
-            usr_t = User.__table__
-            fac_query = (
-                select(fac_t.c.user_id, usr_t.c.full_name, fac_t.c.department)
-                .join(usr_t, fac_t.c.user_id == usr_t.c.user_id)
-                .where(fac_t.c.user_id.in_(list(faculty_ids)))
+            rows = await jury_matching_repository.get_faculty_info_batch(
+                db, list(faculty_ids)
             )
-            fac_result = await db.execute(fac_query)
-            for row in fac_result.all():
+            for row in rows:
                 faculty_map[str(row.user_id)] = {
                     "name": row.full_name or "Unknown",
                     "department": row.department,
@@ -516,16 +437,14 @@ class JuryMatchingService:
         Returns the updated assignment or None if not found.
         """
         # Verify the new pair exists
-        pair_query = select(JuryPair).where(JuryPair.jury_id == new_pair_id)
-        pair_result = await db.execute(pair_query)
-        pair = pair_result.scalar_one_or_none()
+        pair = await jury_matching_repository.get_jury_pair_by_id(db, new_pair_id)
         if not pair:
             return None
 
         # Find the assignment
-        query = select(JuryAssignment).where(JuryAssignment.id == assignment_id)
-        result = await db.execute(query)
-        assignment = result.scalar_one_or_none()
+        assignment = await jury_matching_repository.get_assignment_by_id(
+            db, assignment_id
+        )
 
         if not assignment:
             return None
@@ -545,11 +464,7 @@ class JuryMatchingService:
         self, db: AsyncSession, batch_id: UUID
     ) -> Optional[JuryAssignmentBatch]:
         """Load a batch by ID."""
-        query = select(JuryAssignmentBatch).where(
-            JuryAssignmentBatch.batch_id == batch_id
-        )
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
+        return await jury_matching_repository.get_batch_by_id(db, batch_id)
 
     async def _fail_batch(self, db: AsyncSession, batch_id: UUID, error: str) -> None:
         """Mark a batch as failed with an error log."""
