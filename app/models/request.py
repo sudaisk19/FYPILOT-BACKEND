@@ -42,7 +42,6 @@ class Request(Base):
         nullable=False,
         default=InviteStatusEnum.pending,
     )
-    message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(

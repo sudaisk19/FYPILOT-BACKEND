@@ -72,6 +72,7 @@ class GroupProfileGroupInfo(BaseModel):
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
+    supervisor_acceptance_feedback: Optional[str] = None
 
 
 class GroupProfileMember(BaseModel):
@@ -134,6 +135,7 @@ class SupervisorGroupProfileResponse(BaseModel):
     project: Optional[GroupProfileProject] = None
     members: List[GroupProfileMember] = Field(default_factory=list)
     supervisors: List[GroupProfileSupervisor] = Field(default_factory=list)
+    supervisor_acceptance_feedback: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

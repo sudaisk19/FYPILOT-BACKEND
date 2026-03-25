@@ -3,9 +3,10 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status, Body
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
@@ -14,6 +15,8 @@ from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember, InviteStatusEnum
 from app.models.project import Project, ProjectDomain, project_type_value
 from app.models.request import Request, RequestTypeEnum
+from app.models.request_history import RequestHistory
+from app.models.group import InviteStatusEnum
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.invite_schema import (
@@ -28,10 +31,12 @@ from app.schemas.invite_schema import (
     StudentDetail,
     SupervisorRequestDetailResponse,
 )
+from app.schemas.request_history_schema import RequestHistoryItem
 from app.services.mailer import (
     send_supervisor_accepted_email,
     send_supervisor_rejected_email,
 )
+from app.repositories.request_history_repository import RequestHistoryRepository
 
 router = APIRouter(prefix="/invites", tags=["supervisor-invites"])
 
@@ -119,21 +124,9 @@ async def send_supervisor_invite(
             detail="This faculty member cannot be selected as a supervisor",
         )
 
-    # Check for existing pending request (cancelled requests are deleted, so no need to check for them)
-    existing_request = await db.execute(
-        select(Request).where(
-            Request.group_id == group_id,
-            Request.faculty_id == body.faculty_id,
-            Request.status == InviteStatusEnum.pending,
-        )
-    )
-    if existing_request.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A pending request already exists for this supervisor",
-        )
 
-    # Create request in requests table
+
+    # Determine request_type before using it
     if body.role not in ("supervisor", "cosupervisor"):
         raise HTTPException(
             status_code=400, detail="role must be 'supervisor' or 'cosupervisor'"
@@ -143,14 +136,76 @@ async def send_supervisor_invite(
         if body.role == "supervisor"
         else RequestTypeEnum.cosupervisor
     )
+
+
+    # Check for existing request (pending, accepted, declined)
+    existing_request = await db.execute(
+        select(Request).where(
+            Request.group_id == group_id,
+            Request.faculty_id == body.faculty_id,
+            Request.request_type == request_type,
+        )
+    )
+    req_obj = existing_request.scalars().first()
+    if req_obj:
+        if req_obj.status == InviteStatusEnum.declined:
+            # Update the declined request to pending and update message
+            await db.execute(
+                update(Request)
+                .where(Request.request_id == req_obj.request_id)
+                .values(
+                    status=InviteStatusEnum.pending,
+                    updated_at=datetime.utcnow(),
+                    updated_by=current_user.user_id,
+                )
+            )
+            # Store message in request_history if provided (student message only)
+            if body.message:
+                history_entry = RequestHistory(
+                    request_id=req_obj.request_id,
+                    group_id=group_id,
+                    faculty_id=body.faculty_id,
+                    action=InviteStatusEnum.pending,
+                    message=body.message,
+                    created_by=current_user.user_id,
+                    timestamp=datetime.utcnow(),
+                )
+                db.add(history_entry)
+            await db.commit()
+            return {
+                "message": "Request sent",
+                "role": body.role,
+                "request_id": str(req_obj.request_id),
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A request already exists for this supervisor and is not declined.",
+            )
+
+    # No previous request, create new
     request = Request(
         group_id=group_id,
         faculty_id=body.faculty_id,
         request_type=request_type,
         status=InviteStatusEnum.pending,
-        message=getattr(body, "message", None),
     )
     db.add(request)
+    await db.flush()  # Get request.request_id before commit
+
+    # Store message in request_history if provided (student message only)
+    if body.message:
+        history_entry = RequestHistory(
+            request_id=request.request_id,
+            group_id=group_id,
+            faculty_id=body.faculty_id,
+            action=InviteStatusEnum.pending,
+            message=body.message,
+            created_by=current_user.user_id,
+            timestamp=datetime.utcnow(),
+        )
+        db.add(history_entry)
+
     await db.commit()
 
     return {
@@ -218,11 +273,12 @@ async def list_sent_requests(
         items.append(
             SentRequestItem(
                 request_id=req.request_id,
-                faculty_id=user.user_id,
+                faculty_id=supervisor.user_id,  # Added to fix validation error
+                supervisor_id=user.user_id,
                 supervisor_name=user.full_name,
                 requested_role=req.request_type.value,
                 status=req.status.value,
-                message=req.message,
+                # message removed, fetch from request_history if needed
                 created_at=req.created_at,
                 updated_at=req.updated_at,
             )
@@ -345,9 +401,16 @@ async def list_pending_invites_for_supervisor(
     return PendingInvitesResponse(requests=items)
 
 
+from pydantic import BaseModel
+from typing import Optional
+
+class AcceptInviteBody(BaseModel):
+    feedback: Optional[str] = None
+
 @router.post("/supervisor/{request_id}/accept")
 async def accept_supervisor_request(
     request_id: UUID = Path(...),
+    body: AcceptInviteBody = Body(default=None),
     db: Annotated[AsyncSession, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
@@ -444,6 +507,7 @@ async def accept_supervisor_request(
     else:
         raise HTTPException(400, detail="Unknown request type")
 
+
     # Set THIS request status to accepted
     await db.execute(
         update(Request)
@@ -454,6 +518,19 @@ async def accept_supervisor_request(
             updated_by=current_user.user_id,
         )
     )
+
+    # Add status change to request_history
+    status_entry = RequestHistory(
+        request_id=request_id,
+        group_id=req.group_id,
+        faculty_id=req.faculty_id,
+        action=InviteStatusEnum.accepted,
+        message="Request accepted",
+        feedback=body.feedback if body and body.feedback else None,
+        created_by=current_user.user_id,
+        timestamp=datetime.utcnow(),
+    )
+    db.add(status_entry)
     await db.commit()
 
     # Send acceptance emails to all group members
@@ -477,9 +554,16 @@ async def accept_supervisor_request(
     return {"message": "Request accepted"}
 
 
+from pydantic import BaseModel
+from typing import Optional
+
+class RejectInviteBody(BaseModel):
+    reason: str
+
 @router.post("/supervisor/{request_id}/reject")
 async def reject_invite(
     request_id: UUID = Path(...),
+    body: RejectInviteBody = Body(default=None),
     db: Annotated[AsyncSession, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
@@ -505,6 +589,7 @@ async def reject_invite(
             detail="Only faculty with supervisor privileges can reject invites",
         )
 
+
     # Load and update request
     request_result = await db.execute(
         select(Request).where(
@@ -521,6 +606,13 @@ async def reject_invite(
             detail="Request not found or already processed",
         )
 
+    # Ensure feedback/reason is provided
+    if not body or not body.reason or not body.reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A rejection reason/feedback is required when declining a request.",
+        )
+
     # Get group and supervisor info for email
     group_result = await db.execute(
         select(Group)
@@ -534,6 +626,21 @@ async def reject_invite(
         else "cosupervisor"
     )
 
+
+    # If a reason is provided, add a feedback entry to request history (in feedback field)
+    if body and body.reason:
+        feedback_entry = RequestHistory(
+            request_id=request_id,
+            group_id=req.group_id,
+            faculty_id=current_user.user_id,
+            action=InviteStatusEnum.feedback,
+            feedback=body.reason,
+            created_by=current_user.user_id,
+            timestamp=datetime.utcnow(),
+        )
+        db.add(feedback_entry)
+
+    # Update the request status to declined
     await db.execute(
         update(Request)
         .where(Request.request_id == request_id)
@@ -543,6 +650,17 @@ async def reject_invite(
             updated_at=datetime.utcnow(),
         )
     )
+
+    # Add status change to request_history (no message, just status)
+    status_entry = RequestHistory(
+        request_id=request_id,
+        group_id=req.group_id,
+        faculty_id=current_user.user_id,
+        action=InviteStatusEnum.declined,
+        created_by=current_user.user_id,
+        timestamp=datetime.utcnow(),
+    )
+    db.add(status_entry)
     await db.commit()
 
     # Send rejection emails to all group members
@@ -604,6 +722,17 @@ async def cancel_invite(
     )
     if not is_member:
         raise HTTPException(403, detail="You are not a member of this group")
+
+    # Add status change to request_history before deleting
+    status_entry = RequestHistory(
+        request_id=req.request_id,
+        action=InviteStatusEnum.pending,
+        message="Request cancelled",
+        created_by=current_user.user_id,
+        timestamp=datetime.utcnow(),
+    )
+    db.add(status_entry)
+    await db.commit()
 
     # Delete the request completely (not just update status)
     from sqlalchemy import delete
@@ -804,15 +933,28 @@ async def get_request_details_for_supervisor(
             )
         )
 
+
+    # Fetch full request history for this group and supervisor
+    history_records = await RequestHistoryRepository.get_by_group_and_faculty(db, req.group_id, req.faculty_id)
+    request_history = [RequestHistoryItem(
+        history_id=record.history_id,
+        request_id=record.request_id,
+        action=getattr(record, 'action', getattr(record, 'event_type', None)),
+        message=record.message,
+        feedback=getattr(record, 'feedback', None),
+        created_by=record.created_by,
+        timestamp=record.timestamp,
+    ).dict() for record in history_records]
+
     return SupervisorRequestDetailResponse(
         request_id=req.request_id,
         group_id=req.group_id,
         faculty_id=req.faculty_id,
         status=req.status.value,
-        message=req.message,
         created_at=req.created_at,
         expires_at=expires_at,
         project_brief=project_brief,
         project=project_detail,
         students=students,
+        request_history=request_history,
     )

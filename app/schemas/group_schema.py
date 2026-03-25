@@ -112,6 +112,9 @@ class GroupProfileResponse(BaseModel):
     invites: GroupInvitesInfo = Field(
         ..., description="Pending invites with inviter details"
     )
+    supervisor_acceptance_feedback: Optional[str] = Field(
+        None, description="Supervisor's acceptance feedback if present"
+    )
 
 
 # PATCH Request Schemas

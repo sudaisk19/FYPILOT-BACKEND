@@ -2,7 +2,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
+
 from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.student_announcement_schema import StudentAnnouncementResponse
 
 from app.models.announcement import AnnouncementRoleEnum
 from app.models.submission import SubmissionStatusEnum, SubmissionTypeEnum
@@ -264,6 +266,9 @@ class StudentOfficialSubmissionDetail(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    # New: Full announcement details (optional)
+    announcement: Optional[StudentAnnouncementResponse] = None
+
 
 # ─── STUDENT UNOFFICIAL SUBMISSION SCHEMAS ────────────────────────────────────
 
@@ -302,3 +307,6 @@ class StudentUnofficialSubmissionDetail(BaseModel):
     files: List[StudentSubmissionFileResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    # New: Full announcement details (optional)
+    announcement: Optional[StudentAnnouncementResponse] = None
