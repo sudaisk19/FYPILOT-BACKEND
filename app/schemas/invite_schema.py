@@ -47,7 +47,6 @@ class SentRequestItem(BaseModel):
     supervisor_name: str = Field(..., description="Supervisor's full name")
     requested_role: str = Field(..., description="supervisor or cosupervisor")
     status: str = Field(..., description="pending, accepted, declined, or cancelled")
-    message: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -117,7 +116,6 @@ class SupervisorRequestDetailResponse(BaseModel):
     group_id: UUID
     faculty_id: UUID
     status: str
-    message: str | None = None
     created_at: datetime
     expires_at: datetime
     project_brief: str | None = Field(
@@ -125,3 +123,4 @@ class SupervisorRequestDetailResponse(BaseModel):
     )
     project: ProjectDetail | None = None
     students: List[StudentDetail] = Field(default_factory=list)
+    request_history: list[dict] = Field(default_factory=list, description="History of all request events/messages")

@@ -196,6 +196,30 @@ async def get_official_submission(
             )
         )
 
+    # Full announcement details for the new field
+    from app.schemas.student_announcement_schema import StudentAnnouncementResponse, StudentAnnouncementFileResponse
+    announcement_response = None
+    if announcement:
+        announcement_response = StudentAnnouncementResponse(
+            announcement_id=announcement.announcement_id,
+            title=announcement.title,
+            description=announcement.description,
+            supervisor_name=None,  # Populate if available
+            created_at=announcement.created_at,
+            updated_at=announcement.updated_at,
+            files=[
+                StudentAnnouncementFileResponse(
+                    file_id=f.file_id,
+                    file_name=f.file_name,
+                    storage_key=f.storage_key,
+                    file_type=f.file_type,
+                    mime_type=f.mime_type,
+                    size_bytes=f.size_bytes,
+                )
+                for f in announcement.files
+            ],
+        )
+
     return StudentOfficialSubmissionDetail(
         submission_id=submission.submission_id,
         title=submission.title,
@@ -214,6 +238,7 @@ async def get_official_submission(
         supervisor_feedback=submission.supervisor_feedback,
         admin_feedback=submission.admin_feedback,
         files=uploaded_files,
+        announcement=announcement_response,
     )
 
 
@@ -470,6 +495,8 @@ async def get_unofficial_submission(
 
     from app.schemas.submission_schema import StudentUnofficialSubmissionDetail
 
+    announcement = submission.linked_announcement
+
     uploaded_files = []
     for f in submission.files:
         url = None
@@ -493,6 +520,30 @@ async def get_unofficial_submission(
             )
         )
 
+    # Full announcement details for the new field
+    from app.schemas.student_announcement_schema import StudentAnnouncementResponse, StudentAnnouncementFileResponse
+    announcement_response = None
+    if announcement:
+        announcement_response = StudentAnnouncementResponse(
+            announcement_id=announcement.announcement_id,
+            title=announcement.title,
+            description=announcement.description,
+            supervisor_name=None,  # Populate if available
+            created_at=announcement.created_at,
+            updated_at=announcement.updated_at,
+            files=[
+                StudentAnnouncementFileResponse(
+                    file_id=f.file_id,
+                    file_name=f.file_name,
+                    storage_key=f.storage_key,
+                    file_type=f.file_type,
+                    mime_type=f.mime_type,
+                    size_bytes=f.size_bytes,
+                )
+                for f in announcement.files
+            ],
+        )
+
     return StudentUnofficialSubmissionDetail(
         submission_id=submission.submission_id,
         title=submission.title,
@@ -502,6 +553,7 @@ async def get_unofficial_submission(
         updated_at=submission.updated_at,
         supervisor_feedback=submission.supervisor_feedback,
         files=uploaded_files,
+        announcement=announcement_response,
     )
 
 
