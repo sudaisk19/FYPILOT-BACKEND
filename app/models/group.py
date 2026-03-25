@@ -161,6 +161,7 @@ class InviteStatusEnum(str, enum.Enum):
     declined = "declined"
     expired = "expired"
     cancelled = "cancelled"
+    feedback = "feedback"
 
 
 class GroupInvite(Base):

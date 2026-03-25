@@ -45,7 +45,6 @@ class RequestRepository(BaseRepository[Request]):
         group_id: UUID,
         faculty_id: UUID,
         request_type: RequestTypeEnum,
-        message: Optional[str] = None,
     ) -> Request:
         """
         Create a new supervisor request.
@@ -55,7 +54,6 @@ class RequestRepository(BaseRepository[Request]):
             group_id: Group's UUID
             faculty_id: Faculty's user ID
             request_type: Type of request (supervisor/cosupervisor)
-            message: Optional message to supervisor
 
         Returns:
             Created Request instance
@@ -65,7 +63,6 @@ class RequestRepository(BaseRepository[Request]):
             "faculty_id": faculty_id,
             "request_type": request_type,
             "status": InviteStatusEnum.pending,
-            "message": message,
             "created_at": datetime.utcnow(),
         }
         return await super().create(db, request_data)
@@ -280,6 +277,28 @@ class RequestRepository(BaseRepository[Request]):
         )
         await db.flush()
         return result.rowcount
+
+    async def get_recent_by_group_supervisor_statuses(
+        self,
+        db: AsyncSession,
+        group_id: UUID,
+        faculty_id: UUID,
+        statuses: list[InviteStatusEnum],
+    ) -> Optional[Request]:
+        """
+        Get the most recent request for a specific group-supervisor pair with status in the given list.
+        """
+        query = (
+            select(Request)
+            .where(
+                Request.group_id == group_id,
+                Request.faculty_id == faculty_id,
+                Request.status.in_(statuses),
+            )
+            .order_by(Request.created_at.desc())
+        )
+        result = await db.execute(query)
+        return result.scalars().first()
 
 
 # Singleton instance for convenience

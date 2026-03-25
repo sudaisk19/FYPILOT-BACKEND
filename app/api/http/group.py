@@ -898,12 +898,28 @@ async def get_group_profile(
             "updated_at": group.updated_at.isoformat(),
         }
 
+        # Fetch supervisor acceptance feedback (if any)
+        supervisor_acceptance_feedback = None
+        if group.supervisor_id:
+            from app.repositories.request_history_repository import RequestHistoryRepository
+            # Get all request history for this group and supervisor
+            history_records = await RequestHistoryRepository.get_by_group_and_faculty(db, group.group_id, group.supervisor_id)
+            # Find the latest 'accepted' action with feedback
+            accepted_feedbacks = [
+                h for h in history_records
+                if getattr(h, 'action', None) == InviteStatusEnum.accepted and getattr(h, 'feedback', None)
+            ]
+            if accepted_feedbacks:
+                # Get the most recent one
+                supervisor_acceptance_feedback = sorted(accepted_feedbacks, key=lambda h: h.timestamp)[-1].feedback
+
         return GroupProfileResponse(
             group=group_info,
             members=members,
             supervisors=supervisors,
             project=project,
             invites=invites_info,
+            supervisor_acceptance_feedback=supervisor_acceptance_feedback,
         )
 
     except Exception as e:

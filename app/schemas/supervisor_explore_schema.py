@@ -43,6 +43,9 @@ class IndustryInfo(BaseModel):
 
 
 # Detailed supervisor info for individual view
+from typing import Optional
+from app.schemas.request_history_schema import RequestHistoryItem
+
 class SupervisorDetailedInfo(BaseModel):
     # User fields
     user_id: UUID
@@ -73,6 +76,9 @@ class SupervisorDetailedInfo(BaseModel):
     # Additional computed fields
     current_groups: int = Field(description="Number of groups currently supervising")
     total_supervised: int = Field(description="Total groups supervised (historical)")
+
+    # Student-specific: request history if a request exists
+    request_history: Optional[list[RequestHistoryItem]] = None
 
     class Config:
         from_attributes = True

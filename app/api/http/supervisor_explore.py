@@ -18,6 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.group import InviteStatusEnum
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
@@ -33,6 +34,9 @@ from app.schemas.supervisor_explore_schema import (
     SupervisorBasicInfo,
     SupervisorDetailedInfo,
 )
+from app.schemas.request_history_schema import RequestHistoryItem
+from app.repositories import student_repository, request_repository
+from app.repositories.request_history_repository import RequestHistoryRepository
 
 router = APIRouter(tags=["supervisor-explore"])
 
@@ -430,6 +434,27 @@ async def get_supervisor_details(
         for industry in industries_list
     ]
 
+    # --- Request history logic for students ---
+    request_history = None
+    if current_user.role == "student":
+        # Get the student's group (assume first group if multiple)
+        student = await student_repository.get_with_groups(db, current_user.user_id)
+        group = None
+        if student and student.groups:
+            group = student.groups[0]
+        if group:
+            # Fetch the most recent request with status in (pending, feedback, declined)
+            statuses = [
+                InviteStatusEnum.pending,
+                InviteStatusEnum.feedback,
+                InviteStatusEnum.declined,
+            ]
+            req = await request_repository.get_recent_by_group_supervisor_statuses(db, group.group_id, supervisor_id, statuses)
+            if req:
+                # Fetch full request history for this group and supervisor
+                history_models = await RequestHistoryRepository.get_by_group_and_faculty(db, group.group_id, supervisor_id)
+                request_history = [RequestHistoryItem.from_orm(h) for h in history_models]
+
     return SupervisorDetailedInfo(
         # User fields
         user_id=user.user_id,
@@ -453,4 +478,6 @@ async def get_supervisor_details(
         # Computed fields
         current_groups=current_groups,
         total_supervised=total_supervised,
+        # Add request_history as an extra attribute (will require schema update)
+        request_history=request_history,
     )

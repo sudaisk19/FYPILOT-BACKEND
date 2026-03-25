@@ -148,9 +148,12 @@ async def get_student_profile(
             if supervisor_user:
                 supervisor_name = supervisor_user.full_name
 
-        if group.cosupervisor_id:
+        # Handle multiple co-supervisors (cosupervisor_ids is an array)
+        if group.cosupervisor_ids:
+            # For simplicity, get the first co-supervisor's name (or loop for all if needed)
+            first_cosupervisor_id = group.cosupervisor_ids[0]
             cosupervisor_result = await db.execute(
-                select(User).where(User.user_id == group.cosupervisor_id)
+                select(User).where(User.user_id == first_cosupervisor_id)
             )
             cosupervisor_user = cosupervisor_result.scalar_one_or_none()
             if cosupervisor_user:

@@ -19,8 +19,9 @@ from sqlalchemy.types import Text as SQLText
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.faculty import Faculty
-from app.models.group import Group, GroupMember
+from app.models.group import Group, GroupMember, InviteStatusEnum
 from app.models.project import Project
+from app.models.request_history import RequestHistory
 from app.models.student import Student
 from app.models.user import RoleEnum, User
 from app.schemas.supervisor_groups_schema import (
@@ -379,6 +380,7 @@ async def get_supervisor_group_profile(
         fyp_stage=group.fyp_stage,
         fyp_cycle=group.fyp_cycle.value if group.fyp_cycle else None,
         cohort_year=group.cohort_year,
+        supervisor_acceptance_feedback=None,
     )
 
     # 5. Build members list
@@ -461,9 +463,26 @@ async def get_supervisor_group_profile(
                     )
                 )
 
+    # 8. Get latest acceptance feedback (if any) for the primary supervisor
+    supervisor_acceptance_feedback: Optional[str] = None
+    if group.supervisor_id:
+        feedback_result = await db.execute(
+            select(RequestHistory.feedback)
+            .where(
+                RequestHistory.group_id == group.group_id,
+                RequestHistory.faculty_id == group.supervisor_id,
+                RequestHistory.action == InviteStatusEnum.accepted,
+                RequestHistory.feedback.is_not(None),
+            )
+            .order_by(RequestHistory.timestamp.desc())
+        )
+        supervisor_acceptance_feedback = feedback_result.scalars().first()
+        group_info.supervisor_acceptance_feedback = supervisor_acceptance_feedback
+
     return SupervisorGroupProfileResponse(
         group=group_info,
         project=project_info,
         members=members,
         supervisors=supervisors,
+        supervisor_acceptance_feedback=supervisor_acceptance_feedback,
     )

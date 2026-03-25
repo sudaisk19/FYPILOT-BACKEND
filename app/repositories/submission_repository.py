@@ -141,10 +141,15 @@ class SubmissionRepository(BaseRepository[Submission]):
         submission_id: UUID,
         group_id: UUID,
     ) -> Optional[Submission]:
-        """Fetch a single unofficial submission scoped to the student's group."""
+        """Fetch a single unofficial submission scoped to the student's group, eagerly loading linked announcement and files."""
         result = await db.execute(
             select(Submission)
-            .options(selectinload(Submission.files))
+            .options(
+                selectinload(Submission.files),
+                selectinload(Submission.linked_announcement).selectinload(
+                    Announcement.files
+                ),
+            )
             .where(
                 Submission.submission_id == submission_id,
                 Submission.group_id == group_id,
