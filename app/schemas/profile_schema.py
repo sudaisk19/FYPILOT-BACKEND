@@ -322,7 +322,7 @@ class GroupInfo(BaseModel):
     cohort_year: Optional[int] = None
     max_members: int
     supervisor_name: Optional[str] = None
-    cosupervisor_name: Optional[str] = None
+    cosupervisor_names: List[str] = Field(default_factory=list)
     members: List[GroupMemberInfo] = Field(default_factory=list)
 
 

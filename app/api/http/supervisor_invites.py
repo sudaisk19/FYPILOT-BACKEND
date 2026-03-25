@@ -83,14 +83,22 @@ async def send_supervisor_invite(
             status_code=status.HTTP_409_CONFLICT,
             detail="Group already has a supervisor",
         )
-    if body.role == "cosupervisor" and grp.cosupervisor_ids and len(grp.cosupervisor_ids) > 0:
+    if (
+        body.role == "cosupervisor"
+        and grp.cosupervisor_ids
+        and body.faculty_id in grp.cosupervisor_ids
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Group already has a co-supervisor",
+            detail="This supervisor is already a co-supervisor for this group",
         )
 
     # Prevent same supervisor from being both primary and co (aligns with DB constraint)
-    if body.role == "supervisor" and body.faculty_id in (grp.cosupervisor_ids or []):
+    if (
+        body.role == "supervisor"
+        and grp.cosupervisor_ids
+        and body.faculty_id in grp.cosupervisor_ids
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This supervisor is already assigned as co-supervisor. Cannot assign same person as supervisor.",
@@ -485,11 +493,15 @@ async def accept_supervisor_request(
 
     # Cosupervisor role logic
     elif req.request_type == RequestTypeEnum.cosupervisor:
-        # Set cosupervisor_id in groups
+        # Prepare the new co-supervisor list
+        current_cosups = list(group.cosupervisor_ids) if group.cosupervisor_ids else []
+        if current_user.user_id not in current_cosups:
+            current_cosups.append(current_user.user_id)
+
         await db.execute(
             update(Group)
             .where(Group.group_id == req.group_id)
-            .values(cosupervisor_id=current_user.user_id, updated_at=datetime.utcnow())
+            .values(cosupervisor_ids=current_cosups, updated_at=datetime.utcnow())
         )
         # (No supervisor capacity update for cosupervisor)
     else:

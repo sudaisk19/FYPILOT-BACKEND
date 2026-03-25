@@ -122,7 +122,7 @@ class GroupUpdateData(BaseModel):
     fyp_cycle: Optional[str] = Field(None, pattern="^(fyp1|fyp2)$")
     cohort_year: Optional[int] = Field(None, ge=2020, le=2030)
     supervisor_id: Optional[UUID] = None
-    cosupervisor_id: Optional[UUID] = None
+    cosupervisor_ids: Optional[List[UUID]] = None
 
 
 class ProjectUpdateData(BaseModel):

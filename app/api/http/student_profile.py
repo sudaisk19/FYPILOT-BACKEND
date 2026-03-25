@@ -138,7 +138,7 @@ async def get_student_profile(
 
         # Get supervisor information
         supervisor_name = None
-        cosupervisor_name = None
+        cosupervisor_names = []
 
         if group.supervisor_id:
             supervisor_result = await db.execute(
@@ -148,16 +148,11 @@ async def get_student_profile(
             if supervisor_user:
                 supervisor_name = supervisor_user.full_name
 
-        # Handle multiple co-supervisors (cosupervisor_ids is an array)
-        if group.cosupervisor_ids:
-            # For simplicity, get the first co-supervisor's name (or loop for all if needed)
-            first_cosupervisor_id = group.cosupervisor_ids[0]
+        if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
             cosupervisor_result = await db.execute(
-                select(User).where(User.user_id == first_cosupervisor_id)
+                select(User.full_name).where(User.user_id.in_(group.cosupervisor_ids))
             )
-            cosupervisor_user = cosupervisor_result.scalar_one_or_none()
-            if cosupervisor_user:
-                cosupervisor_name = cosupervisor_user.full_name
+            cosupervisor_names = list(cosupervisor_result.scalars().all())
 
         # Build group info
         group_info = GroupInfo(
@@ -176,7 +171,7 @@ async def get_student_profile(
             cohort_year=group.cohort_year,
             max_members=group.max_members,
             supervisor_name=supervisor_name,
-            cosupervisor_name=cosupervisor_name,
+            cosupervisor_names=cosupervisor_names,
             members=members,
         )
 

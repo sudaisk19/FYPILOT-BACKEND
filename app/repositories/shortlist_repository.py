@@ -45,7 +45,7 @@ class ShortlistRepository(BaseRepository[ShortlistedSupervisor]):
         """
         shortlist_data = {
             "group_id": group_id,
-            "supervisor_id": supervisor_id,
+            "faculty_id": supervisor_id,
             "added_by": added_by,
         }
         return await super().create(db, shortlist_data)
