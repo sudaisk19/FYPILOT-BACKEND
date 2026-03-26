@@ -164,18 +164,15 @@ async def create_task(
         },
     )
     if links:
-        from app.models.task_attachment import TaskAttachment
-
         link_list = [l.strip() for l in links.split(",") if l.strip()]
         for link in link_list:
-            db.add(
-                TaskAttachment(
-                    task_id=task.task_id,
-                    file_name="External Link",  # Frontend se bhi name le sakte hain
-                    storage_key=link,  # Direct URL save ho raha hai
-                    mime_type="application/url",
-                    size_bytes=0,
-                )
+            await task_repository.add_attachment(
+                db,
+                task_id=task.task_id,
+                file_name="External Link",
+                storage_key=link,
+                mime_type="application/url",
+                size_bytes=0,
             )
 
     if files:
@@ -183,28 +180,23 @@ async def create_task(
             if not upload.filename:
                 continue
 
-            # Naming consistent with your build_storage_key logic
             storage_key = f"tasks/{group_id}/{task.task_id}/{upload.filename}"
 
-            # File upload to Supabase (using existing service)
             size_bytes = await upload_file_to_supabase(
                 supabase,
-                bucket="task_attachments",  # Ensure this bucket exists in Supabase
+                bucket="task_attachments",
                 storage_key=storage_key,
                 upload=upload,
             )
 
-            # DB mein attachment save karein
-            from app.models.task_attachment import TaskAttachment
-
-            attachment = TaskAttachment(
+            await task_repository.add_attachment(
+                db,
                 task_id=task.task_id,
                 file_name=upload.filename,
                 storage_key=storage_key,
                 mime_type=upload.content_type,
                 size_bytes=size_bytes,
             )
-            db.add(attachment)
 
     await db.commit()
 
@@ -311,29 +303,23 @@ async def update_task(
                 upload=upload,
             )
 
-            from app.models.task_attachment import TaskAttachment
-
-            db.add(
-                TaskAttachment(
-                    task_id=task_id,
-                    file_name=upload.filename,
-                    storage_key=storage_key,
-                    mime_type=upload.content_type,
-                    size_bytes=size_bytes,
-                )
+            await task_repository.add_attachment(
+                db,
+                task_id=task_id,
+                file_name=upload.filename,
+                storage_key=storage_key,
+                mime_type=upload.content_type,
+                size_bytes=size_bytes,
             )
     if links:
-        from app.models.task_attachment import TaskAttachment
-
         for link in [l.strip() for l in links.split(",") if l.strip()]:
-            db.add(
-                TaskAttachment(
-                    task_id=task_id,
-                    file_name="External Link",
-                    storage_key=link,
-                    mime_type="application/url",
-                    size_bytes=0,
-                )
+            await task_repository.add_attachment(
+                db,
+                task_id=task_id,
+                file_name="External Link",
+                storage_key=link,
+                mime_type="application/url",
+                size_bytes=0,
             )
 
     await db.commit()
@@ -532,14 +518,8 @@ async def delete_sprint(
 
     # 2. Tasks ko pehle hi Backlog mein move karein (Explicit Commit)
     if hasattr(sprint, "tasks") and sprint.tasks:
-        from sqlalchemy import update
-
-        from app.models.task import Task
-
         # Tasks ko un-link karein
-        await db.execute(
-            update(Task).where(Task.milestone_id == sprint_id).values(milestone_id=None)
-        )
+        await task_repository.unlink_sprint_tasks(db, sprint_id)
         # Yahan commit karna zaroori hai taake tasks ka relation khatam ho jaye
         await db.commit()
         # Session refresh karein taake delete safe ho

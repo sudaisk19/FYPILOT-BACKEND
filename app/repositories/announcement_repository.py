@@ -259,6 +259,97 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         result = await db.execute(paginated_query)
         return list(result.scalars().unique().all()), total_items
 
+    async def list_supervisor_submission_tasks(
+        self,
+        db: AsyncSession,
+        supervisor_id: UUID,
+        page: int,
+        per_page: int,
+        search: Optional[str] = None,
+    ) -> Tuple[List[Announcement], int]:
+        """Fetch all submission tasks created by a specific supervisor."""
+        query = (
+            select(Announcement)
+            .where(
+                Announcement.created_by == supervisor_id,
+                Announcement.is_submission_request == True,  # noqa: E712
+                Announcement.created_by_role
+                == dict(AnnouncementRoleEnum.__members__).get(
+                    "supervisor", "supervisor"
+                ),
+            )
+            .options(
+                selectinload(Announcement.targets),
+                selectinload(Announcement.files),
+            )
+        )
+        if search:
+            query = query.where(Announcement.title.ilike(f"%{search}%"))
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar_one()
+
+        offset = (page - 1) * per_page
+        query = (
+            query.order_by(Announcement.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+        rows = await db.execute(query)
+        return list(rows.scalars().all()), total
+
+    async def list_admin_submission_tasks(
+        self,
+        db: AsyncSession,
+        page: int,
+        per_page: int,
+        search: Optional[str] = None,
+    ) -> Tuple[List[Announcement], int]:
+        """Fetch all submission tasks created by admin."""
+        query = (
+            select(Announcement)
+            .where(
+                Announcement.is_submission_request == True,  # noqa: E712
+                Announcement.created_by_role == AnnouncementRoleEnum.admin,
+            )
+            .options(
+                selectinload(Announcement.targets),
+                selectinload(Announcement.files),
+            )
+        )
+        if search:
+            query = query.where(
+                (Announcement.title.ilike(f"%{search}%"))
+                | (Announcement.description.ilike(f"%{search}%"))
+            )
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar_one()
+
+        offset = (page - 1) * per_page
+        query = (
+            query.order_by(Announcement.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+        rows = await db.execute(query)
+        return list(rows.scalars().all()), total
+
+    async def get_announcement_file(
+        self, db: AsyncSession, file_id: UUID
+    ) -> Optional[AnnouncementFile]:
+        """Fetch an announcement file by its ID with announcement loaded."""
+        result = await db.execute(
+            select(AnnouncementFile)
+            .join(
+                Announcement,
+                AnnouncementFile.announcement_id == Announcement.announcement_id,
+            )
+            .options(selectinload(AnnouncementFile.announcement))
+            .where(AnnouncementFile.file_id == file_id)
+        )
+        return result.scalars().first()
+
 
 # Singleton instance for convenience
 announcement_repository = AnnouncementRepository()

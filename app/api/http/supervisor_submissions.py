@@ -19,9 +19,8 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from starlette.background import BackgroundTask
 
 from app.auth.supabase_auth import get_current_user
@@ -36,11 +35,13 @@ from app.models.announcement import (
 from app.models.group import Group
 from app.models.submission import (
     Submission,
-    SubmissionFile,
     SubmissionStatusEnum,
     SubmissionTypeEnum,
 )
 from app.models.user import RoleEnum, User
+from app.repositories.announcement_repository import announcement_repository
+from app.repositories.group_repository import group_repository
+from app.repositories.submission_repository import submission_repository
 from app.schemas.submission_schema import (
     AttachmentInfo,
     FileOutput,
@@ -193,17 +194,7 @@ def _build_response(
 
 async def _get_managed_groups(user_id: UUID, db: AsyncSession) -> List[Group]:
     """Fetch all groups managed by the supervisor."""
-    result = await db.execute(
-        select(Group)
-        .options(selectinload(Group.project))
-        .where(
-            or_(
-                Group.supervisor_id == user_id,
-                Group.cosupervisor_ids.contains([user_id]),
-            )
-        )
-    )
-    return result.scalars().all()
+    return await group_repository.get_groups_by_supervisor(db, user_id)
 
 
 async def _create_placeholder_submissions_for_groups(
@@ -216,15 +207,11 @@ async def _create_placeholder_submissions_for_groups(
         return
 
     # Check existing submissions to avoid duplicates
-    existing_result = await db.execute(
-        select(Submission.group_id).where(
-            and_(
-                Submission.linked_announcement_id == announcement.announcement_id,
-                Submission.group_id.in_(group_ids),
-            )
+    existing_group_ids = (
+        await submission_repository.get_existing_group_ids_for_announcement(
+            db, announcement.announcement_id, group_ids
         )
     )
-    existing_group_ids = set(existing_result.scalars().all())
 
     new_group_ids = [gid for gid in group_ids if gid not in existing_group_ids]
 
@@ -287,16 +274,7 @@ async def download_announcement_file(
         )
 
     # Fetch file metadata
-    result = await db.execute(
-        select(AnnouncementFile)
-        .join(
-            Announcement,
-            AnnouncementFile.announcement_id == Announcement.announcement_id,
-        )
-        .options(selectinload(AnnouncementFile.announcement))
-        .where(AnnouncementFile.file_id == file_id)
-    )
-    file_record = result.scalars().first()
+    file_record = await announcement_repository.get_announcement_file(db, file_id)
 
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
@@ -477,15 +455,9 @@ async def create_supervisor_submission_task(
     await db.commit()
 
     # Re-fetch
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement.announcement_id)
+    announcement = await announcement_repository.get_by_id(
+        db, announcement.announcement_id
     )
-    announcement = result.scalars().first()
 
     return _build_response(announcement, managed_groups)
 
@@ -523,15 +495,7 @@ async def get_supervisor_submission_task(
             detail="Only faculty with supervisor privileges can view submission tasks",
         )
 
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -585,15 +549,7 @@ async def edit_supervisor_submission_task(
         )
 
     # Fetch Announcement
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -730,15 +686,7 @@ async def edit_supervisor_submission_task(
     await db.commit()
 
     # Re-fetch
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     return _build_response(announcement, managed_groups)
 
@@ -775,37 +723,17 @@ async def list_supervisor_submission_tasks(
         )
 
     # Query
-    query = (
-        select(Announcement)
-        .where(
-            Announcement.created_by == current_user.user_id,
-            Announcement.is_submission_request == True,
-            Announcement.created_by_role == AnnouncementRoleEnum.supervisor,
-        )
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
+    announcements, total = (
+        await announcement_repository.list_supervisor_submission_tasks(
+            db=db,
+            supervisor_id=current_user.user_id,
+            page=page,
+            per_page=per_page,
+            search=search,
         )
     )
 
-    if search:
-        query = query.where(Announcement.title.ilike(f"%{search}%"))
-
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
-
-    # Pagination
-    offset = (page - 1) * per_page
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
-    query = (
-        query.order_by(Announcement.created_at.desc()).offset(offset).limit(per_page)
-    )
-
-    result = await db.execute(query)
-    announcements = result.scalars().all()
 
     # Helper needed for context
     managed_groups = await _get_managed_groups(current_user.user_id, db)
@@ -892,12 +820,7 @@ async def get_submission_responses(
         )
 
     # Data Fetch: Announcement
-    announcement_result = await db.execute(
-        select(Announcement)
-        .options(selectinload(Announcement.targets))
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = announcement_result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -921,27 +844,13 @@ async def get_submission_responses(
         )
 
     # Get Groups details
-    groups_query = (
-        select(Group)
-        .options(selectinload(Group.project))
-        .where(
-            and_(
-                Group.group_id.in_(target_group_ids),
-                Group.project.has(),
-            )
-        )
-    )
-
-    groups_result = await db.execute(groups_query)
-    groups = groups_result.scalars().all()
+    groups = await group_repository.get_groups_with_project_by_ids(db, target_group_ids)
 
     # Get Submissions
-    submissions_result = await db.execute(
-        select(Submission).where(Submission.linked_announcement_id == announcement_id)
+    submissions_list = await submission_repository.get_submissions_by_announcement(
+        db, announcement_id
     )
-    submissions_by_group = {
-        sub.group_id: sub for sub in submissions_result.scalars().all()
-    }
+    submissions_by_group = {sub.group_id: sub for sub in submissions_list}
 
     # Build Response List
     group_submissions = []
@@ -1036,16 +945,7 @@ async def get_submission_evaluation(
             detail="Only faculty with supervisor privileges can evaluate submissions",
         )
 
-    result = await db.execute(
-        select(Submission)
-        .options(
-            selectinload(Submission.files),
-            selectinload(Submission.linked_announcement),
-            selectinload(Submission.group),
-        )
-        .where(Submission.submission_id == submission_id)
-    )
-    submission = result.scalars().first()
+    submission = await submission_repository.get_evaluation_details(db, submission_id)
 
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -1132,16 +1032,7 @@ async def update_supervisor_grading(
             detail="Only faculty with supervisor privileges can update grading",
         )
 
-    result = await db.execute(
-        select(Submission)
-        .options(
-            selectinload(Submission.files),
-            selectinload(Submission.linked_announcement),
-            selectinload(Submission.group),
-        )
-        .where(Submission.submission_id == submission_id)
-    )
-    submission = result.scalars().first()
+    submission = await submission_repository.get_evaluation_details(db, submission_id)
 
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -1240,18 +1131,9 @@ async def download_submission_file(
         )
 
     # Fetch file record and check access
-    result = await db.execute(
-        select(SubmissionFile)
-        .join(Submission, SubmissionFile.submission_id == Submission.submission_id)
-        .options(selectinload(SubmissionFile.submission).selectinload(Submission.group))
-        .where(
-            and_(
-                SubmissionFile.file_id == file_id,
-                SubmissionFile.submission_id == submission_id,
-            )
-        )
+    file_record = await submission_repository.get_submission_file_details(
+        db, submission_id, file_id
     )
-    file_record = result.scalars().first()
 
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")

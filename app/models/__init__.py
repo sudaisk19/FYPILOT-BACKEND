@@ -32,6 +32,14 @@ from .faculty_industry import FacultyIndustry
 
 # Group models (depend on User and Student)
 from .group import Group, GroupInvite, GroupMember
+from .group_document import (
+    DocTypeEnum,
+    DocumentFile,
+    DocumentVersion,
+    FilePurposeEnum,
+    GroupDocument,
+    SaveTriggerEnum,
+)
 from .group_milestone import GroupMilestone, SprintStatusEnum
 from .industry import Industry
 
@@ -116,4 +124,11 @@ __all__ = [
     "JuryAssignment",
     "JuryAssignmentBatch",
     "JuryBatchStatusEnum",
+    # Group document models
+    "GroupDocument",
+    "DocumentVersion",
+    "DocumentFile",
+    "DocTypeEnum",
+    "SaveTriggerEnum",
+    "FilePurposeEnum",
 ]

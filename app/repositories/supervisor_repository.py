@@ -91,17 +91,24 @@ class SupervisorRepository(BaseRepository[Faculty]):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def list_all_with_users(self, db: AsyncSession) -> List[Tuple[Faculty, User]]:
+    async def list_all_with_users(
+        self, db: AsyncSession, limit: int = 100
+    ) -> List[Tuple[Faculty, User]]:
         """
         Get all faculty with their user data.
 
         Args:
             db: Database session
+            limit: Maximum number of rows to return
 
         Returns:
             List of (Faculty, User) tuples
         """
-        query = select(Faculty, User).join(User, Faculty.user_id == User.user_id)
+        query = (
+            select(Faculty, User)
+            .join(User, Faculty.user_id == User.user_id)
+            .limit(limit)
+        )
         result = await db.execute(query)
         return list(result.all())
 
@@ -432,6 +439,128 @@ class SupervisorRepository(BaseRepository[Faculty]):
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    async def search_supervisors_with_scoring(
+        self,
+        db: AsyncSession,
+        department: Optional[str] = None,
+        designation: Optional[str] = None,
+        domain: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 10,
+    ) -> Tuple[List[Any], int]:
+        """
+        Advanced search for supervisors with relevance scoring, filtering, and pagination.
+        Returns a tuple of (rows, total_count).
+        """
+        from sqlalchemy import case
+
+        # Helper for department aliases
+        aliases = {
+            "se": "Software Engineering",
+            "software engineering": "Software Engineering",
+            "cs": "Computer Science",
+            "computer science": "Computer Science",
+            "ee": "Electrical Engineering",
+            "electrical engineering": "Electrical Engineering",
+            "me": "Mechanical Engineering",
+            "mechanical engineering": "Mechanical Engineering",
+            "ce": "Civil Engineering",
+            "civil engineering": "Civil Engineering",
+        }
+
+        query = (
+            select(User, Faculty)
+            .join(Faculty, User.user_id == Faculty.user_id)
+            .where(
+                User.role == "faculty",
+                Faculty.is_supervisor == True,
+            )
+        )
+
+        simple_filters = []
+        relevance_score = None
+
+        if department:
+            normalized_dept = department.lower().strip()
+            mapped_dept = aliases.get(normalized_dept, department)
+            simple_filters.append(Faculty.department.ilike(f"%{mapped_dept}%"))
+
+        if designation:
+            simple_filters.append(Faculty.designation.ilike(f"%{designation}%"))
+            relevance_score = case(
+                (func.lower(Faculty.designation) == func.lower(designation), 3),
+                (
+                    func.lower(Faculty.designation).startswith(func.lower(designation)),
+                    2,
+                ),
+                else_=1,
+            )
+
+        if search:
+            search_filter = or_(
+                User.full_name.ilike(f"%{search}%"), User.email.ilike(f"%{search}%")
+            )
+            simple_filters.append(search_filter)
+            search_relevance = case(
+                (func.lower(User.full_name).startswith(func.lower(search)), 3),
+                (func.lower(User.full_name).contains(func.lower(search)), 2),
+                else_=1,
+            )
+            if relevance_score is not None:
+                relevance_score = relevance_score + search_relevance
+            else:
+                relevance_score = search_relevance
+
+        if domain:
+            query = (
+                query.join(FacultyDomain, Faculty.user_id == FacultyDomain.faculty_id)
+                .join(Domain, FacultyDomain.domain_id == Domain.domain_id)
+                .where(Domain.name.ilike(f"%{domain}%"))
+            )
+
+        if simple_filters:
+            query = query.where(and_(*simple_filters))
+
+        query = query.distinct()
+
+        if relevance_score is not None:
+            query = query.add_columns(relevance_score.label("relevance_score"))
+
+        count_subquery = query.subquery()
+        count_query = select(func.count()).select_from(count_subquery)
+        total = (await db.execute(count_query)).scalar() or 0
+
+        offset = (page - 1) * per_page
+
+        if relevance_score is not None:
+            query = query.order_by(relevance_score.desc(), User.full_name.asc())
+        else:
+            query = query.order_by(User.full_name.asc())
+
+        query = query.offset(offset).limit(per_page)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        return rows, total
+
+    async def update_capacity(
+        self, db: AsyncSession, supervisor_id: UUID, increment: int
+    ) -> int:
+        """Atomically increment or decrement a supervisor's filled capacity."""
+        from sqlalchemy import func, update
+
+        query = (
+            update(Faculty)
+            .where(Faculty.user_id == supervisor_id)
+            .values(
+                capacity_filled=func.coalesce(Faculty.capacity_filled, 0) + increment
+            )
+        )
+        result = await db.execute(query)
+        return result.rowcount
 
 
 # Singleton instance for convenience

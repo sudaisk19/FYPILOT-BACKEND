@@ -1,9 +1,14 @@
-import os
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from app.core.config import settings
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "fypilot")
+MONGO_URI = settings.mongo_uri
+MONGO_DB_NAME = settings.mongo_db_name
 
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 mongo_db = mongo_client[MONGO_DB_NAME]
+
+
+async def get_mongo_db() -> AsyncIOMotorDatabase:
+    """FastAPI dependency that yields the Motor database instance."""
+    yield mongo_db

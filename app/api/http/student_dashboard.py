@@ -20,7 +20,23 @@ async def get_student_dashboard_insights(
     """Return the aggregated metrics for the student dashboard UI."""
 
     if current_user.role != RoleEnum.student:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student only")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Student only"
+        )
+
+    from app.services.cache import cache
+
+    cache_key = f"student_dashboard:{current_user.user_id}"
+    cached_data = await cache.get_json(cache_key)
+    if cached_data:
+        # Avoid validation overhead if possible, but since response_model handles it,
+        # we can just return the raw dict or the validated model. Returning model ensures type safety.
+        return StudentDashboardEnvelope(**cached_data)
 
     service = StudentDashboardService(db)
-    return await service.get_dashboard_payload(current_user.user_id)
+    payload = await service.get_dashboard_payload(current_user.user_id)
+
+    # Cache for 10 minutes (600 seconds)
+    await cache.set_json(cache_key, payload.model_dump(mode="json"), ttl_seconds=600)
+
+    return payload

@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     ENV: str = "development"
 
+    # ─── MongoDB Settings ────────────────────────────────────
+    mongo_uri: str = Field(
+        default="mongodb://localhost:27017/", validation_alias="MONGO_URI"
+    )
+    mongo_db_name: str = Field(default="fypilot", validation_alias="MONGO_DB_NAME")
+
     # ─── Cache / Infra ───────────────────────────────────────
     redis_url: str = Field(default="redis://localhost:6379/0")  # REDIS_URL
 

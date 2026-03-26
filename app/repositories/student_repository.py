@@ -208,6 +208,71 @@ class StudentRepository(BaseRepository[Student]):
         result = await db.execute(_DEACTIVATION_SQL)
         return result.rowcount
 
+    async def get_profile_full(self, db: AsyncSession, user_id: UUID) -> Optional[Any]:
+        """
+        Get full student profile including user data, groups, and project.
+        Returns the User object with loaded relationships.
+        """
+        from app.models.user import User
+
+        query = (
+            select(User)
+            .options(
+                selectinload(User.student_profile)
+                .selectinload(Student.groups)
+                .selectinload(Group.project)
+            )
+            .where(User.user_id == user_id)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_group_members_details(
+        self, db: AsyncSession, group_id: UUID
+    ) -> List[Tuple[Any, Student]]:
+        """
+        Get all members of a group with their User and Student details.
+        Returns a list of tuples (User, Student).
+        """
+        from app.models.group import GroupMember
+        from app.models.user import User
+
+        query = (
+            select(User, Student)
+            .join(Student, User.user_id == Student.user_id)
+            .join(GroupMember, Student.user_id == GroupMember.student_id)
+            .where(GroupMember.group_id == group_id)
+        )
+        result = await db.execute(query)
+        return list(result.all())
+
+    async def get_supervisors_names(
+        self,
+        db: AsyncSession,
+        supervisor_id: Optional[UUID],
+        cosupervisor_ids: Optional[List[UUID]],
+    ) -> Tuple[Optional[str], List[str]]:
+        """
+        Get the names of a supervisor and list of cosupervisors.
+        Returns (supervisor_name, [cosupervisor_names])
+        """
+        from app.models.user import User
+
+        sup_name = None
+        co_names = []
+
+        if supervisor_id:
+            query = select(User.full_name).where(User.user_id == supervisor_id)
+            result = await db.execute(query)
+            sup_name = result.scalar_one_or_none()
+
+        if cosupervisor_ids and len(cosupervisor_ids) > 0:
+            query = select(User.full_name).where(User.user_id.in_(cosupervisor_ids))
+            result = await db.execute(query)
+            co_names = list(result.scalars().all())
+
+        return sup_name, co_names
+
 
 # Singleton instance for convenience
 student_repository = StudentRepository()

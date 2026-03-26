@@ -22,5 +22,17 @@ async def get_admin_dashboard_insights(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
+    from app.services.cache import cache
+
+    cache_key = "admin_dashboard_insights"
+    cached_data = await cache.get_json(cache_key)
+    if cached_data:
+        return AdminDashboardEnvelope(**cached_data)
+
     service = AdminDashboardService(db)
-    return await service.get_dashboard_payload()
+    payload = await service.get_dashboard_payload()
+
+    # Cache for 10 minutes (600 seconds)
+    await cache.set_json(cache_key, payload.model_dump(mode="json"), ttl_seconds=600)
+
+    return payload

@@ -23,19 +23,16 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS
 from app.db import get_db
 from app.models.bulk_import import (
-    BulkImportItem,
-    BulkImportJob,
-    BulkItemStatus,
     BulkJobStatus,
 )
 from app.models.user import User
+from app.repositories.bulk_import_repository import bulk_import_repository
 from app.schemas.bulk_import_schema import (
     BulkImportItemSummary,
     BulkImportJobDetailResponse,
@@ -45,9 +42,9 @@ from app.schemas.bulk_import_schema import (
     BulkImportReportItemDetail,
     BulkImportReportResponse,
     BulkImportUploadResponse,
-    DepartmentListResponse,
     CreateStudentRequest,
     CreateSupervisorRequest,
+    DepartmentListResponse,
     ProcessorResponse,
     RetryResponse,
     SingleUserResponse,
@@ -220,19 +217,10 @@ async def list_bulk_import_jobs(
     offset = (page - 1) * page_size
 
     # Get total count
-    count_query = select(func.count()).select_from(BulkImportJob)
-    total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
+    total = await bulk_import_repository.count_jobs(db)
 
     # Get jobs
-    query = (
-        select(BulkImportJob)
-        .order_by(BulkImportJob.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
-    )
-    result = await db.execute(query)
-    jobs = result.scalars().all()
+    jobs = await bulk_import_repository.list_jobs_paginated(db, offset, page_size)
 
     return BulkImportJobListResponse(
         jobs=[
@@ -269,9 +257,7 @@ async def get_bulk_import_job(
 ):
     """Get detailed status of a bulk import job including recent errors."""
     # Get job
-    query = select(BulkImportJob).where(BulkImportJob.id == job_id)
-    result = await db.execute(query)
-    job = result.scalar_one_or_none()
+    job = await bulk_import_repository.get_job_by_id(db, job_id)
 
     if not job:
         raise HTTPException(
@@ -280,17 +266,7 @@ async def get_bulk_import_job(
         )
 
     # Get recent errors (last 10)
-    errors_query = (
-        select(BulkImportItem)
-        .where(
-            BulkImportItem.job_id == job_id,
-            BulkImportItem.status.in_([BulkItemStatus.failed, BulkItemStatus.skipped]),
-        )
-        .order_by(BulkImportItem.row_number)
-        .limit(10)
-    )
-    errors_result = await db.execute(errors_query)
-    error_items = errors_result.scalars().all()
+    error_items = await bulk_import_repository.get_recent_errors(db, job_id, limit=10)
 
     # Calculate progress percentage
     progress_percent = (
@@ -398,9 +374,7 @@ async def download_results_csv(
 ):
     """Download bulk import results as CSV file."""
     # Verify job exists
-    query = select(BulkImportJob).where(BulkImportJob.id == job_id)
-    result = await db.execute(query)
-    job = result.scalar_one_or_none()
+    job = await bulk_import_repository.get_job_by_id(db, job_id)
 
     if not job:
         raise HTTPException(
@@ -465,9 +439,7 @@ async def retry_job(
     - You've fixed data issues and want to retry
     """
     # Verify job exists
-    query = select(BulkImportJob).where(BulkImportJob.id == job_id)
-    result = await db.execute(query)
-    job = result.scalar_one_or_none()
+    job = await bulk_import_repository.get_job_by_id(db, job_id)
 
     if not job:
         raise HTTPException(
@@ -522,9 +494,7 @@ async def resume_job(
     Only remaining 'pending' items will be picked up.
     """
     # Verify job exists
-    query = select(BulkImportJob).where(BulkImportJob.id == job_id)
-    result = await db.execute(query)
-    job = result.scalar_one_or_none()
+    job = await bulk_import_repository.get_job_by_id(db, job_id)
 
     if not job:
         raise HTTPException(

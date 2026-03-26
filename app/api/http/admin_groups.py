@@ -3,18 +3,15 @@ from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.faculty import Faculty
-from app.models.group import FYPCycleEnum, Group, GroupMember
-from app.models.project import Project
-from app.models.student import Student
+from app.models.group import FYPCycleEnum
 from app.models.user import RoleEnum, User
+from app.repositories.group_repository import group_repository
+from app.repositories.supervisor_repository import supervisor_repository
 from app.schemas.admin_groups_schema import (
     AdminGroupMemberInfo,
     AdminGroupProfileResponse,
@@ -64,102 +61,20 @@ async def list_groups(
     if cached:
         return cached
 
-    sup_user = aliased(User)
-    aliased(User)
-
-    # Subquery: members count per group
-    member_counts_sq = (
-        select(
-            GroupMember.group_id.label("group_id"),
-            func.count(GroupMember.student_id).label("members_count"),
-        )
-        .group_by(GroupMember.group_id)
-        .subquery()
+    rows, total = await group_repository.list_admin_groups(
+        db=db,
+        batch=batch,
+        cohort=cohort,
+        cycle=cycle,
+        supervisor=supervisor,
+        members=members,
+        search=search,
+        page=page,
+        per_page=per_page,
     )
 
-    # Base query (select only columns we need)
-    query = (
-        select(
-            Group.group_id,
-            Group.fyp_cycle,
-            Group.fyp_stage,
-            Group.cohort,
-            func.coalesce(member_counts_sq.c.members_count, 0).label("members_count"),
-            Project.name.label("project_name"),
-            sup_user.full_name.label("supervisor_name"),
-            # For now, just return None or empty string for copuservisor in list view
-            # Since it's an array now, we'd need complex aggregation
-            literal(None).label("cosupervisor_name"),
-        )
-        .select_from(Group)
-        .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
-        .outerjoin(Project, Project.group_id == Group.group_id)
-        .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
-        # .outerjoin(cosup_user) <--- Removed broken join
-        .group_by(
-            Group.group_id,
-            Project.name,
-            Group.cohort,
-            sup_user.full_name,
-            # cosup_user.full_name, <--- Removed
-            member_counts_sq.c.members_count,
-        )
-    )
-
-    filters = []
-
-    # Batch + cycle
-    if batch is not None:
-        filters.append(Group.cohort_year == batch)
-
-    if cycle is not None:
-        filters.append(Group.fyp_cycle == cycle)
-
-    # Supervisor assignment
-    if supervisor == "assigned":
-        filters.append(Group.supervisor_id.isnot(None))
-    elif supervisor == "unassigned":
-        filters.append(Group.supervisor_id.is_(None))
-
-    # Members count
-    if members is not None:
-        filters.append(func.coalesce(member_counts_sq.c.members_count, 0) == members)
-
-    # Cohort string filter
-    if cohort:
-        filters.append(func.upper(Group.cohort) == cohort.upper())
-
-    # Search
-    if search:
-        s = f"%{search}%"
-        filters.append(
-            or_(
-                Project.name.ilike(s),
-                sup_user.full_name.ilike(s),
-                Group.name.ilike(s),
-            )
-        )
-
-    if filters:
-        query = query.where(and_(*filters))
-
-    # Count (distinct group_id)
-    count_query = (
-        select(func.count(func.distinct(Group.group_id)))
-        .select_from(Group)
-        .outerjoin(member_counts_sq, member_counts_sq.c.group_id == Group.group_id)
-        .outerjoin(Project, Project.group_id == Group.group_id)
-        .outerjoin(sup_user, sup_user.user_id == Group.supervisor_id)
-    )
-    if filters:
-        count_query = count_query.where(and_(*filters))
-
-    total = (await db.execute(count_query)).scalar() or 0
-
-    offset = (page - 1) * per_page
+    (page - 1) * per_page
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-    query = query.order_by(Group.updated_at.desc()).offset(offset).limit(per_page)
-    rows = (await db.execute(query)).all()
 
     groups_out: List[GroupCardInfo] = []
     for (
@@ -223,22 +138,15 @@ async def update_cohort_cycle(
 
     normalized = cohort.upper()
 
-    match_query = select(func.count(Group.group_id)).where(
-        func.upper(Group.cohort) == normalized
+    total = await group_repository.update_cohort_cycle(
+        db, cohort, payload.target_cycle.value
     )
-    total = (await db.execute(match_query)).scalar() or 0
 
     if total == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No groups found for cohort {normalized}",
         )
-
-    await db.execute(
-        update(Group)
-        .where(func.upper(Group.cohort) == normalized)
-        .values(fyp_cycle=payload.target_cycle, updated_at=datetime.utcnow())
-    )
 
     await db.commit()
 
@@ -271,22 +179,7 @@ async def get_admin_group_profile(
     formatted_members = []
 
     # 2. Fetch Group with all relationships
-    query = (
-        select(Group)
-        .options(
-            selectinload(Group.project).selectinload(Project.domains),
-            selectinload(Group.project).selectinload(Project.industry),
-            selectinload(Group.members)
-            .joinedload(GroupMember.student)
-            .joinedload(Student.user),
-            selectinload(Group.supervisor).joinedload(Faculty.user),
-            selectinload(Group.co_supervisors).joinedload(Faculty.user),
-        )
-        .where(Group.group_id == group_id)
-    )
-
-    result = await db.execute(query)
-    group = result.scalars().first()
+    group = await group_repository.get_admin_group_profile(db, group_id)
 
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -408,28 +301,18 @@ async def assign_supervisor_to_group(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # 1. Validate group exists
-    group_result = await db.execute(
-        select(Group)
-        .options(selectinload(Group.project))
-        .where(Group.group_id == group_id)
-    )
-    group = group_result.scalars().first()
+    group = await group_repository.get_group_with_project(db, group_id)
 
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
     # 2. Validate new supervisor exists
-    supervisor_result = await db.execute(
-        select(Faculty, User)
-        .join(User, User.user_id == Faculty.user_id)
-        .where(Faculty.user_id == body.supervisor_id)
-    )
-    row = supervisor_result.first()
+    new_supervisor = await supervisor_repository.get_with_user(db, body.supervisor_id)
 
-    if not row:
+    if not new_supervisor:
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
-    new_supervisor, new_supervisor_user = row
+    new_supervisor_user = new_supervisor.user
     action = "assigned"
 
     # 3. Check if this supervisor is already co-supervisor of the same group
@@ -457,11 +340,7 @@ async def assign_supervisor_to_group(
         old_supervisor_id = group.supervisor_id
 
         # Decrement old supervisor's capacity
-        await db.execute(
-            update(Faculty)
-            .where(Faculty.user_id == old_supervisor_id)
-            .values(capacity_filled=Faculty.capacity_filled - 1)
-        )
+        await supervisor_repository.update_capacity(db, old_supervisor_id, -1)
 
     # 6. Check new supervisor's capacity (safe access)
     capacity_filled = (
@@ -487,11 +366,7 @@ async def assign_supervisor_to_group(
     db.add(group)
 
     # Increment new supervisor's capacity (handle None case)
-    await db.execute(
-        update(Faculty)
-        .where(Faculty.user_id == body.supervisor_id)
-        .values(capacity_filled=func.coalesce(Faculty.capacity_filled, 0) + 1)
-    )
+    await supervisor_repository.update_capacity(db, body.supervisor_id, 1)
 
     await db.commit()
 
@@ -527,28 +402,18 @@ async def assign_cosupervisor_to_group(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # 1. Validate group exists
-    group_result = await db.execute(
-        select(Group)
-        .options(selectinload(Group.project))
-        .where(Group.group_id == group_id)
-    )
-    group = group_result.scalars().first()
+    group = await group_repository.get_group_with_project(db, group_id)
 
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
     # 2. Validate supervisor exists
-    supervisor_result = await db.execute(
-        select(Faculty, User)
-        .join(User, User.user_id == Faculty.user_id)
-        .where(Faculty.user_id == body.supervisor_id)
-    )
-    row = supervisor_result.first()
+    new_supervisor = await supervisor_repository.get_with_user(db, body.supervisor_id)
 
-    if not row:
+    if not new_supervisor:
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
-    new_supervisor, new_supervisor_user = row
+    new_supervisor_user = new_supervisor.user
 
     # 3. Check if this person is already the primary supervisor
     if group.supervisor_id == body.supervisor_id:
@@ -611,8 +476,7 @@ async def remove_supervisor_from_group(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    group_result = await db.execute(select(Group).where(Group.group_id == group_id))
-    group = group_result.scalars().first()
+    group = await group_repository.get_by_id(db, group_id)
 
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -623,11 +487,7 @@ async def remove_supervisor_from_group(
     old_supervisor_id = group.supervisor_id
 
     # Decrement capacity_filled
-    await db.execute(
-        update(Faculty)
-        .where(Faculty.user_id == old_supervisor_id)
-        .values(capacity_filled=Faculty.capacity_filled - 1)
-    )
+    await supervisor_repository.update_capacity(db, old_supervisor_id, -1)
 
     group.supervisor_id = None
     group.updated_at = datetime.utcnow()
@@ -659,8 +519,7 @@ async def remove_cosupervisor_from_group(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    group_result = await db.execute(select(Group).where(Group.group_id == group_id))
-    group = group_result.scalars().first()
+    group = await group_repository.get_by_id(db, group_id)
 
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")

@@ -11,19 +11,15 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.types import Text as SQLText
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.faculty import Faculty
-from app.models.group import Group, GroupMember, InviteStatusEnum
-from app.models.project import Project
+from app.models.group import InviteStatusEnum
 from app.models.request_history import RequestHistory
-from app.models.student import Student
 from app.models.user import RoleEnum, User
+from app.repositories.group_repository import group_repository
 from app.schemas.supervisor_groups_schema import (
     DomainInfo,
     GroupDirectoryCard,
@@ -114,48 +110,10 @@ async def get_supervisor_groups(
             detail="Only faculty with supervisor privileges can view their supervised groups",
         )
 
-    # 2. Query groups with members + project eager-loaded
-    query = (
-        select(Group)
-        .options(
-            selectinload(Group.members)
-            .joinedload(GroupMember.student)
-            .joinedload(Student.user),
-            selectinload(Group.project),
-        )
-        .outerjoin(Project, Project.group_id == Group.group_id)
-        .where(Group.supervisor_id == current_user.user_id)
+    # 2. Query groups via repository
+    groups = await group_repository.get_supervisor_assigned_groups_directory(
+        db, current_user.user_id, search
     )
-
-    # 3. Apply search filter if provided
-    if search:
-        s = f"%{search.strip()}%"
-
-        # Subquery: does any member's name match?
-        member_name_exists = (
-            select(GroupMember.group_id)
-            .join(Student, Student.user_id == GroupMember.student_id)
-            .join(User, User.user_id == Student.user_id)
-            .where(
-                GroupMember.group_id == Group.group_id,
-                User.full_name.ilike(s),
-            )
-            .correlate(Group)
-            .exists()
-        )
-
-        query = query.where(
-            or_(
-                Project.name.ilike(s),
-                Project.tech_stack.cast(SQLText).ilike(s),
-                member_name_exists,
-            )
-        )
-
-    query = query.order_by(Group.updated_at.desc())
-
-    result = await db.execute(query)
-    groups = result.scalars().unique().all()
 
     # 4. Build response cards
     cards: List[GroupDirectoryCard] = []
@@ -247,22 +205,10 @@ async def get_supervisor_groups_dropdown(
             detail="Only faculty with supervisor privileges can access groups dropdown",
         )
 
-    # 2. Query groups
-    # We include groups where user is primary supervisor OR is in co-supervisors list
-    query = (
-        select(Group.group_id, Project.name.label("name"))
-        .outerjoin(Project, Project.group_id == Group.group_id)
-        .where(
-            or_(
-                Group.supervisor_id == current_user.user_id,
-                Group.cosupervisor_ids.contains([current_user.user_id]),
-            )
-        )
-        .order_by(Project.name.asc())
+    # 2. Query groups via repository
+    rows = await group_repository.get_supervisor_assigned_groups_dropdown(
+        db, current_user.user_id
     )
-
-    result = await db.execute(query)
-    rows = result.all()
 
     # 3. Build response
     items = [
@@ -335,27 +281,8 @@ async def get_supervisor_group_profile(
             detail="Only faculty with supervisor privileges can view group details",
         )
 
-    # 2. Fetch the group with all relationships eager-loaded
-    query = (
-        select(Group)
-        .options(
-            # Members → student → user
-            selectinload(Group.members)
-            .joinedload(GroupMember.student)
-            .joinedload(Student.user),
-            # Project → domains + industry
-            selectinload(Group.project).selectinload(Project.domains),
-            selectinload(Group.project).selectinload(Project.industry),
-            # Primary supervisor → user
-            selectinload(Group.supervisor).joinedload(Faculty.user),
-            # Co-supervisors → user
-            selectinload(Group.co_supervisors).joinedload(Faculty.user),
-        )
-        .where(Group.group_id == group_id)
-    )
-
-    result = await db.execute(query)
-    group = result.scalars().first()
+    # 2. Fetch the group with all relationships eager-loaded via repository
+    group = await group_repository.get_group_profile_full(db, group_id)
 
     if not group:
         raise HTTPException(

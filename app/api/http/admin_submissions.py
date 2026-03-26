@@ -18,7 +18,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.background import BackgroundTask
@@ -36,7 +36,6 @@ from app.models.announcement import (
 from app.models.group import FYPCycleEnum, Group
 from app.models.submission import (
     Submission,
-    SubmissionFile,
     SubmissionStatusEnum,
     SubmissionTypeEnum,
 )
@@ -298,10 +297,7 @@ async def download_announcement_file(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # Fetch file metadata
-    result = await db.execute(
-        select(AnnouncementFile).where(AnnouncementFile.file_id == file_id)
-    )
-    file_record = result.scalars().first()
+    file_record = await announcement_repository.get_announcement_file(db, file_id)
 
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
@@ -518,15 +514,7 @@ async def get_submission_announcement(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -640,16 +628,7 @@ async def edit_submission_announcement(
         files=None,  # We'll handle file sync separately
     )
 
-    # 1. Fetch existing announcement
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -772,15 +751,7 @@ async def edit_submission_announcement(
     await db.commit()
 
     # 5. Re-fetch with relationships
-    result = await db.execute(
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-        )
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     return _build_response(announcement)
 
@@ -808,58 +779,10 @@ async def list_official_submission_tasks(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    # Base query: Select announcements that are submission requests created by admin
-    query = (
-        select(Announcement)
-        .options(
-            selectinload(Announcement.targets),
-            selectinload(Announcement.files),
-            selectinload(Announcement.creator),
-        )
-        .where(
-            and_(
-                Announcement.is_submission_request == True,
-                Announcement.created_by_role == AnnouncementRoleEnum.admin,
-            )
-        )
+    announcements, total = await announcement_repository.list_admin_submission_tasks(
+        db, page, per_page, search
     )
-
-    filters = []
-
-    # Search filter - search by announcement title or description
-    if search:
-        s = f"%{search}%"
-        filters.append(
-            or_(
-                Announcement.title.ilike(s),
-                Announcement.description.ilike(s),
-            )
-        )
-
-    if filters:
-        query = query.where(and_(*filters))
-
-    # Count total matching announcements
-    count_query = select(func.count(Announcement.announcement_id)).where(
-        and_(
-            Announcement.is_submission_request == True,
-            Announcement.created_by_role == AnnouncementRoleEnum.admin,
-        )
-    )
-    if filters:
-        count_query = count_query.where(and_(*filters))
-
-    total = (await db.execute(count_query)).scalar() or 0
-
-    # Pagination
-    offset = (page - 1) * per_page
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
-    query = (
-        query.order_by(Announcement.created_at.desc()).offset(offset).limit(per_page)
-    )
-    result = await db.execute(query)
-    announcements: List[Announcement] = result.scalars().all()
 
     # Build response
     tasks_out: List[SubmissionTaskInfo] = []
@@ -936,12 +859,7 @@ async def get_submission_responses(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
     # Verify announcement exists and is a submission request
-    announcement_result = await db.execute(
-        select(Announcement)
-        .options(selectinload(Announcement.targets))
-        .where(Announcement.announcement_id == announcement_id)
-    )
-    announcement = announcement_result.scalars().first()
+    announcement = await announcement_repository.get_by_id(db, announcement_id)
 
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -1121,16 +1039,7 @@ async def get_submission_evaluation(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    # Fetch submission with all related data
-    result = await db.execute(
-        select(Submission)
-        .options(
-            selectinload(Submission.files),
-            selectinload(Submission.linked_announcement),
-        )
-        .where(Submission.submission_id == submission_id)
-    )
-    submission = result.scalars().first()
+    submission = await submission_repository.get_evaluation_details(db, submission_id)
 
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -1199,16 +1108,7 @@ async def update_admin_grading(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    # Fetch submission
-    result = await db.execute(
-        select(Submission)
-        .options(
-            selectinload(Submission.files),
-            selectinload(Submission.linked_announcement),
-        )
-        .where(Submission.submission_id == submission_id)
-    )
-    submission = result.scalars().first()
+    submission = await submission_repository.get_evaluation_details(db, submission_id)
 
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -1283,16 +1183,9 @@ async def download_submission_file(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    # Fetch file metadata and verify it belongs to the submission
-    result = await db.execute(
-        select(SubmissionFile).where(
-            and_(
-                SubmissionFile.file_id == file_id,
-                SubmissionFile.submission_id == submission_id,
-            )
-        )
+    file_record = await submission_repository.get_submission_file_details(
+        db, submission_id, file_id
     )
-    file_record = result.scalars().first()
 
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")

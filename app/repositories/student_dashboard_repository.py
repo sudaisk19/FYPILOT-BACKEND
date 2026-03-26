@@ -57,6 +57,7 @@ class StudentDashboardRepository:
                 GroupMilestone.status != SprintStatusEnum.Completed,
             )
             .order_by(GroupMilestone.end_date.asc())
+            .limit(4)
         )
         res = await db.execute(stmt)
         return list(res.scalars().all())
@@ -78,6 +79,8 @@ class StudentDashboardRepository:
                     AnnouncementTarget.target_role.in_(valid_targets),
                 ),
             )
+            .order_by(Announcement.due_at.asc())
+            .limit(4)
         )
         res = await db.execute(stmt)
         return list(res.scalars().unique().all())

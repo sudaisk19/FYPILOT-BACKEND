@@ -158,6 +158,63 @@ class SubmissionRepository(BaseRepository[Submission]):
         )
         return result.scalars().first()
 
+    async def get_submissions_by_announcement(
+        self, db: AsyncSession, announcement_id: UUID
+    ) -> List[Submission]:
+        """Fetch all submissions for a given announcement."""
+        result = await db.execute(
+            select(Submission).where(
+                Submission.linked_announcement_id == announcement_id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_evaluation_details(
+        self, db: AsyncSession, submission_id: UUID
+    ) -> Optional[Submission]:
+        """Fetch full submission details for supervisor evaluation."""
+        result = await db.execute(
+            select(Submission)
+            .options(
+                selectinload(Submission.files),
+                selectinload(Submission.linked_announcement),
+                selectinload(Submission.group),
+            )
+            .where(Submission.submission_id == submission_id)
+        )
+        return result.scalars().first()
+
+    async def get_submission_file_details(
+        self, db: AsyncSession, submission_id: UUID, file_id: UUID
+    ) -> Optional[Any]:
+        """Fetch a specific submission file with its loaded submission and group."""
+        from app.models.submission import SubmissionFile
+
+        result = await db.execute(
+            select(SubmissionFile)
+            .join(Submission, SubmissionFile.submission_id == Submission.submission_id)
+            .options(
+                selectinload(SubmissionFile.submission).selectinload(Submission.group)
+            )
+            .where(
+                SubmissionFile.file_id == file_id,
+                SubmissionFile.submission_id == submission_id,
+            )
+        )
+        return result.scalars().first()
+
+    async def get_existing_group_ids_for_announcement(
+        self, db: AsyncSession, announcement_id: UUID, group_ids: List[UUID]
+    ) -> set[UUID]:
+        """Get group IDs that already have a submission for this announcement."""
+        result = await db.execute(
+            select(Submission.group_id).where(
+                Submission.linked_announcement_id == announcement_id,
+                Submission.group_id.in_(group_ids),
+            )
+        )
+        return set(result.scalars().all())
+
 
 # Singleton instance
 submission_repository = SubmissionRepository()

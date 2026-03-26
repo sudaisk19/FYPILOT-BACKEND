@@ -1,0 +1,83 @@
+# app/db/postgres.py
+import logging
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    create_async_engine,
+)
+from sqlalchemy.orm import (
+    declarative_base,
+    sessionmaker,
+)
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# — SQLAlchemy Async Setup —
+original_url = settings.database_url
+
+if not original_url or not original_url.strip():
+    raise ValueError("DATABASE_URL is not set.")
+
+# Convert to asyncpg format
+if original_url.startswith("postgresql://"):
+    database_url = original_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif original_url.startswith("postgres://"):
+    database_url = original_url.replace("postgres://", "postgresql+asyncpg://", 1)
+else:
+    database_url = original_url
+
+# Configure for Supabase session pooler (disable prepared statements)
+if any(x in database_url for x in ["pooler.supabase.com", "db.", ".supabase.co:5432"]):
+    if "?" in database_url:
+        database_url += "&statement_cache_size=0"
+    else:
+        database_url += "?statement_cache_size=0"
+
+engine = create_async_engine(
+    database_url,
+    future=True,
+    echo=True,
+    connect_args={
+        "statement_cache_size": 0,
+        "server_settings": {
+            "jit": "off",
+            "application_name": "fypilot_backend",
+        },
+        "command_timeout": 10,
+    },
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_size=3,
+    max_overflow=5,
+    pool_timeout=10,
+)
+
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
+)
+
+Base = declarative_base()
+
+
+async def get_db():
+    """Provides a transactional AsyncSession for each request."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+async def test_connection():
+    """Test the database connection."""
+    try:
+        async with engine.begin() as conn:
+            await conn.execute("SELECT 1")
+        logger.info("Database connection test successful")
+        return True
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
+        return False

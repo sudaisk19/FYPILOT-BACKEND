@@ -135,6 +135,12 @@ class Group(Base):
         cascade="all, delete-orphan",
     )
 
+    documents = relationship(
+        "GroupDocument",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
 
 class GroupMember(Base):
     __tablename__ = "group_members"

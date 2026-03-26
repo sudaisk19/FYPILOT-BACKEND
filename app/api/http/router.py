@@ -130,9 +130,7 @@ from app.api.http.supervisor_announcements import (
 
 router.include_router(supervisor_announcements_router, prefix="/faculty/announcements")
 
-from app.api.http.student_announcements import (
-    router as student_announcements_router,
-)
+from app.api.http.student_announcements import router as student_announcements_router
 
 router.include_router(
     student_announcements_router,
@@ -148,9 +146,7 @@ router.include_router(
     tags=["student-dashboard"],
 )
 
-from app.api.http.student_submissions import (
-    router as student_submissions_router,
-)
+from app.api.http.student_submissions import router as student_submissions_router
 
 router.include_router(
     student_submissions_router,
@@ -162,3 +158,8 @@ router.include_router(
 from app.api.http.jury_matching import router as jury_matching_router
 
 router.include_router(jury_matching_router)
+
+# Mount unified group documentation workspace router
+from app.api.http.student_documents import router as student_documents_router
+
+router.include_router(student_documents_router, tags=["student-documents"])

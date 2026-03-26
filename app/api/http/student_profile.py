@@ -3,15 +3,15 @@
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.group import Group, GroupMember
 from app.models.student import Student
 from app.models.user import User
+from app.repositories.student_repository import student_repository
+from app.repositories.user_repository import user_repository
 from app.schemas.profile_schema import (
     GroupInfo,
     GroupMemberInfo,
@@ -69,16 +69,7 @@ async def get_student_profile(
         )
 
     # Fetch user with student profile and group information
-    result = await db.execute(
-        select(User)
-        .options(
-            selectinload(User.student_profile)
-            .selectinload(Student.groups)
-            .selectinload(Group.project)
-        )
-        .where(User.user_id == current_user.user_id)
-    )
-    user = result.scalar_one_or_none()
+    user = await student_repository.get_profile_full(db, current_user.user_id)
 
     if not user:
         raise HTTPException(
@@ -116,13 +107,9 @@ async def get_student_profile(
         group = user.student_profile.groups[0]
 
         # Get group members with their details
-        members_result = await db.execute(
-            select(User, Student)
-            .join(Student, User.user_id == Student.user_id)
-            .join(GroupMember, Student.user_id == GroupMember.student_id)
-            .where(GroupMember.group_id == group.group_id)
+        members_data = await student_repository.get_group_members_details(
+            db, group.group_id
         )
-        members_data = members_result.all()
 
         # Build member info list
         members = []
@@ -137,22 +124,11 @@ async def get_student_profile(
             )
 
         # Get supervisor information
-        supervisor_name = None
-        cosupervisor_names = []
-
-        if group.supervisor_id:
-            supervisor_result = await db.execute(
-                select(User).where(User.user_id == group.supervisor_id)
+        supervisor_name, cosupervisor_names = (
+            await student_repository.get_supervisors_names(
+                db, group.supervisor_id, group.cosupervisor_ids
             )
-            supervisor_user = supervisor_result.scalar_one_or_none()
-            if supervisor_user:
-                supervisor_name = supervisor_user.full_name
-
-        if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
-            cosupervisor_result = await db.execute(
-                select(User.full_name).where(User.user_id.in_(group.cosupervisor_ids))
-            )
-            cosupervisor_names = list(cosupervisor_result.scalars().all())
+        )
 
         # Build group info
         group_info = GroupInfo(
@@ -219,10 +195,7 @@ async def complete_student_wizard_profile(
         )
 
     # Check if student profile exists, create if it doesn't
-    result = await db.execute(
-        select(Student).where(Student.user_id == current_user.user_id)
-    )
-    student_profile = result.scalar_one_or_none()
+    student_profile = await student_repository.get_by_user_id(db, current_user.user_id)
 
     # Start transaction
     try:
@@ -246,11 +219,7 @@ async def complete_student_wizard_profile(
         # Update user table if there are changes
         if user_updates:
             user_updates["updated_at"] = func.now()
-            await db.execute(
-                update(User)
-                .where(User.user_id == current_user.user_id)
-                .values(**user_updates)
-            )
+            await user_repository.update(db, current_user.user_id, user_updates)
 
         # Prepare student updates - only include non-empty values
         student_updates = {}
@@ -314,10 +283,8 @@ async def complete_student_wizard_profile(
                     temp_student.normalize_skills_levels_for_save()
                     student_updates["skills_levels"] = temp_student.skills_levels
 
-                await db.execute(
-                    update(Student)
-                    .where(Student.user_id == current_user.user_id)
-                    .values(**student_updates)
+                await student_repository.update(
+                    db, current_user.user_id, student_updates, id_field="user_id"
                 )
 
         # Commit transaction
@@ -326,10 +293,9 @@ async def complete_student_wizard_profile(
         # Refresh the student_profile object to get the committed data
         if not student_profile:
             # Fetch the newly created profile
-            result = await db.execute(
-                select(Student).where(Student.user_id == current_user.user_id)
+            student_profile = await student_repository.get_by_user_id(
+                db, current_user.user_id
             )
-            student_profile = result.scalar_one_or_none()
 
         if not student_profile:
             raise HTTPException(
@@ -404,10 +370,7 @@ async def update_student_profile(
         )
 
     # Check if student profile exists
-    result = await db.execute(
-        select(Student).where(Student.user_id == current_user.user_id)
-    )
-    student_profile = result.scalar_one_or_none()
+    student_profile = await student_repository.get_by_user_id(db, current_user.user_id)
 
     if not student_profile:
         raise HTTPException(
@@ -437,11 +400,7 @@ async def update_student_profile(
         # Update user table if there are changes
         if user_updates:
             user_updates["updated_at"] = func.now()
-            await db.execute(
-                update(User)
-                .where(User.user_id == current_user.user_id)
-                .values(**user_updates)
-            )
+            await user_repository.update(db, current_user.user_id, user_updates)
 
         # Prepare student updates - only include non-empty values (excluding required fields)
         student_updates = {}
@@ -495,22 +454,17 @@ async def update_student_profile(
                 temp_student.normalize_skills_levels_for_save()
                 student_updates["skills_levels"] = temp_student.skills_levels
 
-            await db.execute(
-                update(Student)
-                .where(Student.user_id == current_user.user_id)
-                .values(**student_updates)
+            await student_repository.update(
+                db, current_user.user_id, student_updates, id_field="user_id"
             )
 
         # Commit transaction
         await db.commit()
 
         # Fetch updated data
-        result = await db.execute(
-            select(User)
-            .options(selectinload(User.student_profile))
-            .where(User.user_id == current_user.user_id)
+        updated_user = await student_repository.get_profile_full(
+            db, current_user.user_id
         )
-        updated_user = result.scalar_one()
 
         # Return updated profile with success message
         profile_data = StudentProfileResponse(

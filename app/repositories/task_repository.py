@@ -20,12 +20,12 @@ class TaskRepository(BaseRepository[Task]):
     def __init__(self) -> None:
         super().__init__(Task)
 
-    async def get_by_id(self, db: AsyncSession, task_id: UUID,id_field: Optional[str] = "task_id") -> Optional[Task]:
+    async def get_by_id(
+        self, db: AsyncSession, task_id: UUID, id_field: Optional[str] = "task_id"
+    ) -> Optional[Task]:
         return await super().get_by_id(db, task_id, id_field)
 
-    async def get_with_details(
-        self, db: AsyncSession, task_id: UUID
-    ) -> Optional[Task]:
+    async def get_with_details(self, db: AsyncSession, task_id: UUID) -> Optional[Task]:
         query = (
             select(Task)
             .options(
@@ -73,8 +73,7 @@ class TaskRepository(BaseRepository[Task]):
             conditions.append(Task.assignee_id.in_(assignee_ids))
 
         if search:
-            like_pattern = f"%{search.lower()}%"
-            conditions.append(func.lower(Task.title).like(like_pattern))
+            conditions.append(Task.title.ilike(f"%{search}%"))
 
         query = (
             select(Task)
@@ -108,6 +107,15 @@ class TaskRepository(BaseRepository[Task]):
 
     async def delete_task(self, db: AsyncSession, task_id: UUID) -> bool:
         return await super().delete(db, task_id, "task_id")
+
+    async def unlink_sprint_tasks(self, db: AsyncSession, milestone_id: UUID) -> None:
+        from sqlalchemy import update
+
+        await db.execute(
+            update(Task)
+            .where(Task.milestone_id == milestone_id)
+            .values(milestone_id=None)
+        )
 
     async def add_attachment(
         self,
@@ -146,9 +154,7 @@ class TaskRepository(BaseRepository[Task]):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def remove_attachment(
-        self, db: AsyncSession, attachment_id: UUID
-    ) -> bool:
+    async def remove_attachment(self, db: AsyncSession, attachment_id: UUID) -> bool:
         stmt = delete(TaskAttachment).where(
             TaskAttachment.attachment_id == attachment_id
         )
@@ -164,9 +170,7 @@ class TaskRepository(BaseRepository[Task]):
             conditions.append(Task.milestone_id == milestone_id)
 
         query = (
-            select(Task.status, func.count())
-            .where(*conditions)
-            .group_by(Task.status)
+            select(Task.status, func.count()).where(*conditions).group_by(Task.status)
         )
         result = await db.execute(query)
         rows = result.all()
@@ -175,46 +179,46 @@ class TaskRepository(BaseRepository[Task]):
     # app/repositories/task_repository.py
 
     def _normalize_statuses(self, statuses):
-     if not statuses:
-        return []
-    
-    # ✅ Agar statuses sirf aik string hai (e.g. "InProgress"), toh usay list mein wrap karein
-     if isinstance(statuses, str):
-        statuses = [statuses]
-        
-     normalized = []
-     for value in statuses:
-        try:
-            normalized.append(TaskStatusEnum(value))
-        except ValueError:
-            # Error handle karein agar value galat ho
-            continue
-     return normalized
+        if not statuses:
+            return []
 
-    
+        # ✅ Agar statuses sirf aik string hai (e.g. "InProgress"), toh usay list mein wrap karein
+        if isinstance(statuses, str):
+            statuses = [statuses]
+
+        normalized = []
+        for value in statuses:
+            try:
+                normalized.append(TaskStatusEnum(value))
+            except ValueError:
+                # Error handle karein agar value galat ho
+                continue
+        return normalized
+
     def _normalize_priorities(
-       self, # ✅ 'self' add kiya taake class method ban jaye
-    values: Optional[Sequence[TaskPriorityEnum | str]],
-) -> Optional[List[TaskPriorityEnum]]:
-     if not values:
-        return None
+        self,  # ✅ 'self' add kiya taake class method ban jaye
+        values: Optional[Sequence[TaskPriorityEnum | str]],
+    ) -> Optional[List[TaskPriorityEnum]]:
+        if not values:
+            return None
 
-    # ✅ Single string handling: agar user ne sirf aik priority select ki hai
-     if isinstance(values, str):
-        values = [values]
+        # ✅ Single string handling: agar user ne sirf aik priority select ki hai
+        if isinstance(values, str):
+            values = [values]
 
-     normalized: List[TaskPriorityEnum] = []
-     for value in values:
-        try:
-            if isinstance(value, TaskPriorityEnum):
-                normalized.append(value)
-            else:
-                # String ko Enum mein convert karein
-                normalized.append(TaskPriorityEnum(value))
-        except ValueError:
-            # Agar koi invalid priority string aa jaye toh skip karein
-            continue
-            
-     return normalized
+        normalized: List[TaskPriorityEnum] = []
+        for value in values:
+            try:
+                if isinstance(value, TaskPriorityEnum):
+                    normalized.append(value)
+                else:
+                    # String ko Enum mein convert karein
+                    normalized.append(TaskPriorityEnum(value))
+            except ValueError:
+                # Agar koi invalid priority string aa jaye toh skip karein
+                continue
+
+        return normalized
+
 
 task_repository = TaskRepository()

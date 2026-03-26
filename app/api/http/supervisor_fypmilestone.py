@@ -3,17 +3,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import ValidationError
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.group import FYPCycleEnum, Group, GroupMember
-from app.models.jury_assignment import JuryAssignment
-from app.models.jury_pair import JuryPair
+from app.models.group import FYPCycleEnum, Group
 from app.models.milestone import JuryFormTypeEnum
-from app.models.project import Project
-from app.models.student import Student
 from app.models.user import RoleEnum, User
 from app.repositories import (
     jury_evaluation_repository,
@@ -21,6 +16,7 @@ from app.repositories import (
     proposal_evaluation_repository,
     supervisor_evaluation_repository,
 )
+from app.repositories.group_repository import group_repository
 from app.schemas.admin_milestone_schema import (
     MilestoneListItem,
     SupervisorMilestoneResponse,
@@ -107,16 +103,7 @@ def _ensure_active_jury(user: User) -> None:
 async def _get_managed_group(
     db: AsyncSession, *, supervisor_id: UUID, group_id: UUID
 ) -> Optional[Group]:
-    result = await db.execute(
-        select(Group).where(
-            Group.group_id == group_id,
-            or_(
-                Group.supervisor_id == supervisor_id,
-                Group.cosupervisor_ids.contains([supervisor_id]),
-            ),
-        )
-    )
-    return result.scalar_one_or_none()
+    return await group_repository.get_managed_group(db, supervisor_id, group_id)
 
 
 async def _get_jury_assigned_group(
@@ -125,20 +112,7 @@ async def _get_jury_assigned_group(
     jury_id: UUID,
     group_id: UUID,
 ) -> Optional[Group]:
-    result = await db.execute(
-        select(Group)
-        .join(Project, Project.group_id == Group.group_id)
-        .join(JuryAssignment, JuryAssignment.project_id == Project.project_id)
-        .join(JuryPair, JuryPair.jury_id == JuryAssignment.pair_id)
-        .where(
-            Group.group_id == group_id,
-            or_(
-                JuryPair.faculty_1_id == jury_id,
-                JuryPair.faculty_2_id == jury_id,
-            ),
-        )
-    )
-    return result.scalar_one_or_none()
+    return await group_repository.get_jury_assigned_group(db, jury_id, group_id)
 
 
 async def _list_jury_assigned_groups_for_milestone(
@@ -147,40 +121,15 @@ async def _list_jury_assigned_groups_for_milestone(
     jury_id: UUID,
     milestone_fyp_cycle: FYPCycleEnum,
 ) -> List[JuryAssignedGroupResponse]:
-    result = await db.execute(
-        select(Group, Project)
-        .join(Project, Project.group_id == Group.group_id)
-        .join(JuryAssignment, JuryAssignment.project_id == Project.project_id)
-        .join(JuryPair, JuryPair.jury_id == JuryAssignment.pair_id)
-        .where(
-            Group.fyp_cycle == milestone_fyp_cycle,
-            or_(
-                JuryPair.faculty_1_id == jury_id,
-                JuryPair.faculty_2_id == jury_id,
-            ),
-        )
-        .order_by(Project.name.asc())
+    rows = await group_repository.list_jury_assigned_groups(
+        db, jury_id, milestone_fyp_cycle
     )
-
-    rows = result.all()
     group_ids = [group.group_id for group, _ in rows]
 
     members_by_group = {}
     if group_ids:
-        member_rows = await db.execute(
-            select(
-                GroupMember.group_id,
-                User.full_name,
-                Student.roll_number,
-            )
-            .join(Student, Student.user_id == GroupMember.student_id)
-            .join(User, User.user_id == Student.user_id)
-            .where(GroupMember.group_id.in_(group_ids))
-            .order_by(Student.roll_number.asc())
-        )
-
-        members_by_group = {}
-        for gid, full_name, roll_number in member_rows.all():
+        member_rows = await group_repository.get_group_members_basic_info(db, group_ids)
+        for gid, full_name, roll_number in member_rows:
             members_by_group.setdefault(gid, []).append(
                 JuryAssignedGroupResponse.Member(
                     full_name=full_name,
