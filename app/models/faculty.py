@@ -149,3 +149,21 @@ def _set_is_active_on_insert(mapper, connection, target):
 def _set_is_active_on_update(mapper, connection, target):
     """Auto-calculate is_active whenever a faculty record is updated."""
     target.is_active = target.is_supervisor or target.is_jury
+
+
+@event.listens_for(Faculty, "after_delete")
+def _cleanup_cosupervisor_arrays(mapper, connection, target):
+    """
+    Remove the faculty member's UUID from the cosupervisor_ids array
+    of any group when the faculty record is deleted.
+    """
+    from sqlalchemy import text
+
+    stmt = text(
+        """
+        UPDATE groups 
+        SET cosupervisor_ids = array_remove(cosupervisor_ids, :faculty_id) 
+        WHERE :faculty_id = ANY(cosupervisor_ids)
+        """
+    )
+    connection.execute(stmt, {"faculty_id": target.user_id})

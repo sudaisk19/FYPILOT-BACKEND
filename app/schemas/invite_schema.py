@@ -116,6 +116,7 @@ class SupervisorRequestDetailResponse(BaseModel):
     group_id: UUID
     faculty_id: UUID
     status: str
+    message: str | None = Field(None, description="Optional message from student")
     created_at: datetime
     expires_at: datetime
     project_brief: str | None = Field(
@@ -123,4 +124,6 @@ class SupervisorRequestDetailResponse(BaseModel):
     )
     project: ProjectDetail | None = None
     students: List[StudentDetail] = Field(default_factory=list)
-    request_history: list[dict] = Field(default_factory=list, description="History of all request events/messages")
+    request_history: list[dict] = Field(
+        default_factory=list, description="History of all request events/messages"
+    )

@@ -20,6 +20,7 @@ from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember, InviteStatusEnum
 from app.models.project import Project, ProjectDomain, project_type_value
 from app.models.request import Request, RequestTypeEnum
+from app.models.request_history import RequestHistory
 from app.models.student import Student
 from app.models.user import User
 from app.repositories.group_repository import group_repository
@@ -110,24 +111,45 @@ async def send_supervisor_invite_svc(
     if not faculty_obj.is_supervisor:
         raise PermissionError("This faculty member cannot be selected as a supervisor")
 
-    # 5. Duplicate pending check
-    already_pending = await request_repository.exists_pending(db, group_id, faculty_id)
-    if already_pending:
-        raise ValueError("A pending request already exists for this supervisor")
-
-    # 6. Role enum
-    if role not in ("supervisor", "cosupervisor"):
-        raise ValueError("role must be 'supervisor' or 'cosupervisor'")
+    # 6. Role type
     request_type = (
         RequestTypeEnum.supervisor
         if role == "supervisor"
         else RequestTypeEnum.cosupervisor
     )
 
-    # 7. Create
-    req = await request_repository.create(
-        db, group_id, faculty_id, request_type, message
+    # 7. Check for ANY existing request for this combination (for re-invites)
+    existing_req = await request_repository.get_by_group_faculty_type(
+        db, group_id, faculty_id, request_type
     )
+
+    if existing_req:
+        if existing_req.status == InviteStatusEnum.pending:
+            raise ValueError("A pending request already exists for this supervisor")
+        if existing_req.status == InviteStatusEnum.accepted:
+            raise ValueError(f"This supervisor has already been accepted as {role}")
+
+        # Reactivate cancelled/declined request
+        existing_req.status = InviteStatusEnum.pending
+        existing_req.created_at = datetime.utcnow()
+        existing_req.updated_at = datetime.utcnow()
+        req = existing_req
+    else:
+        # Create new request
+        req = await request_repository.create(db, group_id, faculty_id, request_type)
+
+    # 8. Log the new/re-invite message in request_history
+    if message:
+        history_entry = RequestHistory(
+            request_id=req.request_id,
+            group_id=group_id,
+            faculty_id=faculty_id,
+            action=InviteStatusEnum.pending,
+            message=message,
+            created_by=current_user.user_id,
+        )
+        db.add(history_entry)
+
     await db.commit()
 
     return {"message": "Request sent", "role": role, "request_id": str(req.request_id)}
@@ -166,7 +188,6 @@ async def list_sent_requests_svc(
                 supervisor_name=user.full_name,
                 requested_role=req.request_type.value,
                 status=req.status.value,
-                message=req.message,
                 created_at=req.created_at,
                 updated_at=req.updated_at,
             )
@@ -485,15 +506,39 @@ async def get_request_details_svc(
             )
         )
 
+    # History / Message
+    from app.repositories.request_history_repository import RequestHistoryRepository
+
+    history_rows = await RequestHistoryRepository.get_by_group_and_faculty(
+        db, req.group_id, req.faculty_id
+    )
+
+    # Use newest message as the display message
+    display_message = None
+    history_items = []
+    for h in history_rows:
+        if h.message:
+            display_message = h.message
+        history_items.append(
+            {
+                "action": h.action.value,
+                "message": h.message,
+                "feedback": h.feedback,
+                "timestamp": h.timestamp.isoformat(),
+                "created_by": str(h.created_by) if h.created_by else None,
+            }
+        )
+
     return SupervisorRequestDetailResponse(
         request_id=req.request_id,
         group_id=req.group_id,
-        requested_role=req.request_type.value,
+        faculty_id=req.faculty_id,
         status=req.status.value,
-        message=req.message,
+        message=display_message,
         created_at=req.created_at,
         expires_at=expires_at,
         project_brief=project_brief,
         project=project_detail,
         students=students,
+        request_history=history_items,
     )

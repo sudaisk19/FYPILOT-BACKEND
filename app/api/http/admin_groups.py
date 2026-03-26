@@ -307,12 +307,12 @@ async def assign_supervisor_to_group(
         raise HTTPException(status_code=404, detail="Group not found")
 
     # 2. Validate new supervisor exists
-    new_supervisor = await supervisor_repository.get_with_user(db, body.supervisor_id)
+    supervisor_res = await supervisor_repository.get_with_user(db, body.supervisor_id)
 
-    if not new_supervisor:
+    if not supervisor_res:
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
-    new_supervisor_user = new_supervisor.user
+    new_supervisor_user, new_supervisor = supervisor_res
     action = "assigned"
 
     # 3. Check if this supervisor is already co-supervisor of the same group
@@ -408,12 +408,12 @@ async def assign_cosupervisor_to_group(
         raise HTTPException(status_code=404, detail="Group not found")
 
     # 2. Validate supervisor exists
-    new_supervisor = await supervisor_repository.get_with_user(db, body.supervisor_id)
+    supervisor_res = await supervisor_repository.get_with_user(db, body.supervisor_id)
 
-    if not new_supervisor:
+    if not supervisor_res:
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
-    new_supervisor_user = new_supervisor.user
+    new_supervisor_user, new_supervisor = supervisor_res
 
     # 3. Check if this person is already the primary supervisor
     if group.supervisor_id == body.supervisor_id:

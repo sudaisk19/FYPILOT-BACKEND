@@ -176,6 +176,24 @@ class RequestRepository(BaseRepository[Request]):
         result = await db.execute(query)
         return result.scalars().first()
 
+    async def get_by_group_faculty_type(
+        self,
+        db: AsyncSession,
+        group_id: UUID,
+        faculty_id: UUID,
+        request_type: RequestTypeEnum,
+    ) -> Optional[Request]:
+        """
+        Get any request (regardless of status) for a specific group/faculty/type pair.
+        """
+        query = select(Request).where(
+            Request.group_id == group_id,
+            Request.faculty_id == faculty_id,
+            Request.request_type == request_type,
+        )
+        result = await db.execute(query)
+        return result.scalars().first()
+
     async def update_status(
         self,
         db: AsyncSession,

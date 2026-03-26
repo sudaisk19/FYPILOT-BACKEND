@@ -40,7 +40,7 @@ class AdminGroupMemberInfo(gs.GroupMemberInfo):
     cgpa: float
     experience: Optional[str] = None
     skills: List[Any] = []
-    portfolio_projects: List[str] = []
+    portfolio_projects: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AdminGroupProfileResponse(BaseModel):

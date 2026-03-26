@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -245,8 +245,6 @@ class GroupRepository(BaseRepository[Group]):
         Returns:
             True if removed, False if not found
         """
-        from sqlalchemy import delete
-
         result = await db.execute(
             delete(GroupMember).where(
                 GroupMember.group_id == group_id,
@@ -701,8 +699,6 @@ class GroupRepository(BaseRepository[Group]):
         self, db: AsyncSession, cohort: str, target_cycle: str
     ) -> int:
         """Update fyp cycle for all groups of a cohort."""
-        from datetime import datetime
-
         normalized = cohort.upper()
 
         match_query = select(func.count(Group.group_id)).where(
