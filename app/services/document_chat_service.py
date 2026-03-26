@@ -92,28 +92,34 @@ class DocumentChatService:
         sender_id: str,
         content: str,
         active_document_id: Optional[str],
+        model_choice: str = "gpt-4o",
     ) -> str:
         """
         Full message round-trip:
         1. Persist the student's message to MongoDB.
         2. Resolve the active document's live content from Postgres.
         3. Build LLM history from the last 10 messages.
-        4. Call GPT-4o with document context injected into system prompt.
+        4. Call GitHub Models with document context injected into system prompt.
         5. Persist the LLM reply to MongoDB.
         6. Return the reply text.
         """
         # Build doc_context payload for the student message
         doc_context: Optional[Dict[str, Any]] = None
         document_content_str: Optional[str] = None
+        doc_type_str: Optional[str] = None
 
         if active_document_id:
             doc = await group_document_repo.get_by_id(pg_db, UUID(active_document_id))
-            if doc and doc.content:
-                document_content_str = json.dumps(doc.content, indent=2)
-                doc_context = {
-                    "active_document_id": active_document_id,
-                    "version_number": doc.lock_version,
-                }
+            if doc:
+                if doc.doc_type:
+                    doc_type_str = doc.doc_type.value
+
+                if doc.content:
+                    document_content_str = json.dumps(doc.content, indent=2)
+                    doc_context = {
+                        "active_document_id": active_document_id,
+                        "version_number": doc.lock_version,
+                    }
 
         # 1. Save the student's message
         await chat_session_repo.save_message(
@@ -141,6 +147,8 @@ class DocumentChatService:
             reply = await call_llm(
                 history=history,
                 document_content=document_content_str,
+                model_choice=model_choice,
+                doc_type=doc_type_str,
             )
         except Exception as exc:
             reply = f"[AI Error] {exc}"

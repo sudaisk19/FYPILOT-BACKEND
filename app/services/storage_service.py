@@ -39,13 +39,10 @@ async def upload_file_to_supabase(
     content_type = upload.content_type or "application/octet-stream"
 
     def _upload() -> Optional[dict]:
-        return (
-            client.storage.from_(bucket)
-            .upload(
-                path=storage_key,
-                file=data,
-                file_options={"content-type": content_type, "upsert": upsert},
-            )
+        return client.storage.from_(bucket).upload(
+            path=storage_key,
+            file=data,
+            file_options={"content-type": content_type, "upsert": upsert},
         )
 
     response = await run_in_threadpool(_upload)
@@ -77,4 +74,26 @@ async def delete_file_from_supabase(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete file: {error_message}",
+        )
+
+
+async def download_file_from_supabase(
+    client: Client,
+    *,
+    bucket: str,
+    storage_key: str,
+) -> bytes:
+    """Download a file from Supabase Storage and return its raw bytes."""
+
+    def _download() -> bytes:
+        # Supabase Python client's download returns bytes directly
+        return client.storage.from_(bucket).download(storage_key)
+
+    try:
+        data = await run_in_threadpool(_download)
+        return data
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download file: {str(e)}",
         )

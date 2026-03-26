@@ -12,6 +12,24 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     ENV: str = "development"
 
+    # ─── LLM / GitHub AI Settings ────────────────────────────
+    github_openai_token: str | None = Field(
+        default=None, validation_alias="GITHUB_OPENAI_TOKEN"
+    )
+    github_deepseek_token: str | None = Field(
+        default=None, validation_alias="GITHUB_DEEPSEEK_TOKEN"
+    )
+    github_gpto4mini_token: str | None = Field(
+        default=None, validation_alias="GITHUB_GPTo4mini_TOKEN"
+    )
+    github_llama4_token: str | None = Field(
+        default=None, validation_alias="GITHUB_LLAMA4_TOKEN"
+    )
+    github_openai_base_url: str = Field(
+        default="https://models.github.ai/inference",
+        validation_alias="GITHUB_OPENAI_BASE_URL",
+    )
+
     # ─── MongoDB Settings ────────────────────────────────────
     mongo_uri: str = Field(
         default="mongodb://localhost:27017/", validation_alias="MONGO_URI"

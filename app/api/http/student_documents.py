@@ -13,17 +13,23 @@ Endpoints:
   GET    /students/chat-sessions/{session_id}/messages       - Paginate chat history
 """
 
+import os
+import tempfile
 import uuid
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from supabase import Client
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.db.mongo import get_mongo_db
+from app.db.supabase import get_supabase_client
+from app.models.announcement import AnnouncementFile
 from app.models.user import User
 from app.schemas.document_schema import (
     AutosaveRequest,
@@ -34,12 +40,18 @@ from app.schemas.document_schema import (
     CreateWorkspaceRequest,
     DocumentVersionResponse,
     GroupDocumentResponse,
+    ImportTemplateRequest,
     MessageListResponse,
     SendMessageRequest,
     WorkspaceResponse,
 )
 from app.services.document_chat_service import document_chat_service
 from app.services.document_service import document_service
+from app.services.extract_text import process_document_import_async
+from app.services.storage_service import (
+    ANNOUNCEMENTS_BUCKET,
+    download_file_from_supabase,
+)
 
 router = APIRouter()
 
@@ -181,6 +193,90 @@ async def create_document_in_workspace(
     return GroupDocumentResponse.model_validate(doc)
 
 
+@router.post(
+    "/students/chat-sessions/{session_id}/import-template",
+    response_model=GroupDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import an admin template into the workspace",
+    tags=["student-documents"],
+)
+async def import_template(
+    session_id: str,
+    body: ImportTemplateRequest,
+    clean: bool = Query(
+        True, description="Use AI to clean PDF formatting (takes 3-5s)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    current_user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_client),
+):
+    """
+    Downloads an admin template from Supabase Storage, extracts/cleans its text,
+    and intelligently creates an editable GroupDocument inside the chat workspace.
+    """
+    # 1. Fetch the workspace to ensure it exists and get group_id
+    session = await document_chat_service.get_workspace(mongo_db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Workspace session not found.")
+    group_id_str = session["group_id"]
+    if not group_id_str:
+        raise HTTPException(
+            status_code=404, detail="Workspace is not linked to a group."
+        )
+
+    # 2. Fetch the announcement file record from Postgres
+    stmt = select(AnnouncementFile).where(
+        AnnouncementFile.file_id == body.announcement_file_id
+    )
+    result = await db.execute(stmt)
+    ann_file = result.scalar_one_or_none()
+
+    if not ann_file:
+        raise HTTPException(status_code=404, detail="Template file not found.")
+
+    # 3. Download the file from Supabase
+    file_bytes = await download_file_from_supabase(
+        client=supabase, bucket=ANNOUNCEMENTS_BUCKET, storage_key=ann_file.storage_key
+    )
+
+    # 4. Write to temp file and parse text
+    ext = os.path.splitext(ann_file.file_name)[1].lower() or ".pdf"
+    temp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(file_bytes)
+            temp_path = tmp.name
+
+        # 5. Extract (and conditionally AI-clean) the text
+        html_content = await process_document_import_async(temp_path, clean_pdf=clean)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+    # 6. Format structure for TipTap and create document
+    content_json = {"type": "doc", "html": html_content}
+
+    doc = await document_service.create_document(
+        db=db,
+        group_id=UUID(group_id_str),
+        doc_type=body.doc_type,
+        title=f"Imported: {ann_file.file_name}",
+        created_by=current_user.user_id,
+        chat_session_id=session_id,
+        content=content_json,
+    )
+
+    # 7. Link the new doc to the Mongo session
+    await document_chat_service.link_document_to_session(
+        db=mongo_db,
+        session_id=session_id,
+        document_id=str(doc.id),
+    )
+
+    return GroupDocumentResponse.model_validate(doc)
+
+
 # ── Document Autosave & Versioning ────────────────────────────────────────────
 
 
@@ -256,6 +352,22 @@ async def list_versions(
 # ── Chat Messages ─────────────────────────────────────────────────────────────
 
 
+@router.get(
+    "/students/chat-sessions/models",
+    response_model=List[str],
+    summary="List available AI models for the chat workspace",
+    tags=["student-documents"],
+)
+async def list_available_models(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the array of available AI model keys the frontend can send
+    in the SendMessageRequest `model` field.
+    """
+    return ["gpt-4o", "gpt-4o-mini", "deepseek", "llama"]
+
+
 @router.post(
     "/students/chat-sessions/{session_id}/messages",
     response_model=ChatMessageResponse,
@@ -270,8 +382,8 @@ async def send_message(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Persists the student message, queries GPT-4o with the active document's
-    content injected as context, persists the AI reply, and returns it.
+    Persists the student message, queries the selected AI model with the active
+    document's content injected as context, persists the AI reply, and returns it.
     """
     reply = await document_chat_service.send_message_with_llm(
         pg_db=db,
@@ -280,6 +392,7 @@ async def send_message(
         sender_id=str(current_user.user_id),
         content=body.content,
         active_document_id=body.active_document_id,
+        model_choice=body.model or "gpt-4o",
     )
     return ChatMessageResponse(reply=reply)
 

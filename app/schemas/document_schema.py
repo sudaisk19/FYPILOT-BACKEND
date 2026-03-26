@@ -112,6 +112,13 @@ class AddDocumentToSessionRequest(BaseModel):
     )
 
 
+class ImportTemplateRequest(BaseModel):
+    announcement_file_id: UUID = Field(
+        ..., description="UUID of the AnnouncementFile (the chosen template)."
+    )
+    doc_type: DocTypeEnum = Field(..., description="Type of the document to create.")
+
+
 # ── Chat Messages ─────────────────────────────────────────────────────────────
 
 
@@ -123,6 +130,10 @@ class SendMessageRequest(BaseModel):
             "UUID of the document tab currently open. "
             "The backend will inject this document's content into the LLM system prompt."
         ),
+    )
+    model: Optional[str] = Field(
+        default="gpt-4o",
+        description="The LLM model to use: gpt-4o, gpt-4o-mini, deepseek, llama",
     )
 
 

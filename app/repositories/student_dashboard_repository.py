@@ -99,17 +99,18 @@ class StudentDashboardRepository:
     async def get_submission_trends(
         self, db: AsyncSession, group_id: UUID, start_date: datetime
     ) -> List[Tuple[datetime, int]]:
+        sub_date = func.date_trunc("day", Submission.submitted_at).label("sub_date")
         stmt = (
             select(
-                func.date_trunc("day", Submission.submitted_at).label("sub_date"),
+                sub_date,
                 func.count(Submission.submission_id).label("count"),
             )
             .where(
                 Submission.group_id == group_id,
                 Submission.submitted_at >= start_date,
             )
-            .group_by(func.date_trunc("day", Submission.submitted_at))
-            .order_by(func.date_trunc("day", Submission.submitted_at))
+            .group_by(sub_date)
+            .order_by(sub_date)
         )
         res = await db.execute(stmt)
         return list(res.all())
