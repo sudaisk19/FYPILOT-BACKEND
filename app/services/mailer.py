@@ -1,16 +1,47 @@
 # app/services/mailer.py
 
+import logging
 from email.message import EmailMessage
-from typing import Optional
+from typing import Awaitable, Optional
 
 import aiosmtplib
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 try:
     from sendgrid import SendGridAPIClient
 except ImportError:
     SendGridAPIClient = None  # type: ignore
+
+
+MAILTRAP_RATE_LIMIT_CODE = 550
+MAILTRAP_RATE_LIMIT_HINT = "Too many emails per second"
+MAILTRAP_RATE_LIMIT_DOC = "https://mailtrap.io/billing/plans/testing"
+
+
+async def _send_with_rate_limit_guard(
+    send_operation: Awaitable[None], *, context: str
+) -> None:
+    """Await a mailer send and swallow Mailtrap's per-second throttle errors."""
+
+    try:
+        await send_operation
+    except aiosmtplib.errors.SMTPDataError as exc:
+        detail = getattr(exc, "message", "")
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="ignore")
+        detail_text = detail or str(exc)
+
+        if exc.code == MAILTRAP_RATE_LIMIT_CODE and MAILTRAP_RATE_LIMIT_HINT in detail_text:
+            logger.warning(
+                "Mailtrap rate limit while sending %s. Email suppressed (see %s)",
+                context,
+                MAILTRAP_RATE_LIMIT_DOC,
+            )
+            return
+        raise
 
 
 def get_email_template(
@@ -279,7 +310,10 @@ async def send_password_reset_email(to_email: str, user_name: str, reset_link: s
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="password reset email",
+    )
 
 
 async def send_group_invitation_email(
@@ -341,7 +375,10 @@ async def send_group_invitation_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="group invitation email",
+    )
 
 
 async def send_supervisor_accepted_email(
@@ -388,7 +425,10 @@ async def send_supervisor_accepted_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="supervisor request accepted email",
+    )
 
 
 async def send_supervisor_rejected_email(
@@ -435,4 +475,7 @@ async def send_supervisor_rejected_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="supervisor request rejected email",
+    )

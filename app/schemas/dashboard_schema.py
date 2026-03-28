@@ -1,7 +1,7 @@
 # app/schemas/dashboard_schema.py
 
 from datetime import date
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -194,3 +194,105 @@ class AdminDashboardEnvelope(BaseModel):
     """Final payload returned to the frontend for admin dashboards."""
 
     admin_dashboard: AdminDashboardInsights
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Faculty Dashboard Schemas
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class FacultyTopCards(BaseModel):
+    """Headline KPIs for a faculty member."""
+
+    total_supervised_groups: int
+    total_jury_assigned_groups: int
+    avg_supervisor_marks: Optional[float] = None
+    avg_jury_marks: Optional[float] = None
+
+
+class SupervisorGroupOverviewEntry(BaseModel):
+    """Compact snapshot of a supervised group."""
+
+    group_id: UUID
+    project_name: str
+    fyp_cycle: str
+    members: List[str]
+    avg_marks: Optional[float] = None
+
+
+class SupervisorPerformancePoint(BaseModel):
+    """Bar-chart friendly entry for supervisor performance."""
+
+    project_name: str
+    avg_marks: float
+
+
+class SupervisorPerformanceChart(BaseModel):
+    """Supervisor performance visualisation payload."""
+
+    type: Literal["bar_chart"]
+    data: List[SupervisorPerformancePoint]
+
+
+class SupervisorRecentSubmission(BaseModel):
+    """Latest submissions awaiting supervisor attention."""
+
+    submission_id: UUID
+    project_name: str
+    title: str
+    status: str
+    submitted_at: Optional[str] = None
+
+
+class SupervisorCapacityTracker(BaseModel):
+    """Capacity snapshot for supervisor slots."""
+
+    capacity_max: int
+    capacity_filled: int
+    remaining: int
+
+
+class SupervisorSection(BaseModel):
+    """All supervisor-facing widgets."""
+
+    groups_overview: List[SupervisorGroupOverviewEntry]
+    performance_chart: SupervisorPerformanceChart
+    recent_submissions: List[SupervisorRecentSubmission]
+    capacity_tracker: SupervisorCapacityTracker
+
+
+class JuryAssignedGroupEntry(BaseModel):
+    """Single jury assignment row."""
+
+    group_id: UUID
+    project_name: str
+    milestone_title: str
+    evaluated: bool
+
+
+class JuryEvaluationStatusChart(BaseModel):
+    """Pie-chart summary for jury evaluation throughput."""
+
+    type: Literal["pie_chart"]
+    data: Dict[str, int]
+
+
+class JurySection(BaseModel):
+    """All jury-facing widgets."""
+
+    assigned_groups: List[JuryAssignedGroupEntry]
+    evaluation_status_chart: JuryEvaluationStatusChart
+
+
+class FacultyDashboardInsights(BaseModel):
+    """Aggregated payload for the faculty dashboard."""
+
+    top_cards: FacultyTopCards
+    supervisor_section: Optional[SupervisorSection] = None
+    jury_section: Optional[JurySection] = None
+
+
+class FacultyDashboardEnvelope(BaseModel):
+    """Final response wrapper for faculty dashboards."""
+
+    faculty_dashboard: FacultyDashboardInsights
