@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -42,6 +42,8 @@ class Request(Base):
         nullable=False,
         default=InviteStatusEnum.pending,
     )
+    message = Column(Text, nullable=True)
+    feedback = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(

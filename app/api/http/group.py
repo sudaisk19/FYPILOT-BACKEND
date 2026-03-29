@@ -901,17 +901,19 @@ async def get_group_profile(
         # Fetch supervisor acceptance feedback (if any)
         supervisor_acceptance_feedback = None
         if group.supervisor_id:
-            from app.repositories.request_history_repository import RequestHistoryRepository
-            # Get all request history for this group and supervisor
-            history_records = await RequestHistoryRepository.get_by_group_and_faculty(db, group.group_id, group.supervisor_id)
-            # Find the latest 'accepted' action with feedback
-            accepted_feedbacks = [
-                h for h in history_records
-                if getattr(h, 'action', None) == InviteStatusEnum.accepted and getattr(h, 'feedback', None)
-            ]
-            if accepted_feedbacks:
-                # Get the most recent one
-                supervisor_acceptance_feedback = sorted(accepted_feedbacks, key=lambda h: h.timestamp)[-1].feedback
+            from app.models.request import Request, RequestTypeEnum
+
+            feedback_result = await db.execute(
+                select(Request.feedback)
+                .where(
+                    Request.group_id == group.group_id,
+                    Request.faculty_id == group.supervisor_id,
+                    Request.status == InviteStatusEnum.accepted,
+                    Request.feedback.is_not(None),
+                )
+                .order_by(Request.updated_at.desc())
+            )
+            supervisor_acceptance_feedback = feedback_result.scalars().first()
 
         return GroupProfileResponse(
             group=group_info,

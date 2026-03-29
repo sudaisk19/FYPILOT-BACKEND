@@ -27,8 +27,8 @@ from app.repositories import (
     student_repository,
     supervisor_repository,
 )
-from app.repositories.request_history_repository import RequestHistoryRepository
-from app.schemas.request_history_schema import RequestHistoryItem
+from app.models.request import Request
+from app.schemas.invite_schema import RequestSummaryItem
 from app.schemas.supervisor_explore_schema import (
     DomainInfo,
     IndustryInfo,
@@ -367,14 +367,28 @@ async def get_supervisor_details(
                 db, group.group_id, supervisor_id, statuses
             )
             if req:
-                # Fetch full request history for this group and supervisor
-                history_models = (
-                    await RequestHistoryRepository.get_by_group_and_faculty(
-                        db, group.group_id, supervisor_id
+                # Fetch all requests between this group and supervisor
+                from sqlalchemy import select as sa_select
+
+                all_requests_result = await db.execute(
+                    sa_select(Request)
+                    .where(
+                        Request.group_id == group.group_id,
+                        Request.faculty_id == supervisor_id,
                     )
+                    .order_by(Request.created_at.asc())
                 )
+                all_requests = all_requests_result.scalars().all()
                 request_history = [
-                    RequestHistoryItem.from_orm(h) for h in history_models
+                    RequestSummaryItem(
+                        request_id=r.request_id,
+                        status=r.status.value,
+                        message=r.message,
+                        feedback=r.feedback,
+                        created_at=r.created_at,
+                        updated_at=r.updated_at,
+                    )
+                    for r in all_requests
                 ]
 
     return SupervisorDetailedInfo(

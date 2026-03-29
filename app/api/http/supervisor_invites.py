@@ -20,7 +20,9 @@ from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.user import User
 from app.schemas.invite_schema import (
+    AcceptRequestBody,
     PendingInvitesResponse,
+    RejectRequestBody,
     SendSupervisorInviteRequest,
     SentRequestsResponse,
     SupervisorRequestDetailResponse,
@@ -140,6 +142,7 @@ async def list_pending_invites_for_supervisor(
 @router.post("/supervisor/{request_id}/accept")
 async def accept_supervisor_request(
     request_id: UUID = Path(...),
+    body: AcceptRequestBody = AcceptRequestBody(),
     db: Annotated[AsyncSession, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
@@ -147,7 +150,7 @@ async def accept_supervisor_request(
     _require_supervisor_faculty(current_user)
     try:
         return await accept_supervisor_request_svc(
-            db, current_user, request_id, background_tasks
+            db, current_user, request_id, background_tasks, feedback=body.feedback
         )
     except Exception as exc:
         raise _map_service_error(exc) from exc
@@ -156,6 +159,7 @@ async def accept_supervisor_request(
 @router.post("/supervisor/{request_id}/reject")
 async def reject_invite(
     request_id: UUID = Path(...),
+    body: RejectRequestBody = ...,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     background_tasks: BackgroundTasks = None,
@@ -163,7 +167,7 @@ async def reject_invite(
     _require_supervisor_faculty(current_user)
     try:
         return await reject_supervisor_request_svc(
-            db, current_user, request_id, background_tasks
+            db, current_user, request_id, background_tasks, feedback=body.feedback
         )
     except Exception as exc:
         raise _map_service_error(exc) from exc

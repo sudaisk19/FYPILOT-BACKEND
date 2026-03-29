@@ -523,7 +523,7 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
         domains_result = await db.execute(
             select(Domain)
             .join(FacultyDomain, FacultyDomain.domain_id == Domain.domain_id)
-            .where(FacultyDomain.supervisor_id == user_id)
+            .where(FacultyDomain.faculty_id == user_id)
         )
         domains = [
             DomainInfo(domain_id=d.domain_id, name=d.name)
@@ -537,7 +537,7 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
                 FacultyIndustry,
                 FacultyIndustry.industry_id == Industry.industry_id,
             )
-            .where(FacultyIndustry.supervisor_id == user_id)
+            .where(FacultyIndustry.faculty_id == user_id)
         )
         industries = [
             IndustryInfo(industry_id=i.industry_id, name=i.name)

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.group import InviteStatusEnum
-from app.models.request_history import RequestHistory
+from app.models.request import Request
 from app.models.user import RoleEnum, User
 from app.repositories.group_repository import group_repository
 from app.schemas.supervisor_groups_schema import (
@@ -394,14 +394,14 @@ async def get_supervisor_group_profile(
     supervisor_acceptance_feedback: Optional[str] = None
     if group.supervisor_id:
         feedback_result = await db.execute(
-            select(RequestHistory.feedback)
+            select(Request.feedback)
             .where(
-                RequestHistory.group_id == group.group_id,
-                RequestHistory.faculty_id == group.supervisor_id,
-                RequestHistory.action == InviteStatusEnum.accepted,
-                RequestHistory.feedback.is_not(None),
+                Request.group_id == group.group_id,
+                Request.faculty_id == group.supervisor_id,
+                Request.status == InviteStatusEnum.accepted,
+                Request.feedback.is_not(None),
             )
-            .order_by(RequestHistory.timestamp.desc())
+            .order_by(Request.updated_at.desc())
         )
         supervisor_acceptance_feedback = feedback_result.scalars().first()
         group_info.supervisor_acceptance_feedback = supervisor_acceptance_feedback
