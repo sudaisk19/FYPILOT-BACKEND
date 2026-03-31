@@ -20,7 +20,6 @@ from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember, InviteStatusEnum
 from app.models.project import Project, ProjectDomain, project_type_value
 from app.models.request import Request, RequestTypeEnum
-from app.models.request_history import RequestHistory
 from app.models.student import Student
 from app.models.user import User
 from app.repositories.group_repository import group_repository
@@ -118,37 +117,23 @@ async def send_supervisor_invite_svc(
         else RequestTypeEnum.cosupervisor
     )
 
-    # 7. Check for ANY existing request for this combination (for re-invites)
-    existing_req = await request_repository.get_by_group_faculty_type(
-        db, group_id, faculty_id, request_type
+    # 7. Block only if there's already a pending or accepted request
+    existing_pending = await request_repository.exists_pending(
+        db, group_id, faculty_id
     )
+    if existing_pending:
+        raise ValueError("A pending request already exists for this supervisor")
 
-    if existing_req:
-        if existing_req.status == InviteStatusEnum.pending:
-            raise ValueError("A pending request already exists for this supervisor")
-        if existing_req.status == InviteStatusEnum.accepted:
-            raise ValueError(f"This supervisor has already been accepted as {role}")
+    existing_accepted = await request_repository.get_recent_by_group_supervisor_statuses(
+        db, group_id, faculty_id, [InviteStatusEnum.accepted]
+    )
+    if existing_accepted:
+        raise ValueError(f"This supervisor has already been accepted as {role}")
 
-        # Reactivate cancelled/declined request
-        existing_req.status = InviteStatusEnum.pending
-        existing_req.created_at = datetime.utcnow()
-        existing_req.updated_at = datetime.utcnow()
-        req = existing_req
-    else:
-        # Create new request
-        req = await request_repository.create(db, group_id, faculty_id, request_type)
-
-    # 8. Log the new/re-invite message in request_history
-    if message:
-        history_entry = RequestHistory(
-            request_id=req.request_id,
-            group_id=group_id,
-            faculty_id=faculty_id,
-            action=InviteStatusEnum.pending,
-            message=message,
-            created_by=current_user.user_id,
-        )
-        db.add(history_entry)
+    # 8. Always create a new request row (preserves history of all past requests)
+    req = await request_repository.create(
+        db, group_id, faculty_id, request_type, message=message
+    )
 
     await db.commit()
 
@@ -188,6 +173,8 @@ async def list_sent_requests_svc(
                 supervisor_name=user.full_name,
                 requested_role=req.request_type.value,
                 status=req.status.value,
+                message=req.message,
+                feedback=req.feedback,
                 created_at=req.created_at,
                 updated_at=req.updated_at,
             )
@@ -261,6 +248,7 @@ async def accept_supervisor_request_svc(
     current_user: User,
     request_id: UUID,
     background_tasks: BackgroundTasks,
+    feedback: Optional[str] = None,
 ) -> dict:
     """Accept a pending supervisor request; update group + faculty records."""
     req = await request_repository.get_for_supervisor_validation(
@@ -304,8 +292,10 @@ async def accept_supervisor_request_svc(
     elif req.request_type == RequestTypeEnum.cosupervisor:
         await group_repository.set_cosupervisor(db, req.group_id, current_user.user_id)
 
-    # Mark accepted
-    await request_repository.update_status(db, request_id, InviteStatusEnum.accepted)
+    # Mark accepted with optional feedback
+    await request_repository.update_status(
+        db, request_id, InviteStatusEnum.accepted, feedback=feedback
+    )
     # Record who accepted
     req.updated_by = current_user.user_id
     await db.commit()
@@ -335,8 +325,9 @@ async def reject_supervisor_request_svc(
     current_user: User,
     request_id: UUID,
     background_tasks: BackgroundTasks,
+    feedback: str = "",
 ) -> dict:
-    """Reject (decline) a pending supervisor request."""
+    """Reject (decline) a pending supervisor request with mandatory feedback."""
     req = await request_repository.get_for_supervisor_validation(
         db, request_id, current_user.user_id
     )
@@ -350,7 +341,9 @@ async def reject_supervisor_request_svc(
         else "cosupervisor"
     )
 
-    await request_repository.update_status(db, request_id, InviteStatusEnum.declined)
+    await request_repository.update_status(
+        db, request_id, InviteStatusEnum.declined, feedback=feedback
+    )
     req.updated_by = current_user.user_id
     await db.commit()
 
@@ -506,39 +499,42 @@ async def get_request_details_svc(
             )
         )
 
-    # History / Message
-    from app.repositories.request_history_repository import RequestHistoryRepository
+    # Fetch all requests between this group and supervisor for history
+    from sqlalchemy import select as sa_select
+    from app.schemas.invite_schema import RequestSummaryItem
 
-    history_rows = await RequestHistoryRepository.get_by_group_and_faculty(
-        db, req.group_id, req.faculty_id
-    )
-
-    # Use newest message as the display message
-    display_message = None
-    history_items = []
-    for h in history_rows:
-        if h.message:
-            display_message = h.message
-        history_items.append(
-            {
-                "action": h.action.value,
-                "message": h.message,
-                "feedback": h.feedback,
-                "timestamp": h.timestamp.isoformat(),
-                "created_by": str(h.created_by) if h.created_by else None,
-            }
+    all_requests_result = await db.execute(
+        sa_select(Request)
+        .where(
+            Request.group_id == req.group_id,
+            Request.faculty_id == req.faculty_id,
         )
+        .order_by(Request.created_at.asc())
+    )
+    all_requests = all_requests_result.scalars().all()
+    request_history = [
+        RequestSummaryItem(
+            request_id=r.request_id,
+            status=r.status.value,
+            message=r.message,
+            feedback=r.feedback,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
+        for r in all_requests
+    ]
 
     return SupervisorRequestDetailResponse(
         request_id=req.request_id,
         group_id=req.group_id,
         faculty_id=req.faculty_id,
         status=req.status.value,
-        message=display_message,
+        message=req.message,
+        feedback=req.feedback,
         created_at=req.created_at,
         expires_at=expires_at,
         project_brief=project_brief,
         project=project_detail,
         students=students,
-        request_history=history_items,
+        request_history=request_history,
     )

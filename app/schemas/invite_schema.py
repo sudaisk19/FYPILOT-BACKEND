@@ -21,6 +21,18 @@ class SendSupervisorInviteRequest(BaseModel):
     message: str | None = Field(None, description="Optional message to supervisor")
 
 
+class AcceptRequestBody(BaseModel):
+    """Body for accepting a supervisor request."""
+
+    feedback: str | None = Field(None, description="Optional feedback/condition from supervisor")
+
+
+class RejectRequestBody(BaseModel):
+    """Body for rejecting a supervisor request."""
+
+    feedback: str = Field(..., description="Mandatory feedback/reason for rejection")
+
+
 class PendingInviteItem(BaseModel):
     request_id: UUID
     group_id: UUID
@@ -47,8 +59,24 @@ class SentRequestItem(BaseModel):
     supervisor_name: str = Field(..., description="Supervisor's full name")
     requested_role: str = Field(..., description="supervisor or cosupervisor")
     status: str = Field(..., description="pending, accepted, declined, or cancelled")
+    message: str | None = Field(None, description="Student's message to supervisor")
+    feedback: str | None = Field(None, description="Supervisor's feedback/reason")
     created_at: datetime
     updated_at: datetime
+
+
+class RequestSummaryItem(BaseModel):
+    """Summary of a request between a group and supervisor."""
+
+    request_id: UUID
+    status: str = Field(..., description="pending, accepted, declined, or cancelled")
+    message: str | None = Field(None, description="Student's message to supervisor")
+    feedback: str | None = Field(None, description="Supervisor's feedback/reason")
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class SentRequestsResponse(BaseModel):
@@ -116,7 +144,8 @@ class SupervisorRequestDetailResponse(BaseModel):
     group_id: UUID
     faculty_id: UUID
     status: str
-    message: str | None = Field(None, description="Optional message from student")
+    message: str | None = Field(None, description="Student's message to supervisor")
+    feedback: str | None = Field(None, description="Supervisor's feedback/reason")
     created_at: datetime
     expires_at: datetime
     project_brief: str | None = Field(
@@ -124,6 +153,6 @@ class SupervisorRequestDetailResponse(BaseModel):
     )
     project: ProjectDetail | None = None
     students: List[StudentDetail] = Field(default_factory=list)
-    request_history: list[dict] = Field(
-        default_factory=list, description="History of all request events/messages"
+    request_history: List[RequestSummaryItem] = Field(
+        default_factory=list, description="All past requests from this group"
     )

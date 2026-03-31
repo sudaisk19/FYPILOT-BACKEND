@@ -45,6 +45,7 @@ class RequestRepository(BaseRepository[Request]):
         group_id: UUID,
         faculty_id: UUID,
         request_type: RequestTypeEnum,
+        message: Optional[str] = None,
     ) -> Request:
         """
         Create a new supervisor request.
@@ -54,6 +55,7 @@ class RequestRepository(BaseRepository[Request]):
             group_id: Group's UUID
             faculty_id: Faculty's user ID
             request_type: Type of request (supervisor/cosupervisor)
+            message: Optional message from the student to the supervisor
 
         Returns:
             Created Request instance
@@ -64,6 +66,7 @@ class RequestRepository(BaseRepository[Request]):
             "request_type": request_type,
             "status": InviteStatusEnum.pending,
             "created_at": datetime.utcnow(),
+            "message": message,
         }
         return await super().create(db, request_data)
 
@@ -199,6 +202,7 @@ class RequestRepository(BaseRepository[Request]):
         db: AsyncSession,
         request_id: UUID,
         status: InviteStatusEnum,
+        feedback: Optional[str] = None,
     ) -> Optional[Request]:
         """
         Update the status of a request.
@@ -207,6 +211,7 @@ class RequestRepository(BaseRepository[Request]):
             db: Database session
             request_id: Request's UUID
             status: New status
+            feedback: Optional feedback from the supervisor
 
         Returns:
             Updated Request instance or None if not found
@@ -216,6 +221,8 @@ class RequestRepository(BaseRepository[Request]):
             return None
 
         request.status = status
+        if feedback is not None:
+            request.feedback = feedback
         request.updated_at = datetime.utcnow()
         await db.flush()
         return request

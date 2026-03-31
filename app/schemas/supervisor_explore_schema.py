@@ -1,10 +1,10 @@
-# app/schemas/supervisor_explore_schema.py
-
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from app.schemas.invite_schema import RequestSummaryItem
 
 
 # Basic supervisor info for list view
@@ -42,10 +42,6 @@ class IndustryInfo(BaseModel):
         from_attributes = True
 
 
-# Detailed supervisor info for individual view
-from typing import Optional
-from app.schemas.request_history_schema import RequestHistoryItem
-
 class SupervisorDetailedInfo(BaseModel):
     # User fields
     user_id: UUID
@@ -77,8 +73,8 @@ class SupervisorDetailedInfo(BaseModel):
     current_groups: int = Field(description="Number of groups currently supervising")
     total_supervised: int = Field(description="Total groups supervised (historical)")
 
-    # Student-specific: request history if a request exists
-    request_history: Optional[list[RequestHistoryItem]] = None
+    # Student-specific: list of requests between student's group and this supervisor
+    request_history: Optional[list[RequestSummaryItem]] = None
 
     class Config:
         from_attributes = True
