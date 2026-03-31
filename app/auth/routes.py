@@ -97,6 +97,40 @@ from fastapi.security import HTTPBearer
 oauth2_scheme = HTTPBearer()
 
 
+def _faculty_flags(user: User) -> dict:
+    """Return supervisor/jury status for the authenticated user."""
+
+    profile = user.__dict__.get("faculty_profile")
+    if profile is None:
+        return {"is_supervisor": False, "is_jury": False, "is_active": False}
+
+    return {
+        "is_supervisor": bool(getattr(profile, "is_supervisor", False)),
+        "is_jury": bool(getattr(profile, "is_jury", False)),
+        "is_active": bool(getattr(profile, "is_active", False)),
+    }
+
+
+def _serialize_user(user: User) -> dict:
+    """Build a consistent user payload for auth responses."""
+
+    student_profile = user.__dict__.get("student_profile")
+    faculty_profile = user.__dict__.get("faculty_profile")
+    admin_profile = user.__dict__.get("admin_profile")
+
+    return {
+        "user_id": user.user_id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "role": user.role.value if hasattr(user.role, "value") else user.role,
+        "profile_avatar": user.profile_avatar,
+        "has_student_profile": student_profile is not None,
+        "has_faculty_profile": faculty_profile is not None,
+        "has_admin_profile": admin_profile is not None,
+        "faculty_info": _faculty_flags(user),
+    }
+
+
 @router.post(
     "/signup", status_code=status.HTTP_201_CREATED, response_model=SignupResponse
 )
@@ -156,22 +190,13 @@ async def signup(user_in: UserCreateSchema, db: AsyncSession = Depends(get_db)):
         # Generate and return JWT token with role
         token = create_access_token(sub=str(user.user_id), role=user.role.value)
 
-        # Return enhanced response with full user data
+        # Return enhanced response with full user data (including faculty flags)
         return {
             "message": "Account created successfully",
             "access_token": token,
             "token_type": "bearer",
             "role": user.role.value,
-            "user": {
-                "user_id": user.user_id,
-                "full_name": user.full_name,
-                "email": user.email,
-                "role": user.role.value,
-                "profile_avatar": user.profile_avatar,
-                "has_student_profile": False,  # New user won't have profiles yet
-                "has_faculty_profile": False,
-                "has_admin_profile": False,
-            },
+            "user": _serialize_user(user),
         }
 
     except HTTPException:
@@ -243,16 +268,7 @@ async def login_for_access_token(
             "access_token": token,
             "token_type": "bearer",
             "role": role_val,
-            "user": {
-                "user_id": user.user_id,
-                "full_name": user.full_name,
-                "email": user.email,
-                "role": role_val,
-                "profile_avatar": user.profile_avatar,
-                "has_student_profile": user.student_profile is not None,
-                "has_faculty_profile": user.faculty_profile is not None,
-                "has_admin_profile": user.admin_profile is not None,
-            },
+            "user": _serialize_user(user),
         }
 
     except HTTPException:
@@ -523,7 +539,7 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
         domains_result = await db.execute(
             select(Domain)
             .join(FacultyDomain, FacultyDomain.domain_id == Domain.domain_id)
-            .where(FacultyDomain.supervisor_id == user_id)
+            .where(FacultyDomain.faculty_id == user_id)
         )
         domains = [
             DomainInfo(domain_id=d.domain_id, name=d.name)
@@ -537,7 +553,7 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
                 FacultyIndustry,
                 FacultyIndustry.industry_id == Industry.industry_id,
             )
-            .where(FacultyIndustry.supervisor_id == user_id)
+            .where(FacultyIndustry.faculty_id == user_id)
         )
         industries = [
             IndustryInfo(industry_id=i.industry_id, name=i.name)
@@ -551,12 +567,17 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
             capacity_max=faculty_member.capacity_max,
             capacity_filled=faculty_member.capacity_filled,
             project_types=(
-                [faculty_member.project_type] if faculty_member.project_type else []
+                [str(faculty_member.project_type)]
+                if faculty_member.project_type
+                else []
             ),
             requirements=faculty_member.requirements or [],
             supervised_groups=supervised_groups,
             domains=domains,
             industries=industries,
+            is_supervisor=bool(faculty_member.is_supervisor),
+            is_jury=bool(faculty_member.is_jury),
+            is_active=bool(faculty_member.is_active),
         )
     except Exception as e:
         logger.error(f"Error fetching faculty info for user {user_id}: {e}")
@@ -1101,22 +1122,12 @@ async def update_user_role(
         )
         new_token = create_access_token(sub=str(current_user.user_id), role=role_val)
 
-        # Build updated user data
-        updated_user = {
-            "user_id": current_user.user_id,
-            "full_name": current_user.full_name,
-            "email": current_user.email,
-            "role": role_val,
-            "profile_avatar": current_user.profile_avatar,
-            "has_student_profile": current_user.student_profile is not None,
-            "has_faculty_profile": current_user.faculty_profile is not None,
-            "has_admin_profile": current_user.admin_profile is not None,
-        }
-
         logger.info(f"User {current_user.email} updated role to {new_role}")
 
         return RoleUpdateResponse(
-            message="Role updated successfully", role=role_val, user=updated_user
+            message="Role updated successfully",
+            role=role_val,
+            user=_serialize_user(current_user),
         )
 
     except HTTPException:

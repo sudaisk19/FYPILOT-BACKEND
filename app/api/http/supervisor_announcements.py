@@ -244,12 +244,7 @@ async def get_admin_announcements_for_supervisor(
             detail="Your faculty account is inactive. Contact an administrator.",
         )
 
-    # Check if faculty has supervisor privileges
-    if not current_user.faculty_profile.is_supervisor:
-        raise HTTPException(
-            status_code=403,
-            detail="Only faculty with supervisor privileges can view announcements",
-        )
+    # Formerly restricted to supervisors only; all active faculty can now view.
 
     # Only admin-created, non-submission announcements
     # whose target_role is all_supervisors or both

@@ -17,6 +17,7 @@ from app.api.http.group import router as group_router
 
 # Import each feature's router
 from app.api.http.health import router as health_router
+from app.api.http.faculty_dashboard import router as faculty_dashboard_router
 
 # Import profile status router
 from app.api.http.profile_status import router as profile_status_router
@@ -93,6 +94,7 @@ router.include_router(admin_groups_router)
 
 router.include_router(admin_announcements_router)
 router.include_router(admin_dashboard_router)
+router.include_router(faculty_dashboard_router)
 # Mount bulk import router (admin only)
 # Mount user registration router (admin only — both single + bulk)
 router.include_router(

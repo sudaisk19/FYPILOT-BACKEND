@@ -174,6 +174,9 @@ class FacultyInfo(BaseModel):
     supervised_groups: List[SupervisedGroup] = []
     domains: List[DomainInfo] = []
     industries: List[IndustryInfo] = []
+    is_supervisor: bool = False
+    is_jury: bool = False
+    is_active: bool = False
 
 
 class SystemStats(BaseModel):
