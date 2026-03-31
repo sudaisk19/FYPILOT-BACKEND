@@ -25,11 +25,15 @@ if TYPE_CHECKING:
 
 
 class DocTypeEnum(str, enum.Enum):
-    srs = "srs"
+    """Must exactly match the 'doc_type_enum' PostgreSQL enum."""
+
     proposal = "proposal"
-    progress_report = "progress_report"
-    literature_review = "literature_review"
-    meeting_minutes = "meeting_minutes"
+    srs = "srs"
+    sds = "sds"
+    report_fyp1 = "report_fyp1"
+    report_fyp2 = "report_fyp2"
+    testcases = "testcases"
+    other = "other"  # ← default — safe catch-all
 
 
 class SaveTriggerEnum(str, enum.Enum):
@@ -65,7 +69,7 @@ class GroupDocument(Base):
     doc_type: Mapped[DocTypeEnum] = mapped_column(
         Enum(DocTypeEnum, name="doc_type_enum", create_type=False),
         nullable=False,
-        default=DocTypeEnum.srs,
+        default=DocTypeEnum.other,
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
 

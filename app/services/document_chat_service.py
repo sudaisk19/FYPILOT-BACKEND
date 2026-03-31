@@ -71,6 +71,14 @@ class DocumentChatService:
         """
         await chat_session_repo.add_document_to_session(db, session_id, document_id)
 
+    async def rename_workspace(
+        self, db: AsyncIOMotorDatabase, session_id: str, title: str
+    ) -> bool:
+        return await chat_session_repo.rename_session(db, session_id, title)
+
+    async def delete_workspace(self, db: AsyncIOMotorDatabase, session_id: str) -> bool:
+        return await chat_session_repo.delete_session(db, session_id)
+
     # ── Message + LLM ───────────────────────────────────────────────────────
 
     async def get_messages(

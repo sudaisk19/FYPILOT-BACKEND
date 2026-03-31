@@ -38,10 +38,13 @@ class GroupDocumentRepository(BaseRepository[GroupDocument]):
     async def get_documents_for_session(
         self, db: AsyncSession, chat_session_id: str
     ) -> List[GroupDocument]:
-        """Return all documents that belong to a workspace (chat session)."""
+        """Return all active documents that belong to a workspace (chat session)."""
         result = await db.execute(
             select(GroupDocument)
-            .where(GroupDocument.chat_session_id == chat_session_id)
+            .where(
+                GroupDocument.chat_session_id == chat_session_id,
+                GroupDocument.is_active.is_(True),
+            )
             .order_by(GroupDocument.created_at)
         )
         return list(result.scalars().all())
@@ -135,6 +138,31 @@ class GroupDocumentRepository(BaseRepository[GroupDocument]):
                 ),
             )
         await db.flush()
+        return row
+
+    async def rename_document(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        title: str,
+        updated_by: UUID,
+    ) -> Optional[GroupDocument]:
+        """Rename a document regardless of lock_version."""
+        stmt = (
+            update(GroupDocument)
+            .where(GroupDocument.id == doc_id)
+            .values(
+                title=title,
+                updated_by=updated_by,
+                # Optionally, bump lock_version so other clients know it changed?
+                # lock_version=GroupDocument.lock_version + 1,
+            )
+            .returning(GroupDocument)
+        )
+        result = await db.execute(stmt)
+        row = result.scalars().first()
+        if row:
+            await db.flush()
         return row
 
     # ── Version Snapshots ───────────────────────────────────────────────────

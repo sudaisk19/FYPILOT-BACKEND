@@ -29,6 +29,7 @@ from app.schemas.student_announcement_schema import (
     PaginatedStudentAnnouncements,
     StudentAnnouncementFileResponse,
     StudentAnnouncementResponse,
+    TemplateFileResponse,
 )
 
 router = APIRouter(tags=["student-announcements"])
@@ -171,3 +172,56 @@ async def get_admin_announcements_for_student(
         current_page=page,
         per_page=per_page,
     )
+
+
+# ─── TEMPLATE PICKER ──────────────────────────────────────────────────────────
+
+
+@router.get("/templates", response_model=list[TemplateFileResponse])
+async def get_templates_for_student(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return all admin-uploaded Template files visible to the requesting student.
+
+    Scoping rules (same as admin announcements tab):
+      - Always includes: all_students, both
+      - Includes fyp1_students or fyp2_students based on the student's group FYP cycle
+      - Ungrouped students see all FYP-cycle templates as a fallback
+
+    Used by the frontend template picker modal before importing a template
+    via POST /api/students/chat-sessions/{session_id}/import-template.
+    """
+    if current_user.role != RoleEnum.student:
+        raise HTTPException(status_code=403, detail="Student only")
+
+    # Determine target roles same way as admin announcements tab
+    relevant_roles = [TargetRoleEnum.all_students, TargetRoleEnum.both]
+    student_group = await _get_student_group(current_user.user_id, db)
+    if student_group:
+        if student_group.fyp_cycle == FYPCycleEnum.fyp1:
+            relevant_roles.append(TargetRoleEnum.fyp1_students)
+        elif student_group.fyp_cycle == FYPCycleEnum.fyp2:
+            relevant_roles.append(TargetRoleEnum.fyp2_students)
+    else:
+        relevant_roles.extend(
+            [TargetRoleEnum.fyp1_students, TargetRoleEnum.fyp2_students]
+        )
+
+    files = await announcement_repository.get_templates_for_student(
+        db, target_roles=relevant_roles
+    )
+
+    return [
+        TemplateFileResponse(
+            file_id=f.file_id,
+            file_name=f.file_name,
+            mime_type=f.mime_type,
+            size_bytes=f.size_bytes,
+            uploaded_at=f.uploaded_at,
+            announcement_id=f.announcement.announcement_id,
+            announcement_title=f.announcement.title,
+        )
+        for f in files
+    ]

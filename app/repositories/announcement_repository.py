@@ -350,6 +350,40 @@ class AnnouncementRepository(BaseRepository[Announcement]):
         )
         return result.scalars().first()
 
+    async def get_templates_for_student(
+        self,
+        db: AsyncSession,
+        *,
+        target_roles: List[TargetRoleEnum],
+    ) -> List[AnnouncementFile]:
+        """
+        Return all AnnouncementFiles tagged as Template that are scoped to the
+        student's role / FYP cycle.
+
+        Used by:  GET /api/students/documents/templates
+        The result is a flat list ready to render as a template picker.
+        """
+        result = await db.execute(
+            select(AnnouncementFile)
+            .join(
+                Announcement,
+                AnnouncementFile.announcement_id == Announcement.announcement_id,
+            )
+            .join(
+                AnnouncementTarget,
+                AnnouncementTarget.announcement_id == Announcement.announcement_id,
+            )
+            .options(selectinload(AnnouncementFile.announcement))
+            .where(
+                Announcement.created_by_role == AnnouncementRoleEnum.admin,
+                AnnouncementFile.file_type == FileTypeEnum.Template,
+                AnnouncementTarget.target_role.in_(target_roles),
+            )
+            .order_by(AnnouncementFile.uploaded_at.desc())
+        )
+        # Use unique() to deduplicate rows produced by the join
+        return list(result.scalars().unique().all())
+
 
 # Singleton instance for convenience
 announcement_repository = AnnouncementRepository()

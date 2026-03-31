@@ -86,6 +86,26 @@ class ChatSessionRepository:
             },
         )
 
+    async def rename_session(
+        self, db: AsyncIOMotorDatabase, session_id: str, title: str
+    ) -> bool:
+        """Rename an active workspace session only (inactive → no-op)."""
+        now = datetime.datetime.utcnow()
+        result = await db[self.SESSIONS_COL].update_one(
+            {"_id": session_id, "is_active": True},
+            {"$set": {"title": title, "updated_at": now}},
+        )
+        return result.modified_count > 0
+
+    async def delete_session(self, db: AsyncIOMotorDatabase, session_id: str) -> bool:
+        """Soft-delete an active session (is_active=True → False). Idempotent for already inactive."""
+        now = datetime.datetime.utcnow()
+        result = await db[self.SESSIONS_COL].update_one(
+            {"_id": session_id, "is_active": True},
+            {"$set": {"is_active": False, "updated_at": now}},
+        )
+        return result.modified_count > 0
+
     # ── Message Operations ──────────────────────────────────────────────────
 
     async def save_message(

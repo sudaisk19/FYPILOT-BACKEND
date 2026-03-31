@@ -5,13 +5,39 @@ REST endpoints for the Unified Group Documentation Workspace.
 Endpoints:
   GET    /students/chat-sessions/{session_id}/documents      - List all tabs in a workspace
   PATCH  /students/documents/{doc_id}/autosave               - Optimistic-lock live draft save
-  POST   /students/documents/{doc_id}/versions               - Create an immutable version snapshot
+   POST   /students/documents/{doc_id}/versions               - Create an immutable version snapshot
+  GET    /students/documents/{doc_id}/versions               - List all versions
+  GET    /students/documents/{doc_id}                        - Fetch single document
+  PATCH  /students/documents/{doc_id}                        - Rename document
   POST   /students/chat-sessions                             - Create a new workspace
+  PATCH  /students/chat-sessions/{session_id}                - Rename workspace
+  DELETE /students/chat-sessions/{session_id}                - Delete workspace
   GET    /students/chat-sessions                             - List workspaces for a group
   POST   /students/chat-sessions/{session_id}/documents      - Link/create a doc in a workspace
   POST   /students/chat-sessions/{session_id}/messages       - Send a chat message (with LLM)
   GET    /students/chat-sessions/{session_id}/messages       - Paginate chat history
 """
+
+# --- Manual tests (replace JWT, session_id, group membership as needed) ----------
+# export TOKEN="<jwt>"
+# export SID="<session_uuid>"
+#
+# PATCH rename (expect 200 + JSON body, or 403/404/422):
+# curl -sS -X PATCH "http://localhost:8000/api/students/chat-sessions/${SID}" \
+#   -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+#   -d '{"title":"New workspace title"}' -w "\nHTTP %{http_code}\n"
+#
+# DELETE soft-delete (expect 204 empty body):
+# curl -sS -X DELETE "http://localhost:8000/api/students/chat-sessions/${SID}" \
+#   -H "Authorization: Bearer ${TOKEN}" -w "\nHTTP %{http_code}\n" -D -
+#
+# import httpx
+# client = httpx.Client(base_url="http://localhost:8000", headers={"Authorization": "Bearer <jwt>"})
+# r = client.patch("/api/students/chat-sessions/<session_id>", json={"title": "New Name"})
+# print(r.status_code, r.text)
+# r = client.delete("/api/students/chat-sessions/<session_id>")
+# print(r.status_code, r.text)
+# -------------------------------------------------------------------------------
 
 import os
 import tempfile
@@ -30,6 +56,8 @@ from app.db import get_db
 from app.db.mongo import get_mongo_db
 from app.db.supabase import get_supabase_client
 from app.models.announcement import AnnouncementFile
+from app.models.group import GroupMember
+from app.models.group_document import DocTypeEnum
 from app.models.user import User
 from app.schemas.document_schema import (
     AutosaveRequest,
@@ -38,10 +66,13 @@ from app.schemas.document_schema import (
     CreateDocumentRequest,
     CreateVersionRequest,
     CreateWorkspaceRequest,
+    DocumentTypeOptionResponse,
     DocumentVersionResponse,
     GroupDocumentResponse,
     ImportTemplateRequest,
     MessageListResponse,
+    RenameDocumentRequest,
+    RenameWorkspaceRequest,
     SendMessageRequest,
     WorkspaceResponse,
 )
@@ -54,6 +85,110 @@ from app.services.storage_service import (
 )
 
 router = APIRouter()
+
+
+DOC_TYPE_METADATA = {
+    DocTypeEnum.proposal: {
+        "label": "FYP Proposal",
+        "description": "Problem statement, objectives, scope, and feasibility.",
+    },
+    DocTypeEnum.srs: {
+        "label": "Software Requirements Specification (SRS)",
+        "description": "Functional and non-functional requirements.",
+    },
+    DocTypeEnum.sds: {
+        "label": "Software Design Specification (SDS)",
+        "description": "Architecture, components, interfaces, and design details.",
+    },
+    DocTypeEnum.report_fyp1: {
+        "label": "FYP1 Progress Report",
+        "description": "Interim report with literature review and planned implementation.",
+    },
+    DocTypeEnum.report_fyp2: {
+        "label": "FYP2 Final Report",
+        "description": "Final report with implementation, results, and conclusions.",
+    },
+    DocTypeEnum.testcases: {
+        "label": "Test Cases",
+        "description": "Verification scenarios with expected outcomes.",
+    },
+    DocTypeEnum.other: {
+        "label": "Other",
+        "description": "General purpose document type.",
+    },
+}
+
+
+async def _user_is_group_member(
+    db: AsyncSession, user_id: UUID, group_id: UUID
+) -> bool:
+    stmt = select(GroupMember).where(
+        GroupMember.group_id == group_id,
+        GroupMember.student_id == user_id,
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first() is not None
+
+
+async def _require_active_workspace_group_access(
+    db: AsyncSession,
+    mongo_db: AsyncIOMotorDatabase,
+    session_id: str,
+    current_user: User,
+) -> dict:
+    """
+    Load session, require active + group_id; 403 if user not in group_members.
+    """
+    session = await document_chat_service.get_workspace(mongo_db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if not session.get("is_active", True):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    gid_raw = session.get("group_id")
+    if not gid_raw:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    try:
+        gid = UUID(str(gid_raw))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if not await _user_is_group_member(db, current_user.user_id, gid):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a member of the group that owns this workspace.",
+        )
+    return session
+
+
+@router.get(
+    "/students/document-types",
+    response_model=List[DocumentTypeOptionResponse],
+    summary="Get available document types for dropdowns",
+    tags=["student-documents"],
+)
+async def list_document_types(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return all allowed DocTypeEnum values with frontend-friendly labels.
+    """
+    _ = current_user  # enforce authenticated access
+    options: List[DocumentTypeOptionResponse] = []
+    for doc_type in DocTypeEnum:
+        metadata = DOC_TYPE_METADATA.get(
+            doc_type,
+            {
+                "label": doc_type.value.replace("_", " ").title(),
+                "description": "General purpose document type.",
+            },
+        )
+        options.append(
+            DocumentTypeOptionResponse(
+                value=doc_type,
+                label=metadata["label"],
+                description=metadata["description"],
+            )
+        )
+    return options
 
 
 # ── Workspace (Session) Endpoints ────────────────────────────────────────────
@@ -121,6 +256,70 @@ async def list_workspaces(
     ]
 
 
+@router.patch(
+    "/students/chat-sessions/{session_id}",
+    response_model=WorkspaceResponse,
+    summary="Rename a workspace",
+    tags=["student-documents"],
+)
+async def rename_workspace(
+    session_id: str,
+    body: RenameWorkspaceRequest,
+    db: AsyncSession = Depends(get_db),
+    mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_active_workspace_group_access(db, mongo_db, session_id, current_user)
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Title must not be empty",
+        )
+    if len(title) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Title must be at most 100 characters",
+        )
+
+    success = await document_chat_service.rename_workspace(mongo_db, session_id, title)
+    if not success:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    session = await document_chat_service.get_workspace(mongo_db, session_id)
+    return WorkspaceResponse(
+        session_id=session["_id"],
+        group_id=session["group_id"],
+        title=session["title"],
+        document_ids=session.get("document_ids", []),
+        is_active=session.get("is_active", True),
+        created_at=session.get("created_at"),
+        updated_at=session.get("updated_at"),
+    )
+
+
+@router.delete(
+    "/students/chat-sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a workspace",
+    tags=["student-documents"],
+)
+async def delete_workspace(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Soft-delete MongoDB workspace (is_active=false). Postgres GroupDocuments unchanged.
+    """
+    await _require_active_workspace_group_access(db, mongo_db, session_id, current_user)
+    success = await document_chat_service.delete_workspace(mongo_db, session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return None
+
+
 # ── Document-in-Workspace Endpoints ──────────────────────────────────────────
 
 
@@ -161,11 +360,9 @@ async def create_document_in_workspace(
     Creates a new Postgres GroupDocument with chat_session_id set,
     then appends its UUID to the MongoDB session's document_ids array.
     """
-    # body.chat_session_id may be provided; if not, use the path param
-    effective_session_id = body.chat_session_id or session_id
-
-    # Derive group_id from the user's group — we need it stored on the doc
-    # For now the caller sets it via the URL; we extract from the Mongo session
+    # Always use the URL path param as the canonical session_id.
+    # Never let body.chat_session_id override it — doing so causes a Postgres/Mongo
+    # mismatch where MongoDB has the doc UUID but Postgres can't find the doc on reload.
     session = await document_chat_service.get_workspace(mongo_db, session_id)
     group_id_str = session["group_id"] if session else None
     if not group_id_str:
@@ -179,7 +376,7 @@ async def create_document_in_workspace(
         doc_type=body.doc_type,
         title=body.title,
         created_by=current_user.user_id,
-        chat_session_id=effective_session_id,
+        chat_session_id=session_id,  # <-- always the URL path param
         content=body.content,
     )
 
@@ -278,6 +475,44 @@ async def import_template(
 
 
 # ── Document Autosave & Versioning ────────────────────────────────────────────
+
+
+@router.get(
+    "/students/documents/{doc_id}",
+    response_model=GroupDocumentResponse,
+    summary="Fetch a single document",
+    tags=["student-documents"],
+)
+async def get_single_document(
+    doc_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = await document_service.get_document(db, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return GroupDocumentResponse.model_validate(doc)
+
+
+@router.patch(
+    "/students/documents/{doc_id}",
+    response_model=GroupDocumentResponse,
+    summary="Rename a document",
+    tags=["student-documents"],
+)
+async def rename_document(
+    doc_id: UUID,
+    body: RenameDocumentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Rename a generic document. Does not check optimism lock logic, just renames.
+    """
+    doc = await document_service.rename_document(
+        db, doc_id, body.title, current_user.user_id
+    )
+    return GroupDocumentResponse.model_validate(doc)
 
 
 @router.patch(

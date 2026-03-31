@@ -3,15 +3,87 @@ LLM Service
 Async wrapper around GitHub Models inference.
 Handles document-context injection for the document workspace feature.
 Supports multiple models via distinct tokens from environment.
+
+Provides two call modes:
+  - call_llm()   : Blocking, returns full reply string (used by HTTP endpoints).
+  - stream_llm() : Async generator, yields token chunks (used by WebSocket endpoints).
 """
 
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 
 from app.core.config import settings
 
 TIMEOUT = 60.0
+
+BASE_SYSTEM_PROMPT = (
+    "You are an expert academic writing assistant helping university students "
+    "draft and improve their Final Year Project (FYP) documents."
+)
+
+DOC_TYPE_GUIDANCE: Dict[str, str] = {
+    "proposal": (
+        "Focus on problem framing, objectives, scope boundaries, feasibility, "
+        "and a concise methodology preview. Keep claims realistic and measurable."
+    ),
+    "srs": (
+        "Prioritize clear and testable requirements. Separate functional and non-functional "
+        "requirements, remove ambiguity, and keep wording implementation-neutral."
+    ),
+    "sds": (
+        "Emphasize architecture, module responsibilities, interfaces, data flow, and design rationale. "
+        "Use structured technical language and consistency in component naming."
+    ),
+    "report_fyp1": (
+        "Treat this as an interim academic report: highlight literature grounding, initial design choices, "
+        "planned implementation steps, and progress achieved so far."
+    ),
+    "report_fyp2": (
+        "Treat this as a final project report: emphasize implementation details, evaluation results, "
+        "critical discussion, limitations, and future improvements."
+    ),
+    "testcases": (
+        "Generate verification-oriented content with explicit preconditions, test steps, expected outcomes, "
+        "and coverage of normal, boundary, and failure scenarios."
+    ),
+    "other": (
+        "Use a clear academic structure, maintain formal tone, and prioritize clarity, coherence, and evidence-backed writing."
+    ),
+}
+
+
+def _build_system_prompt(
+    document_content: Optional[str],
+    doc_type: Optional[str],
+    system_extra: Optional[str],
+) -> str:
+    """Build a single system prompt shared by call_llm and stream_llm."""
+    system_parts = [BASE_SYSTEM_PROMPT]
+
+    normalized_doc_type = (doc_type or "other").strip().lower()
+    doc_type_guidance = DOC_TYPE_GUIDANCE.get(
+        normalized_doc_type, DOC_TYPE_GUIDANCE["other"]
+    )
+
+    system_parts.append(
+        f"Document-type guidance ({normalized_doc_type}): {doc_type_guidance}"
+    )
+
+    if document_content:
+        doc_type_str = f" ({normalized_doc_type})"
+        system_parts.append(
+            f"\n\nThe student currently has the following document{doc_type_str} open:\n"
+            f"---\n{document_content}\n---\n"
+            "Use this content as context when answering. "
+            "If asked to improve or rewrite a section, return only the revised text."
+        )
+
+    if system_extra:
+        system_parts.append(system_extra)
+
+    return "\n".join(system_parts)
 
 
 def get_model_config(model_choice: str) -> tuple[str, str]:
@@ -58,22 +130,16 @@ async def call_llm(
     Raises:
         RuntimeError: On HTTP error or unexpected API response.
     """
-    system_parts = [
-        "You are an expert academic writing assistant helping university students "
-        "draft and improve their Final Year Project (FYP) documents."
+    messages = [
+        {
+            "role": "system",
+            "content": _build_system_prompt(
+                document_content=document_content,
+                doc_type=doc_type,
+                system_extra=system_extra,
+            ),
+        }
     ]
-    if document_content:
-        doc_type_str = f" ({doc_type})" if doc_type else ""
-        system_parts.append(
-            f"\n\nThe student currently has the following document{doc_type_str} open:\n"
-            f"---\n{document_content}\n---\n"
-            "Use this content as context when answering. "
-            "If asked to improve or rewrite a section, return only the revised text."
-        )
-    if system_extra:
-        system_parts.append(system_extra)
-
-    messages = [{"role": "system", "content": "\n".join(system_parts)}]
     messages.extend(history)
 
     model_id, token = get_model_config(model_choice)
@@ -98,3 +164,73 @@ async def call_llm(
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]
+
+
+async def stream_llm(
+    history: List[Dict[str, Any]],
+    document_content: Optional[str] = None,
+    system_extra: Optional[str] = None,
+    model_choice: str = "gpt-4o",
+    doc_type: Optional[str] = None,
+) -> AsyncIterator[str]:
+    """
+    Stream tokens from GitHub Models inference via Server-Sent Events.
+
+    Async generator — yields individual token strings as they arrive.
+    Designed for WebSocket endpoints that broadcast tokens in real-time.
+
+    Usage:
+        async for token in stream_llm(history, ...):
+            await ws.send_json({"type": "llm_token", "token": token})
+    """
+    messages = [
+        {
+            "role": "system",
+            "content": _build_system_prompt(
+                document_content=document_content,
+                doc_type=doc_type,
+                system_extra=system_extra,
+            ),
+        }
+    ]
+    messages.extend(history)
+
+    model_id, token = get_model_config(model_choice)
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": model_id,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 2048,
+        "stream": True,  # ← SSE streaming
+    }
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        async with client.stream(
+            "POST",
+            f"{settings.github_openai_base_url}/chat/completions",
+            headers=headers,
+            json=body,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                raw = line[len("data: ") :]
+                if raw.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(raw)
+                    token_text = (
+                        chunk.get("choices", [{}])[0]
+                        .get("delta", {})
+                        .get("content", "")
+                    )
+                    if token_text:
+                        yield token_text
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    continue

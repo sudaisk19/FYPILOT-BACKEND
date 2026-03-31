@@ -7,6 +7,7 @@ All DB access goes through the repository layer.
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.group_document import (
@@ -79,6 +80,21 @@ class DocumentService:
             expected_lock_version=expected_lock_version,
             updated_by=updated_by,
         )
+        await db.commit()
+        return doc
+
+    async def rename_document(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        title: str,
+        updated_by: UUID,
+    ) -> GroupDocument:
+        doc = await group_document_repo.rename_document(
+            db, doc_id=doc_id, title=title, updated_by=updated_by
+        )
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
         await db.commit()
         return doc
 

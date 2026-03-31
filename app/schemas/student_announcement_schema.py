@@ -39,3 +39,20 @@ class PaginatedStudentAnnouncements(BaseModel):
     total_pages: int
     current_page: int
     per_page: int
+
+
+class TemplateFileResponse(BaseModel):
+    """Flat response for a single template file in the template picker."""
+
+    file_id: UUID
+    file_name: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    uploaded_at: datetime
+
+    # From the parent announcement
+    announcement_id: UUID
+    announcement_title: str
+
+    class Config:
+        from_attributes = True

@@ -48,6 +48,12 @@ class GroupDocumentResponse(BaseModel):
     updated_at: datetime
 
 
+class DocumentTypeOptionResponse(BaseModel):
+    value: DocTypeEnum
+    label: str
+    description: str
+
+
 # ── Autosave ─────────────────────────────────────────────────────────────────
 
 
@@ -56,6 +62,10 @@ class AutosaveRequest(BaseModel):
     lock_version: int = Field(
         ..., ge=1, description="Expected current lock_version from client."
     )
+
+
+class RenameDocumentRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
 
 
 class AutosaveResponse(BaseModel):
@@ -102,6 +112,10 @@ class WorkspaceResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class RenameWorkspaceRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
 
 
 class AddDocumentToSessionRequest(BaseModel):

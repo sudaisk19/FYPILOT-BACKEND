@@ -82,6 +82,13 @@ app.include_router(
 )  # /api/groups, /api/users, /api/students, /api/supervisors, /api/admins, /health
 app.include_router(llm_chat.router, prefix="/llm")
 
+# ── WebSocket routers (no /api prefix — WS uses ?token= for auth) ────────────
+from app.api.websocket import chat as ws_chat
+from app.api.websocket import document as ws_document
+
+app.include_router(ws_chat.router)
+app.include_router(ws_document.router)
+
 # Global exception handlers
 register_exception_handlers(app)
 
