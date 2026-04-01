@@ -3,7 +3,8 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import CheckConstraint, Column, Date, DateTime
-from sqlalchemy import ForeignKey, String, Text, func, text
+from sqlalchemy import ForeignKey, Text, func, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -23,20 +24,33 @@ class ProjectTypeEnum(str, Enum):
     research = "research"
     product = "product"
     product_and_research = "product_and_research"
-
-
-# Mapping of legacy DB values (with spaces) → canonical enum value
 _LEGACY_PROJECT_TYPE_MAP = {
     "product and research": "product_and_research",
 }
 
+_ENUM_VALUES = [member.value for member in ProjectTypeEnum]
+_ENUM_VALUES_WITH_LEGACY = _ENUM_VALUES + sorted(
+    {v for v in _LEGACY_PROJECT_TYPE_MAP.keys() if v not in _ENUM_VALUES}
+)
+
+
+# Mapping of legacy DB values (with spaces) → canonical enum value
+
+
+_PROJECT_TYPE_TOKENS = {member.value for member in ProjectTypeEnum}
+_PROJECT_TYPE_TOKENS.update(member.name.lower() for member in ProjectTypeEnum)
+
 
 class ProjectTypeColumn(TypeDecorator):
-    """A TypeDecorator that reads/writes ``project_type_enum`` while
-    transparently normalising legacy values that contain spaces."""
+    """Normalises legacy values while keeping the Postgres enum type."""
 
-    impl = String          # underlying DB type (Postgres enum stored as text)
-    cache_ok = True        # safe to cache compiled forms
+    impl = postgresql.ENUM(  # keep DB column type as project_type_enum
+        *_ENUM_VALUES_WITH_LEGACY,
+        name="project_type_enum",
+        create_type=False,
+        validate_strings=False,
+    )
+    cache_ok = True
 
     def process_bind_param(self, value, dialect):
         """Python → DB: send the canonical underscore form."""
@@ -44,8 +58,7 @@ class ProjectTypeColumn(TypeDecorator):
             return None
         if isinstance(value, ProjectTypeEnum):
             return value.value
-        normalised = _normalise_project_type(str(value))
-        return normalised
+        return _normalise_project_type(str(value))
 
     def process_result_value(self, value, dialect):
         """DB → Python: convert any variant into ``ProjectTypeEnum``."""
@@ -58,11 +71,17 @@ class ProjectTypeColumn(TypeDecorator):
 def _normalise_project_type(raw: str) -> str:
     """Return the canonical enum value string for *raw*."""
     stripped = raw.strip().lower()
+    if "." in stripped:
+        suffix = stripped.rsplit(".", 1)[-1]
+        if suffix in _PROJECT_TYPE_TOKENS:
+            stripped = suffix
+    underscored = stripped.replace(" ", "_")
     if stripped in _LEGACY_PROJECT_TYPE_MAP:
         return _LEGACY_PROJECT_TYPE_MAP[stripped]
-    underscored = stripped.replace(" ", "_")
     for member in ProjectTypeEnum:
-        if underscored == member.value or stripped == member.name.lower():
+        if underscored == member.name.lower() or stripped == member.name.lower():
+            return member.value
+        if underscored == member.value:
             return member.value
     return stripped  # fall through – will raise on enum() if truly unknown
 

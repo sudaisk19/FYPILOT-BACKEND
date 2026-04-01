@@ -56,7 +56,7 @@ from app.models.faculty_industry import FacultyIndustry
 from app.models.group import Group, GroupMember
 from app.models.industry import Industry
 from app.models.password_reset import PasswordResetToken
-from app.models.project import Project
+from app.models.project import Project, project_type_value
 from app.models.student import Student
 from app.models.user import RoleEnum, User
 from app.schemas.auth_schema import (
@@ -567,7 +567,7 @@ async def get_faculty_info(user_id: UUID, db: AsyncSession) -> Optional[FacultyI
             capacity_max=faculty_member.capacity_max,
             capacity_filled=faculty_member.capacity_filled,
             project_types=(
-                [str(faculty_member.project_type)]
+                [project_type_value(faculty_member.project_type)]
                 if faculty_member.project_type
                 else []
             ),
