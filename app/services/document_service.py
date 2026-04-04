@@ -4,7 +4,8 @@ Business logic for live-draft autosave, version snapshots, and workspace managem
 All DB access goes through the repository layer.
 """
 
-from typing import List, Optional
+import json
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -125,6 +126,51 @@ class DocumentService:
         self, db: AsyncSession, doc_id: UUID
     ) -> List[DocumentVersion]:
         return await group_document_repo.get_versions(db, doc_id)
+
+    async def get_version_snapshot(
+        self, db: AsyncSession, doc_id: UUID, version_number: int
+    ) -> Optional[DocumentVersion]:
+        return await group_document_repo.get_version(db, doc_id, version_number)
+
+    async def restore_document_to_version(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        version_number: int,
+        expected_lock_version: int,
+        updated_by: UUID,
+    ) -> Tuple[GroupDocument, DocumentVersion]:
+        """
+        Apply content from an immutable snapshot to the live draft (autosave),
+        then create a new snapshot row recording that restore (non-destructive history).
+        """
+        old = await group_document_repo.get_version(db, doc_id, version_number)
+        if old is None:
+            raise HTTPException(status_code=404, detail="Version not found")
+        try:
+            content_dict = json.loads(old.content)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Stored version content is invalid JSON: {e}",
+            ) from e
+        doc = await group_document_repo.autosave(
+            db,
+            doc_id=doc_id,
+            content=content_dict,
+            expected_lock_version=expected_lock_version,
+            updated_by=updated_by,
+        )
+        snapshot = await group_document_repo.create_snapshot(
+            db,
+            doc_id=doc_id,
+            save_trigger=SaveTriggerEnum.student,
+            created_by=updated_by,
+        )
+        await db.commit()
+        await db.refresh(doc)
+        await db.refresh(snapshot)
+        return doc, snapshot
 
     # ── File Tracking ───────────────────────────────────────────────────────
 

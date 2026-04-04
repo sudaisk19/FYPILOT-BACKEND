@@ -15,75 +15,9 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 
 from app.core.config import settings
+from app.services.prompts import build_chat_system_prompt
 
 TIMEOUT = 60.0
-
-BASE_SYSTEM_PROMPT = (
-    "You are an expert academic writing assistant helping university students "
-    "draft and improve their Final Year Project (FYP) documents."
-)
-
-DOC_TYPE_GUIDANCE: Dict[str, str] = {
-    "proposal": (
-        "Focus on problem framing, objectives, scope boundaries, feasibility, "
-        "and a concise methodology preview. Keep claims realistic and measurable."
-    ),
-    "srs": (
-        "Prioritize clear and testable requirements. Separate functional and non-functional "
-        "requirements, remove ambiguity, and keep wording implementation-neutral."
-    ),
-    "sds": (
-        "Emphasize architecture, module responsibilities, interfaces, data flow, and design rationale. "
-        "Use structured technical language and consistency in component naming."
-    ),
-    "report_fyp1": (
-        "Treat this as an interim academic report: highlight literature grounding, initial design choices, "
-        "planned implementation steps, and progress achieved so far."
-    ),
-    "report_fyp2": (
-        "Treat this as a final project report: emphasize implementation details, evaluation results, "
-        "critical discussion, limitations, and future improvements."
-    ),
-    "testcases": (
-        "Generate verification-oriented content with explicit preconditions, test steps, expected outcomes, "
-        "and coverage of normal, boundary, and failure scenarios."
-    ),
-    "other": (
-        "Use a clear academic structure, maintain formal tone, and prioritize clarity, coherence, and evidence-backed writing."
-    ),
-}
-
-
-def _build_system_prompt(
-    document_content: Optional[str],
-    doc_type: Optional[str],
-    system_extra: Optional[str],
-) -> str:
-    """Build a single system prompt shared by call_llm and stream_llm."""
-    system_parts = [BASE_SYSTEM_PROMPT]
-
-    normalized_doc_type = (doc_type or "other").strip().lower()
-    doc_type_guidance = DOC_TYPE_GUIDANCE.get(
-        normalized_doc_type, DOC_TYPE_GUIDANCE["other"]
-    )
-
-    system_parts.append(
-        f"Document-type guidance ({normalized_doc_type}): {doc_type_guidance}"
-    )
-
-    if document_content:
-        doc_type_str = f" ({normalized_doc_type})"
-        system_parts.append(
-            f"\n\nThe student currently has the following document{doc_type_str} open:\n"
-            f"---\n{document_content}\n---\n"
-            "Use this content as context when answering. "
-            "If asked to improve or rewrite a section, return only the revised text."
-        )
-
-    if system_extra:
-        system_parts.append(system_extra)
-
-    return "\n".join(system_parts)
 
 
 def get_model_config(model_choice: str) -> tuple[str, str]:
@@ -133,7 +67,7 @@ async def call_llm(
     messages = [
         {
             "role": "system",
-            "content": _build_system_prompt(
+            "content": build_chat_system_prompt(
                 document_content=document_content,
                 doc_type=doc_type,
                 system_extra=system_extra,
@@ -186,7 +120,7 @@ async def stream_llm(
     messages = [
         {
             "role": "system",
-            "content": _build_system_prompt(
+            "content": build_chat_system_prompt(
                 document_content=document_content,
                 doc_type=doc_type,
                 system_extra=system_extra,

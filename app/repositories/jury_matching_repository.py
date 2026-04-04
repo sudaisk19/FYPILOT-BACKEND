@@ -39,7 +39,7 @@ class JuryMatchingRepository:
                     JuryAssignment.project
                 ),
                 selectinload(JuryAssignmentBatch.assignments).selectinload(
-                    JuryAssignment.jury_pair
+                    JuryAssignment.pair
                 ),
             )
         )

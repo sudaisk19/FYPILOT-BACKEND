@@ -101,6 +101,7 @@ class DocumentChatService:
         content: str,
         active_document_id: Optional[str],
         model_choice: str = "gpt-4o",
+        sender_name: Optional[str] = None,
     ) -> str:
         """
         Full message round-trip:
@@ -129,6 +130,8 @@ class DocumentChatService:
                         "version_number": doc.lock_version,
                     }
 
+        display_name = sender_name or sender_id
+
         # 1. Save the student's message
         await chat_session_repo.save_message(
             mongo_db,
@@ -137,6 +140,7 @@ class DocumentChatService:
             sender_type="student",
             content=content,
             doc_context=doc_context,
+            sender_name=display_name,
         )
 
         # 2. Fetch recent history for LLM context
@@ -169,6 +173,7 @@ class DocumentChatService:
             sender_type="llm",
             content=reply,
             doc_context=doc_context,
+            sender_name="Assistant",
         )
 
         return reply

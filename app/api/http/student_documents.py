@@ -7,6 +7,8 @@ Endpoints:
   PATCH  /students/documents/{doc_id}/autosave               - Optimistic-lock live draft save
    POST   /students/documents/{doc_id}/versions               - Create an immutable version snapshot
   GET    /students/documents/{doc_id}/versions               - List all versions
+  GET    /students/documents/{doc_id}/versions/{version_number} - Read-only snapshot (preview)
+  POST   /students/documents/{doc_id}/versions/{version_number}/restore - Restore draft from snapshot
   GET    /students/documents/{doc_id}                        - Fetch single document
   PATCH  /students/documents/{doc_id}                        - Rename document
   POST   /students/chat-sessions                             - Create a new workspace
@@ -51,6 +53,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from supabase import Client
 
+from app.api.websocket.manager import manager
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.db.mongo import get_mongo_db
@@ -73,9 +76,12 @@ from app.schemas.document_schema import (
     MessageListResponse,
     RenameDocumentRequest,
     RenameWorkspaceRequest,
+    RestoreVersionRequest,
+    RestoreVersionResponse,
     SendMessageRequest,
     WorkspaceResponse,
 )
+from app.services.document_access import require_group_document_for_user
 from app.services.document_chat_service import document_chat_service
 from app.services.document_service import document_service
 from app.services.extract_text import process_document_import_async
@@ -582,6 +588,65 @@ async def list_versions(
 ):
     versions = await document_service.list_versions(db, doc_id)
     return [DocumentVersionResponse.model_validate(v) for v in versions]
+
+
+@router.get(
+    "/students/documents/{doc_id}/versions/{version_number}",
+    response_model=DocumentVersionResponse,
+    summary="Get a single version snapshot (read-only preview)",
+    tags=["student-documents"],
+)
+async def get_version(
+    doc_id: UUID,
+    version_number: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await require_group_document_for_user(db, doc_id, current_user)
+    snap = await document_service.get_version_snapshot(db, doc_id, version_number)
+    if snap is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Version not found",
+        )
+    return DocumentVersionResponse.model_validate(snap)
+
+
+@router.post(
+    "/students/documents/{doc_id}/versions/{version_number}/restore",
+    response_model=RestoreVersionResponse,
+    summary="Restore live draft from a past version snapshot",
+    tags=["student-documents"],
+)
+async def restore_document_version(
+    doc_id: UUID,
+    version_number: int,
+    body: RestoreVersionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await require_group_document_for_user(db, doc_id, current_user)
+    doc, snapshot = await document_service.restore_document_to_version(
+        db,
+        doc_id,
+        version_number,
+        body.lock_version,
+        current_user.user_id,
+    )
+    room_key = f"doc:{doc_id}"
+    await manager.broadcast(
+        room_key,
+        {
+            "type": "document_restored",
+            "version": version_number,
+            "restored_by": str(current_user.user_id),
+            "restored_by_name": current_user.full_name or str(current_user.user_id),
+        },
+    )
+    return RestoreVersionResponse(
+        snapshot=DocumentVersionResponse.model_validate(snapshot),
+        lock_version=doc.lock_version,
+    )
 
 
 # ── Chat Messages ─────────────────────────────────────────────────────────────

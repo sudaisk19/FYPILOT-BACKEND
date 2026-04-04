@@ -1,6 +1,11 @@
 # deploy/docker-compose.prod.yml
 # Production Docker Compose for DigitalOcean Droplet
 # Used by the deployment pipeline on the server
+#
+# WebSocket scaling: Redis Pub/Sub fan-out (app/api/websocket/redis_ws.py). For
+# multiple backend replicas behind a load balancer, enable sticky sessions or
+# rely on Redis so broadcasts reach all workers (document edit locks are still
+# per-process unless extended).
 
 version: "3.8"
 

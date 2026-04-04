@@ -21,6 +21,7 @@ from .bulk_import import (
     BulkItemStatus,
     BulkJobStatus,
 )
+from .chat_llm_turn import ChatLlmTurn
 
 # Domain and Industry models (base models)
 from .domain import Domain
@@ -119,6 +120,7 @@ __all__ = [
     "BulkImportItem",
     "BulkJobStatus",
     "BulkItemStatus",
+    "ChatLlmTurn",
     # Jury models
     "JuryPair",
     "JuryAssignment",

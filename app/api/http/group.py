@@ -901,7 +901,7 @@ async def get_group_profile(
         # Fetch supervisor acceptance feedback (if any)
         supervisor_acceptance_feedback = None
         if group.supervisor_id:
-            from app.models.request import Request, RequestTypeEnum
+            from app.models.request import Request
 
             feedback_result = await db.execute(
                 select(Request.feedback)

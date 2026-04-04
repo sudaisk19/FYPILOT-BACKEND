@@ -17,6 +17,7 @@ Server → Client broadcasts (JSON):
     { "type": "editor_unlock" }
     { "type": "cursor",        "user_id": "...", "position": 145 }
     { "type": "lock_denied",   "locked_by": "user_id", "locked_by_name": "Ali" }
+    { "type": "document_restored", "version": <int>, "restored_by": "<user_id>", "restored_by_name": "..." }
     { "type": "error",         "detail": "..." }
 """
 

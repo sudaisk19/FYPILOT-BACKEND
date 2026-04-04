@@ -76,7 +76,10 @@ class JuryMatchingClient:
             return False
 
     async def batch_match(
-        self, fyp_cycles: Optional[List[str]] = None
+        self,
+        fyp_cycles: Optional[List[str]] = None,
+        max_groups_per_pair: Optional[int] = None,
+        min_jury_per_project: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get jury recommendations for ALL projects in one call.
@@ -96,6 +99,10 @@ class JuryMatchingClient:
             payload = {}
             if fyp_cycles:
                 payload["fyp_cycles"] = fyp_cycles
+            if max_groups_per_pair is not None:
+                payload["max_groups_per_pair"] = max_groups_per_pair
+            if min_jury_per_project is not None:
+                payload["min_jury_per_project"] = min_jury_per_project
 
             response = await self.client.post("/api/v1/jury/batch", json=payload)
 

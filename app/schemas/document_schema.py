@@ -95,6 +95,23 @@ class DocumentVersionResponse(BaseModel):
     created_at: datetime
 
 
+class RestoreVersionRequest(BaseModel):
+    """Restore live draft from a past snapshot (optimistic lock on current draft)."""
+
+    lock_version: int = Field(
+        ...,
+        ge=1,
+        description="Expected current lock_version on group_documents before applying restore.",
+    )
+
+
+class RestoreVersionResponse(BaseModel):
+    """New immutable snapshot row plus updated draft version after restore."""
+
+    snapshot: DocumentVersionResponse
+    lock_version: int
+
+
 # ── Chat Workspace (Sessions) ────────────────────────────────────────────────
 
 

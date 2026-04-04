@@ -100,6 +100,7 @@ async def on_startup():
 
     # Initialize Redis cache connection (non-blocking with timeout)
     # If Redis fails, app will continue without cache
+    redis_ok = False
     try:
         # Add 3 second timeout to prevent blocking startup
         redis_ok = await asyncio.wait_for(cache.connect(), timeout=3.0)
@@ -117,6 +118,25 @@ async def on_startup():
             f"Redis connection failed during startup: {e}. "
             "App will continue without cache. Caching will be disabled."
         )
+
+    if redis_ok:
+        from app.api.websocket.manager import start_redis_ws_subscriber
+        from app.services.chat_sse_hub import start_chat_sse_redis_subscriber
+
+        start_redis_ws_subscriber()
+        start_chat_sse_redis_subscriber()
+
+    from app.db.mongo import mongo_db
+    from app.repositories.chat_session_repository import chat_session_repo
+    from app.services.collaborative_chat_worker import start_chat_workers
+
+    try:
+        await chat_session_repo.ensure_indexes(mongo_db)
+        logger.info("MongoDB chat message indexes ensured.")
+    except Exception as e:
+        logger.warning("MongoDB chat index ensure failed (non-fatal): %s", e)
+
+    start_chat_workers()
 
     # Database tables will be created automatically on first use via SQLAlchemy
     # Or you can run migrations separately. This ensures fast startup.

@@ -23,13 +23,13 @@ class JuryAssignRequest(BaseModel):
     max_groups_per_pair: int = Field(
         ...,
         ge=1,
-        le=20,
+        le=10,
         description="Maximum number of projects one jury pair can evaluate",
     )
     min_jury_per_project: int = Field(
         default=1,
         ge=1,
-        le=5,
+        le=10,
         description="Minimum number of jury pairs per project",
     )
     fyp_cycles: List[str] = Field(

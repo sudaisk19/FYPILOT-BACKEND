@@ -22,6 +22,13 @@ class ChatSessionRepository:
     SESSIONS_COL = "document_chat_sessions"
     MESSAGES_COL = "document_chat_messages"
 
+    async def ensure_indexes(self, db: AsyncIOMotorDatabase) -> None:
+        """Idempotent indexes for chat history queries."""
+        await db[self.MESSAGES_COL].create_index(
+            [("chat_session_id", 1), ("_id", 1)],
+            name="idx_chat_messages_session_id",
+        )
+
     # ── Session Operations ──────────────────────────────────────────────────
 
     async def create_session(
@@ -118,6 +125,8 @@ class ChatSessionRepository:
         doc_context: Optional[Dict[str, Any]] = None,
         is_complete: bool = True,
         metadata: Optional[Dict[str, Any]] = None,
+        sender_name: Optional[str] = None,
+        request_id: Optional[str] = None,
     ) -> str:
         """Persist a single chat message and return its string ObjectId."""
         doc = {
@@ -132,6 +141,10 @@ class ChatSessionRepository:
             "metadata": metadata or {},
             "created_at": datetime.datetime.utcnow(),
         }
+        if sender_name:
+            doc["sender_name"] = sender_name
+        if request_id:
+            doc["request_id"] = request_id
         result = await db[self.MESSAGES_COL].insert_one(doc)
 
         # bump session updated_at
@@ -140,6 +153,29 @@ class ChatSessionRepository:
             {"$set": {"updated_at": datetime.datetime.utcnow()}},
         )
         return str(result.inserted_id)
+
+    async def count_messages(
+        self, db: AsyncIOMotorDatabase, chat_session_id: str
+    ) -> int:
+        return await db[self.MESSAGES_COL].count_documents(
+            {"chat_session_id": chat_session_id}
+        )
+
+    async def get_last_message(
+        self, db: AsyncIOMotorDatabase, chat_session_id: str
+    ) -> Optional[Dict[str, Any]]:
+        cursor = (
+            db[self.MESSAGES_COL]
+            .find({"chat_session_id": chat_session_id})
+            .sort("_id", -1)
+            .limit(1)
+        )
+        rows = await cursor.to_list(length=1)
+        if not rows:
+            return None
+        m = rows[0]
+        m["_id"] = str(m["_id"])
+        return m
 
     async def get_messages(
         self,
@@ -156,6 +192,26 @@ class ChatSessionRepository:
             .skip(skip)
             .limit(limit)
         )
+        results = await cursor.to_list(length=limit)
+        for m in results:
+            m["_id"] = str(m["_id"])
+        return results
+
+    async def get_messages_after(
+        self,
+        db: AsyncIOMotorDatabase,
+        chat_session_id: str,
+        after_id: Optional[str],
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Messages strictly after `after_id` (ObjectId string), oldest first.
+        If after_id is None, returns the first `limit` messages chronologically.
+        """
+        q: Dict[str, Any] = {"chat_session_id": chat_session_id}
+        if after_id:
+            q["_id"] = {"$gt": ObjectId(after_id)}
+        cursor = db[self.MESSAGES_COL].find(q).sort("_id", 1).limit(limit)
         results = await cursor.to_list(length=limit)
         for m in results:
             m["_id"] = str(m["_id"])

@@ -139,6 +139,26 @@ class Settings(BaseSettings):
         default=24, validation_alias="TEMP_PASSWORD_TTL_HOURS"
     )
 
+    # ─── Collaborative chat (SSE + job workers) ─────────────
+    chat_context_message_limit: int = Field(
+        default=20,
+        validation_alias="CHAT_CONTEXT_MESSAGE_LIMIT",
+        description="Max prior messages sent to the LLM per turn",
+    )
+    chat_rate_limit_per_minute_user: int = Field(
+        default=30,
+        validation_alias="CHAT_RATE_LIMIT_PER_MINUTE_USER",
+    )
+    chat_rate_limit_per_minute_room: int = Field(
+        default=60,
+        validation_alias="CHAT_RATE_LIMIT_PER_MINUTE_ROOM",
+    )
+    chat_worker_tasks: int = Field(
+        default=2,
+        validation_alias="CHAT_WORKER_TASKS",
+        description="Number of asyncio workers consuming chat LLM jobs",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

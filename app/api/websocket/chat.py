@@ -35,10 +35,75 @@ from app.db import get_db
 from app.db.mongo import get_mongo_db
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
+from app.services.chat_sse_hub import publish as sse_publish
+from app.services.chat_sse_hub import (
+    sse_stream_error,
+    sse_stream_status,
+)
 from app.services.llm import stream_llm
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _mirror_ws_payload_to_sse(session_id: str, payload: dict) -> None:
+    """Mirror legacy WebSocket payloads to HTTP SSE channel (same room_id as Mongo session)."""
+    t = payload.get("type")
+    if t == "presence":
+        return
+    try:
+        import time
+
+        ts = time.time()
+        if t == "user_message":
+            await sse_publish(
+                session_id,
+                {
+                    "type": "chat.message.sent",
+                    "sender_id": payload["sender_id"],
+                    "sender_name": payload.get("sender_name"),
+                    "content": payload.get("content"),
+                    "timestamp": ts,
+                },
+            )
+        elif t == "llm_status":
+            rid = payload.get("request_id") or ""
+            await sse_publish(
+                session_id,
+                sse_stream_status(rid, payload.get("phase") or "queued"),
+            )
+        elif t == "llm_token":
+            await sse_publish(
+                session_id,
+                {
+                    "type": "chat.stream.token",
+                    "request_id": payload.get("request_id"),
+                    "token": payload.get("token"),
+                    "seq": payload.get("seq"),
+                },
+            )
+        elif t == "llm_error":
+            rid = payload.get("request_id") or ""
+            detail = str(payload.get("detail") or "")
+            await sse_publish(session_id, sse_stream_error(rid, detail))
+        elif t == "llm_done":
+            full = payload.get("full_reply") or ""
+            await sse_publish(
+                session_id,
+                {
+                    "type": "chat.stream.end",
+                    "request_id": payload.get("request_id"),
+                    "assistant_message_id": payload.get("message_id"),
+                    "reply_length": len(full),
+                },
+            )
+    except Exception:
+        logger.debug("SSE mirror from WebSocket chat failed", exc_info=True)
+
+
+async def _broadcast_chat_ws(room_key: str, session_id: str, payload: dict) -> None:
+    await manager.broadcast(room_key, payload)
+    await _mirror_ws_payload_to_sse(session_id, payload)
 
 
 @router.websocket("/ws/chat/{session_id}")
@@ -112,8 +177,9 @@ async def chat_websocket(
                 request_id = str(uuid4())
 
                 # 1. Broadcast the student's own message to all in session
-                await manager.broadcast(
+                await _broadcast_chat_ws(
                     room_key,
+                    session_id,
                     {
                         "type": "user_message",
                         "sender_id": user_id,
@@ -123,8 +189,9 @@ async def chat_websocket(
                     },
                 )
 
-                await manager.broadcast(
+                await _broadcast_chat_ws(
                     room_key,
+                    session_id,
                     {
                         "type": "llm_status",
                         "request_id": request_id,
@@ -177,8 +244,9 @@ async def chat_websocket(
                 token_seq = 0
                 sent_streaming_status = False
                 try:
-                    await manager.broadcast(
+                    await _broadcast_chat_ws(
                         room_key,
+                        session_id,
                         {
                             "type": "llm_status",
                             "request_id": request_id,
@@ -195,8 +263,9 @@ async def chat_websocket(
                     ):
                         if not sent_streaming_status:
                             sent_streaming_status = True
-                            await manager.broadcast(
+                            await _broadcast_chat_ws(
                                 room_key,
+                                session_id,
                                 {
                                     "type": "llm_status",
                                     "request_id": request_id,
@@ -207,8 +276,9 @@ async def chat_websocket(
 
                         token_seq += 1
                         full_reply_parts.append(token_chunk)
-                        await manager.broadcast(
+                        await _broadcast_chat_ws(
                             room_key,
+                            session_id,
                             {
                                 "type": "llm_token",
                                 "request_id": request_id,
@@ -218,8 +288,9 @@ async def chat_websocket(
                         )
                 except Exception as exc:
                     logger.error(f"LLM streaming error: {exc}")
-                    await manager.broadcast(
+                    await _broadcast_chat_ws(
                         room_key,
+                        session_id,
                         {
                             "type": "llm_error",
                             "request_id": request_id,
@@ -242,8 +313,9 @@ async def chat_websocket(
                 )
 
                 # 6. Notify all that streaming is complete
-                await manager.broadcast(
+                await _broadcast_chat_ws(
                     room_key,
+                    session_id,
                     {
                         "type": "llm_done",
                         "request_id": request_id,
@@ -252,8 +324,9 @@ async def chat_websocket(
                     },
                 )
 
-                await manager.broadcast(
+                await _broadcast_chat_ws(
                     room_key,
+                    session_id,
                     {
                         "type": "llm_status",
                         "request_id": request_id,

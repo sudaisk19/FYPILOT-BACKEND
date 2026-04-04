@@ -32,12 +32,7 @@ def extract_text(file_path: str) -> str:
         raise ValueError("Unsupported file type")
 
 
-_CLEAN_PDF_SYSTEM = (
-    "You receive HTML produced by extracting text from a PDF. "
-    "Clean it for a rich-text editor: fix broken line breaks and duplicate spans, "
-    "normalize headings and lists where obvious, and remove PDF extraction noise. "
-    "Preserve meaning and reading order. Output ONLY an HTML fragment (no markdown, no preamble)."
-)
+from app.services.prompts import DOC_CLEANING_SYSTEM_PROMPT
 
 
 async def process_document_import_async(
@@ -55,7 +50,7 @@ async def process_document_import_async(
 
     cleaned = await call_llm(
         history=[{"role": "user", "content": html}],
-        system_extra=_CLEAN_PDF_SYSTEM,
+        system_extra=DOC_CLEANING_SYSTEM_PROMPT,
         model_choice="gpt-4o",
     )
     return cleaned.strip()
