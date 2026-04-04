@@ -1,7 +1,7 @@
 # app/repositories/submission_repository.py
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select

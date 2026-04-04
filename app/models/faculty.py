@@ -2,13 +2,13 @@
 import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Column
-from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, Text, event
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
 from app.db import Base
+from app.models.project import ProjectTypeColumn, ProjectTypeEnum
 
 
 class Faculty(Base):
@@ -45,15 +45,9 @@ class Faculty(Base):
     )
 
     project_type = Column(
-        SQLEnum(
-            "research",
-            "product",
-            "product and research",
-            name="project_type_enum",
-            create_type=False,
-        ),
+        ProjectTypeColumn(),
         nullable=False,
-        default="research",
+        default=ProjectTypeEnum.research,
     )
 
     # Role flags — determine what the faculty member can do

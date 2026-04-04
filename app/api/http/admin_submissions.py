@@ -40,6 +40,8 @@ from app.models.submission import (
     SubmissionTypeEnum,
 )
 from app.models.user import RoleEnum, User
+from app.repositories.announcement_repository import announcement_repository
+from app.repositories.submission_repository import submission_repository
 from app.schemas.submission_schema import (
     AttachmentInfo,
     CreateSubmissionAnnouncementRequest,
@@ -66,6 +68,14 @@ logger = logging.getLogger(__name__)
 SUBMISSION_FILES_BUCKET = "submission_files"
 
 
+SUBMISSION_ALLOWED_ASSIGNMENTS = frozenset(
+    {
+        "All Students",
+        "FYP-I Students",
+        "FYP-II Students",
+    }
+)
+
 ASSIGNMENT_LABEL_TO_ROLES = {
     "All Students": (TargetRoleEnum.all_students,),
     "All Supervisors": (TargetRoleEnum.all_supervisors,),
@@ -77,12 +87,10 @@ ASSIGNMENT_LABEL_TO_ROLES = {
     ),
 }
 
-ASSIGN_TO_CHOICES_DESC = (
-    "Students, Supervisors, FYP-I Students, FYP-II Students, or Both"
-)
+ASSIGN_TO_CHOICES_DESC = "All Students, FYP-I Students, or FYP-II Students"
 
 INVALID_ASSIGNTO_MESSAGE = (
-    f"Invalid assignTo option. Choose from {ASSIGN_TO_CHOICES_DESC}."
+    f"Invalid assignTo option. Student submissions can only target: {ASSIGN_TO_CHOICES_DESC}."
 )
 
 _ROLE_SET_TO_LABEL = {
@@ -203,6 +211,8 @@ def _build_response(announcement: Announcement) -> SubmissionAnnouncementRespons
 
 def _build_targets(assign_to: str, announcement_id: UUID) -> List[AnnouncementTarget]:
     """Create AnnouncementTarget rows from an assignTo label."""
+    if assign_to not in SUBMISSION_ALLOWED_ASSIGNMENTS:
+        raise HTTPException(status_code=400, detail=INVALID_ASSIGNTO_MESSAGE)
     roles = ASSIGNMENT_LABEL_TO_ROLES.get(assign_to)
     if not roles:
         raise HTTPException(status_code=400, detail=INVALID_ASSIGNTO_MESSAGE)
