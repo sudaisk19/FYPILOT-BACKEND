@@ -73,6 +73,7 @@ from .task_attachment import TaskAttachment
 
 # Base models first
 from .user import RoleEnum, User
+from .whiteboard import Whiteboard
 
 # Milestone Model
 
@@ -133,4 +134,5 @@ __all__ = [
     "DocTypeEnum",
     "SaveTriggerEnum",
     "FilePurposeEnum",
+    "Whiteboard",
 ]

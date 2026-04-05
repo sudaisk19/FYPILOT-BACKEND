@@ -167,5 +167,7 @@ from app.api.http.student_documents import router as student_documents_router
 router.include_router(student_documents_router, tags=["student-documents"])
 
 from app.api.http.collaborative_chat import router as collaborative_chat_router
+from app.api.http.student_whiteboards import router as student_whiteboards_router
 
 router.include_router(collaborative_chat_router)
+router.include_router(student_whiteboards_router, tags=["Whiteboards"])

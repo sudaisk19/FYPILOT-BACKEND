@@ -26,14 +26,16 @@ class Cache:
         self._url: str = url or settings.redis_url
         self._is_connected: bool = False
         if _HAS_REDIS:
-            # Add connection timeout to prevent hanging
+            # socket_timeout must exceed longest blocking Redis command (e.g. BRPOP
+            # timeout=5 in collaborative_chat_worker); a 2s read timeout causes false
+            # TimeoutError on idle queues.
             self._client = Redis.from_url(
                 self._url,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_connect_timeout=2,  # 2 second connection timeout
-                socket_timeout=2,  # 2 second socket timeout
-                retry_on_timeout=False,  # Don't retry on timeout
+                socket_connect_timeout=5,
+                socket_timeout=30,
+                retry_on_timeout=False,
             )  # type: ignore
         else:
             logger.warning(
@@ -61,14 +63,13 @@ class Cache:
             return False
 
         if not self._client:
-            # Add connection timeout to prevent hanging
             self._client = Redis.from_url(
                 self._url,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_connect_timeout=2,  # 2 second connection timeout
-                socket_timeout=2,  # 2 second socket timeout
-                retry_on_timeout=False,  # Don't retry on timeout
+                socket_connect_timeout=5,
+                socket_timeout=30,
+                retry_on_timeout=False,
             )
 
         try:

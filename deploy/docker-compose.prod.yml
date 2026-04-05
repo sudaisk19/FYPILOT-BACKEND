@@ -1,6 +1,9 @@
 # deploy/docker-compose.prod.yml
 # Production Docker Compose for DigitalOcean Droplet
-# Used by the deployment pipeline on the server
+# Used by the deployment pipeline on the server.
+#
+# Set the image to your GHCR path, e.g. ghcr.io/your-org/fypilot-backend:latest
+# (see docs/deployment/digitalocean.md). Default uses GITHUB_OWNER if exported.
 #
 # WebSocket scaling: Redis Pub/Sub fan-out (app/api/websocket/redis_ws.py). For
 # multiple backend replicas behind a load balancer, enable sticky sessions or

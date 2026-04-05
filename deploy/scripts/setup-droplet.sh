@@ -191,5 +191,5 @@ echo "  2. Copy docker-compose:       scp deploy/docker-compose.prod.yml deploy@
 echo "  3. Copy nginx config:         scp deploy/nginx/fypilot-backend.conf root@YOUR_IP:/etc/nginx/sites-available/fypilot-backend"
 echo "  4. Enable nginx site:         ssh root@YOUR_IP 'ln -sf /etc/nginx/sites-available/fypilot-backend /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx'"
 echo "  5. Setup SSL:                 ssh root@YOUR_IP 'certbot --nginx -d api.fypilot.com'"
-echo "  6. Add GitHub Secrets (see DIGITALOCEAN_DEPLOYMENT.md)"
+echo "  6. Add GitHub Secrets (see docs/deployment/digitalocean.md)"
 echo ""

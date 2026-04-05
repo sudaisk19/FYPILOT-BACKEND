@@ -24,6 +24,9 @@ from app.auth.routes import router as auth_router  # your signup/login endpoints
 from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
+from app.middleware.whiteboard_patch_size_limit import (
+    WhiteboardPatchContentSizeLimitMiddleware,
+)
 from app.services.cache import cache  # Redis cache
 from app.services.jury_matching_client import (  # Jury Matching HTTP client
     jury_matching_client,
@@ -72,6 +75,9 @@ app.add_middleware(
     max_age=60 * 60 * 24 * 30,  # 30 days
     session_cookie="fyp_session",
 )
+
+# Enforce max PATCH body size for Excalidraw whiteboards (must be outermost = registered last).
+app.add_middleware(WhiteboardPatchContentSizeLimitMiddleware)
 
 # Mount routers
 app.include_router(

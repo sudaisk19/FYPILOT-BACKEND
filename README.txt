@@ -12,7 +12,7 @@ A **Layered + Repository**–pattern FastAPI backend with real-time LLM support,
 - **In-memory stubs** for fast prototyping, easily swapped for SQLAlchemy or Supabase implementations  
 - **Alembic** for schema migrations  
 - **pytest/pytest-asyncio** for unit & integration tests  
-- **GitHub Actions** for CI, **Render** for CD  
+- **GitHub Actions** for CI/CD; production deploy targets **DigitalOcean** (Droplet + Docker). See `docs/deployment/digitalocean.md`.
 
 ---
 
