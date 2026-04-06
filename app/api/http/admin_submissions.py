@@ -89,9 +89,7 @@ ASSIGNMENT_LABEL_TO_ROLES = {
 
 ASSIGN_TO_CHOICES_DESC = "All Students, FYP-I Students, or FYP-II Students"
 
-INVALID_ASSIGNTO_MESSAGE = (
-    f"Invalid assignTo option. Student submissions can only target: {ASSIGN_TO_CHOICES_DESC}."
-)
+INVALID_ASSIGNTO_MESSAGE = f"Invalid assignTo option. Student submissions can only target: {ASSIGN_TO_CHOICES_DESC}."
 
 _ROLE_SET_TO_LABEL = {
     frozenset(roles): label for label, roles in ASSIGNMENT_LABEL_TO_ROLES.items()

@@ -34,7 +34,10 @@ async def _send_with_rate_limit_guard(
             detail = detail.decode("utf-8", errors="ignore")
         detail_text = detail or str(exc)
 
-        if exc.code == MAILTRAP_RATE_LIMIT_CODE and MAILTRAP_RATE_LIMIT_HINT in detail_text:
+        if (
+            exc.code == MAILTRAP_RATE_LIMIT_CODE
+            and MAILTRAP_RATE_LIMIT_HINT in detail_text
+        ):
             logger.warning(
                 "Mailtrap rate limit while sending %s. Email suppressed (see %s)",
                 context,

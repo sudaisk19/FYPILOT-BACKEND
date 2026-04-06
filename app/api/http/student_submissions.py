@@ -197,7 +197,11 @@ async def get_official_submission(
         )
 
     # Full announcement details for the new field
-    from app.schemas.student_announcement_schema import StudentAnnouncementResponse, StudentAnnouncementFileResponse
+    from app.schemas.student_announcement_schema import (
+        StudentAnnouncementFileResponse,
+        StudentAnnouncementResponse,
+    )
+
     announcement_response = None
     if announcement:
         announcement_response = StudentAnnouncementResponse(
@@ -521,7 +525,11 @@ async def get_unofficial_submission(
         )
 
     # Full announcement details for the new field
-    from app.schemas.student_announcement_schema import StudentAnnouncementResponse, StudentAnnouncementFileResponse
+    from app.schemas.student_announcement_schema import (
+        StudentAnnouncementFileResponse,
+        StudentAnnouncementResponse,
+    )
+
     announcement_response = None
     if announcement:
         announcement_response = StudentAnnouncementResponse(

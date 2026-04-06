@@ -1,9 +1,18 @@
 import os
 import re
 from typing import List, Optional, Tuple
-from uuid import UUID,uuid4
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -111,9 +120,9 @@ async def post_announcement(
             status_code=403, detail="Only admins can create announcements"
         )
 
-    file_payloads: List[
-        Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]
-    ] = []
+    file_payloads: List[Tuple[str, str, FileTypeEnum, Optional[str], Optional[int]]] = (
+        []
+    )
     types_list = [t.strip() for t in file_types.split(",")] if file_types else []
 
     if files:

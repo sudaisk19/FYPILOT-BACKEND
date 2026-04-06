@@ -10,8 +10,12 @@ from app.models.milestone import JuryFormTypeEnum
 
 
 class JuryEvaluationPayload(BaseModel):
-    letter_grade: JuryGradeEnum = Field(..., description="Letter grade assigned by the jury")
-    comments: Optional[str] = Field(None, description="Free-form feedback from the jury")
+    letter_grade: JuryGradeEnum = Field(
+        ..., description="Letter grade assigned by the jury"
+    )
+    comments: Optional[str] = Field(
+        None, description="Free-form feedback from the jury"
+    )
 
 
 class JuryEvaluationResponse(JuryEvaluationPayload):
@@ -62,9 +66,15 @@ class ProposalEvaluationPayload(BaseModel):
         le=2,
         description="System diagram / architecture marks (0-2)",
     )
-    total_marks: Optional[float] = Field(None, ge=0, description="Total computed marks (auto-calculated when omitted)")
-    deliverables: Optional[str] = Field(None, description="Expected deliverables or notes shared during proposal review")
-    recommended_changes: Optional[str] = Field(None, description="Recommended changes or feedback")
+    total_marks: Optional[float] = Field(
+        None, ge=0, description="Total computed marks (auto-calculated when omitted)"
+    )
+    deliverables: Optional[str] = Field(
+        None, description="Expected deliverables or notes shared during proposal review"
+    )
+    recommended_changes: Optional[str] = Field(
+        None, description="Recommended changes or feedback"
+    )
     project_status: ProposalStatusEnum = Field(
         ..., description="Final status recommendation for the proposal"
     )

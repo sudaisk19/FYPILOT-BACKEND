@@ -136,7 +136,9 @@ class FacultyDashboardService:
         faculty_id = faculty.user_id
         assignments = await self.repo.fetch_jury_assignments(faculty_id)
         if not assignments:
-            chart = JuryEvaluationStatusChart(type="pie_chart", data={"evaluated": 0, "pending": 0})
+            chart = JuryEvaluationStatusChart(
+                type="pie_chart", data={"evaluated": 0, "pending": 0}
+            )
             return JurySection(assigned_groups=[], evaluation_status_chart=chart)
 
         cycle_titles = await self.repo.fetch_active_milestones_by_cycle()

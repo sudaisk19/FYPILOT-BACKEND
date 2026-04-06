@@ -5,6 +5,7 @@ from typing import Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.admin_dashboard_repository import AdminDashboardRepository
 from app.schemas.dashboard_schema import (
     AdminDashboardEnvelope,
     AdminDashboardInsights,
@@ -15,12 +16,11 @@ from app.schemas.dashboard_schema import (
     ProjectsPerCycleEntry,
     StudentsPerTermChart,
     StudentsPerTermPoint,
-    SupervisorsPerDepartment,
     SupervisorCapacityUsage,
+    SupervisorsPerDepartment,
     SupervisorWorkloadInsights,
     UpcomingMilestones,
 )
-from app.repositories.admin_dashboard_repository import AdminDashboardRepository
 
 
 class AdminDashboardService:
@@ -165,7 +165,11 @@ class AdminDashboardService:
             MilestoneSummary(
                 milestone=m.title,
                 date=m.due_date,
-                cycle=m.fyp_cycle.value if hasattr(m.fyp_cycle, "value") else str(m.fyp_cycle),
+                cycle=(
+                    m.fyp_cycle.value
+                    if hasattr(m.fyp_cycle, "value")
+                    else str(m.fyp_cycle)
+                ),
             )
             for m in milestones
         ]

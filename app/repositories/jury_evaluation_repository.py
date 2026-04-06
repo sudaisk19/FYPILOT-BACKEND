@@ -84,11 +84,13 @@ async def get_numeric_marks(
     group_id: UUID,
 ) -> Optional[float]:
     result = await db.execute(
-        select(JuryEvaluation.numeric_marks).where(
+        select(JuryEvaluation.numeric_marks)
+        .where(
             JuryEvaluation.milestone_id == milestone_id,
             JuryEvaluation.group_id == group_id,
             JuryEvaluation.numeric_marks.is_not(None),
-        ).limit(1)
+        )
+        .limit(1)
     )
     marks = result.scalar_one_or_none()
     return float(marks) if marks is not None else None

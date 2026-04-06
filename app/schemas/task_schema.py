@@ -91,7 +91,6 @@ class SprintUpdate(BaseModel):
     status: Optional[SprintStatusEnum] = None
 
 
-
 class SprintResponse(BaseModel):
     milestone_id: UUID
     group_id: UUID

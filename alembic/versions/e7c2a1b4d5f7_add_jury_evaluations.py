@@ -9,6 +9,7 @@ Create Date: 2026-03-13 10:15:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -212,7 +213,9 @@ def upgrade() -> None:
     op.create_table(
         "proposal_evaluation_config",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("intro_max", sa.Numeric(3, 1), nullable=False, server_default=sa.text("2")),
+        sa.Column(
+            "intro_max", sa.Numeric(3, 1), nullable=False, server_default=sa.text("2")
+        ),
         sa.Column(
             "literature_max",
             sa.Numeric(3, 1),
