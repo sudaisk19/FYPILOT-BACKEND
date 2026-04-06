@@ -44,7 +44,8 @@ from app.api.http.users import router as user_router
 router = APIRouter()
 
 # Mount them under their prefixes
-router.include_router(health_router, prefix="/health", tags=["health"])
+# Single /health segment: router defines @router.get("/health") → /api/health
+router.include_router(health_router, tags=["health"])
 
 router.include_router(group_router, tags=["groups"])
 router.include_router(user_router, prefix="/users")
