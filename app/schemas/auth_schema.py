@@ -37,14 +37,14 @@ class SignupResponse(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str  # "student" or "supervisor" only
+    role: str  # "student" or "faculty" only
 
     @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        """Validate that role is either student or supervisor"""
-        if v not in ["student", "supervisor"]:
-            raise ValueError("Role must be 'student' or 'supervisor'")
+        """Validate that role is either student or faculty"""
+        if v not in ["student", "faculty"]:
+            raise ValueError("Role must be 'student' or 'faculty'")
         return v
 
 
@@ -135,18 +135,18 @@ class StudentInfo(BaseModel):
 
 class GroupInfo(BaseModel):
     group_id: Optional[UUID] = None
-    group_name: Optional[str] = None
+    project_name: Optional[str] = None
     fyp_stage: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
     supervisor_id: Optional[UUID] = None
-    cosupervisor_id: Optional[UUID] = None
+    cosupervisor_ids: List[UUID] = Field(default_factory=list)
     project_id: Optional[UUID] = None
 
 
 class SupervisedGroup(BaseModel):
     group_id: UUID
-    group_name: str
+    project_name: str
     fyp_stage: str
     fyp_cycle: str
     member_count: int
@@ -163,7 +163,7 @@ class IndustryInfo(BaseModel):
     name: str
 
 
-class SupervisorInfo(BaseModel):
+class FacultyInfo(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
     office: Optional[str] = None
@@ -174,11 +174,14 @@ class SupervisorInfo(BaseModel):
     supervised_groups: List[SupervisedGroup] = []
     domains: List[DomainInfo] = []
     industries: List[IndustryInfo] = []
+    is_supervisor: bool = False
+    is_jury: bool = False
+    is_active: bool = False
 
 
 class SystemStats(BaseModel):
     total_students: int
-    total_supervisors: int
+    total_faculty: int
     total_groups: int
     total_projects: int
     pending_invites: int
@@ -200,5 +203,5 @@ class UserProfileResponse(BaseModel):
     updated_at: datetime
     student_info: Optional[StudentInfo] = None  # Student profile data
     group_info: Optional[GroupInfo] = None  # For students
-    supervisor_info: Optional[SupervisorInfo] = None  # For supervisors
+    faculty_info: Optional[FacultyInfo] = None  # For faculty
     admin_info: Optional[AdminInfo] = None  # For admins

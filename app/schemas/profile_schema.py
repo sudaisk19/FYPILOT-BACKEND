@@ -73,7 +73,6 @@ class BaseUserFields(BaseModel):
 # Student-specific fields
 class StudentFields(BaseModel):
     roll_number: Optional[str] = Field(None, max_length=50)
-    department: Optional[str] = Field(None, max_length=255)
     cgpa: Optional[float] = Field(None, ge=0.0, le=4.0)
     interests: Optional[List[str]] = Field(None, max_items=20)
     experience: Optional[str] = Field(None, max_length=2000)
@@ -84,7 +83,7 @@ class StudentFields(BaseModel):
         description="Mapping of skill names to their levels (1-5). Skills without explicit levels default to 1.",
     )
 
-    @field_validator("roll_number", "department", "experience")
+    @field_validator("roll_number", "experience")
     @classmethod
     def validate_string_fields(cls, v):
         """Convert empty strings to None for string fields"""
@@ -100,7 +99,6 @@ class StudentFields(BaseModel):
 
 # Supervisor-specific fields
 class SupervisorFields(BaseModel):
-    department: Optional[str] = Field(None, max_length=255)
     designation: Optional[str] = Field(None, max_length=255)
     office: Optional[str] = Field(None, max_length=255)
     requirements: Optional[List[str]] = Field(None, max_items=20)
@@ -127,8 +125,7 @@ class StudentProfilePatchUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=255)
     profile_avatar: Optional[str] = Field(None, max_length=5000)
 
-    # Student fields (mutable - excluding roll_number)
-    department: Optional[str] = Field(None, max_length=255)
+    # Student fields (mutable - excluding roll_number and department)
     cgpa: Optional[float] = Field(None, ge=0.0, le=4.0)
     interests: Optional[List[str]] = Field(None, max_items=20)
     experience: Optional[str] = Field(None, max_length=2000)
@@ -139,7 +136,7 @@ class StudentProfilePatchUpdate(BaseModel):
         description="Mapping of skill names to their levels (1-5). Skills without explicit levels default to 1.",
     )
 
-    @field_validator("full_name", "profile_avatar", "department", "experience")
+    @field_validator("full_name", "profile_avatar", "experience")
     @classmethod
     def validate_string_fields(cls, v):
         """Validate string fields - convert empty strings to None"""
@@ -177,7 +174,6 @@ class SupervisorProfilePatchUpdate(BaseModel):
     profile_avatar: Optional[str] = Field(None, max_length=5000)
 
     # Supervisor fields (mutable)
-    department: Optional[str] = Field(None, max_length=255)
     designation: Optional[str] = Field(None, max_length=255)
     office: Optional[str] = Field(None, max_length=255)
     requirements: Optional[List[str]] = Field(None, max_items=20)
@@ -198,7 +194,7 @@ class SupervisorProfilePatchUpdate(BaseModel):
         None, ge=1, le=20, description="Maximum student capacity"
     )
 
-    @field_validator("full_name", "department", "designation", "office")
+    @field_validator("full_name", "designation", "office")
     @classmethod
     def validate_string_fields(cls, v):
         """Validate string fields - convert empty strings to None"""
@@ -320,14 +316,13 @@ class GroupInfo(BaseModel):
     """Minimal group information"""
 
     group_id: UUID
-    name: str
+    project_name: str
     fyp_stage: str
     fyp_cycle: str
     cohort_year: Optional[int] = None
     max_members: int
     supervisor_name: Optional[str] = None
-    cosupervisor_name: Optional[str] = None
-    project_name: Optional[str] = None
+    cosupervisor_names: List[str] = Field(default_factory=list)
     members: List[GroupMemberInfo] = Field(default_factory=list)
 
 

@@ -1,11 +1,11 @@
 # app/models/group.py
 import enum
 import uuid
-from datetime import datetime
 
 from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Index, Integer, Text, func, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -34,7 +34,6 @@ class FYPCycleEnum(str, enum.Enum):
 class Group(Base):
     __tablename__ = "groups"
     group_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(Text, nullable=False)
     fyp_stage = Column(
         Text,
         nullable=False,
@@ -46,35 +45,58 @@ class Group(Base):
         default=FYPCycleEnum.fyp1,
     )
     cohort_year = Column(Integer, nullable=True)
+    cohort = Column(
+        Text,
+        nullable=True,
+        comment="Short cohort code like F24 or S25",
+    )
     max_members = Column(
         Integer, nullable=False, default=3, comment="Maximum number of members (1-3)"
     )
-    milestone_template_id = Column(
-        PGUUID(as_uuid=True),
-        nullable=True,
-        # Note: Foreign key to milestone_templates.template_id removed
-        # until MilestoneTemplate model is implemented
-    )
     supervisor_id = Column(
-        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+        PGUUID(as_uuid=True), ForeignKey("faculty.user_id"), nullable=True
     )
-    cosupervisor_id = Column(
-        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=True
+    # Multiple co-supervisors as ARRAY of UUIDs
+    cosupervisor_ids = Column(
+        ARRAY(PGUUID(as_uuid=True)),
+        nullable=False,
+        default=list,
+        server_default=text("'{}'::uuid[]"),
+        comment="Array of co-supervisor user IDs",
     )
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
-    # Table constraints
+    # Table constraints + indexes
     __table_args__ = (
         CheckConstraint(
             "max_members >= 1 AND max_members <= 3", name="check_max_members_range"
         ),
+        CheckConstraint(
+            "cohort ~ '^[FS][0-9]{2}$'",
+            name="groups_cohort_format_check",
+        ),
+        # ── Performance indexes ───────────────────────────────────────────
+        # FK lookup: find all groups supervised by a given faculty member
+        Index("ix_groups_supervisor_id", "supervisor_id"),
+        # Common list filter: groups in a specific FYP cycle
+        Index("ix_groups_fyp_cycle", "fyp_cycle"),
+        # Common filter combo used in admin/supervisor group list queries
+        Index("ix_groups_fyp_stage_cycle", "fyp_stage", "fyp_cycle"),
     )
 
     members = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )
-    # Access students through members relationship instead of direct relationship
+
+    # Access students through members relationship
     students = relationship(
         "Student",
         secondary="group_members",
@@ -82,6 +104,41 @@ class Group(Base):
         viewonly=True,
         primaryjoin="Group.group_id == group_members.c.group_id",
         secondaryjoin="group_members.c.student_id == Student.user_id",
+    )
+    supervisor = relationship(
+        "Faculty",
+        foreign_keys=[supervisor_id],
+    )
+
+    # Added relationship for Co-Supervisors (using Array containment)
+    co_supervisors = relationship(
+        "Faculty",
+        primaryjoin="foreign(Faculty.user_id) == func.any(Group.cosupervisor_ids)",
+        viewonly=True,
+    )
+
+    project = relationship("Project", back_populates="group", uselist=False)
+
+    submissions = relationship(
+        "Submission", back_populates="group", cascade="all, delete-orphan"
+    )
+
+    tasks = relationship(
+        "Task",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    milestones = relationship(
+        "GroupMilestone",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    documents = relationship(
+        "GroupDocument",
+        back_populates="group",
+        cascade="all, delete-orphan",
     )
 
 
@@ -100,7 +157,9 @@ class GroupMember(Base):
         ),  # ← must reference students.user_id
         primary_key=True,
     )
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # now SQLAlchemy can wire this relationship:
     group = relationship("Group", back_populates="members", overlaps="groups,students")
@@ -115,6 +174,7 @@ class InviteStatusEnum(str, enum.Enum):
     declined = "declined"
     expired = "expired"
     cancelled = "cancelled"
+    feedback = "feedback"
 
 
 class GroupInvite(Base):
@@ -133,5 +193,7 @@ class GroupInvite(Base):
         nullable=False,
         default=InviteStatusEnum.pending,
     )
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)

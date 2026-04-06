@@ -1,37 +1,46 @@
-# alembic/env.py
+"""Alembic environment: sync migrations against Postgres (psycopg2).
+
+Loads all SQLAlchemy models so autogenerate sees the full schema (including Whiteboard).
+"""
+
+from __future__ import annotations
 
 from logging.config import fileConfig
+from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# Import your Pydantic settings so we can grab the real DATABASE_URL
-from app.core.config import settings
+# Load .env before app settings / models (DATABASE_URL).
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
-# this is the Alembic Config object, which provides
-# access to values within alembic.ini
+import app.models  # noqa: F401 — register models for autogenerate
+from app.core.config import settings
+from app.db import Base
+
 config = context.config
 
-# ─── Override the URL in alembic.ini with your app's DATABASE_URL ───
-# This ensures Alembic uses the same connection string as your FastAPI app
-config.set_main_option("sqlalchemy.url", settings.database_url)
-
-
-# Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+target_metadata = Base.metadata
 
-# If you have model metadata, point target_metadata here
-# from app.db import Base
-# target_metadata = Base.metadata
-target_metadata = None
+
+def _sync_database_url(url: str) -> str:
+    """Use psycopg2 for Alembic; app runtime uses asyncpg."""
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode (no DBAPI needed)."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = _sync_database_url(settings.database_url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -44,9 +53,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode (connect via Engine)."""
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = _sync_database_url(settings.database_url)
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -58,14 +68,7 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-# Decide between offline & online based on context
 if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-# End of alembic/env.py
-# This file is used by Alembic to manage database migrations.
-# It configures the connection to the database and runs migrations based on the settings defined in your FastAPI app's configuration.
-# The `run_migrations_offline` function is used when running migrations without a live database connection (e.g., generating migration scripts).
-# The `run_migrations_online` function is used when running migrations with a live database connection.
-# The `target_metadata` variable is set to `None` here, but you can uncomment and set it to your SQLAlchemy

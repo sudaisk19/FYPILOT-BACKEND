@@ -43,19 +43,19 @@ async def get_profile_completion_status(
             # Consider profile "completed" if at least roll_number and department are filled
             profile_completed = bool(student.roll_number and student.department)
 
-    elif current_user.role == "supervisor":
+    elif current_user.role == "faculty":
         result = await db.execute(
             select(User)
-            .options(selectinload(User.supervisor_profile))
+            .options(selectinload(User.faculty_profile))
             .where(User.user_id == current_user.user_id)
         )
         user = result.scalar_one_or_none()
-        has_profile = user.supervisor_profile is not None
+        has_profile = user.faculty_profile is not None
 
         # Check if profile has any meaningful data
         profile_completed = False
         if has_profile:
-            supervisor = user.supervisor_profile
+            supervisor = user.faculty_profile
             # Consider profile "completed" if at least department and designation are filled
             profile_completed = bool(supervisor.department and supervisor.designation)
 

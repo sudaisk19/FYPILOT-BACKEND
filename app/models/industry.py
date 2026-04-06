@@ -17,6 +17,6 @@ class Industry(Base):
 
     # Relationships - use string references to avoid circular imports
     projects = relationship("Project", back_populates="industry")
-    supervisors = relationship(
-        "Supervisor", secondary="supervisor_industries", back_populates="industries"
+    faculty_members = relationship(
+        "Faculty", secondary="faculty_industries", back_populates="industries"
     )

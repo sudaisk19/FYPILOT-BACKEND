@@ -5,12 +5,49 @@
 
 from .admin import Admin
 
+# Submission and Announcement models
+from .announcement import (
+    Announcement,
+    AnnouncementFile,
+    AnnouncementRoleEnum,
+    AnnouncementTarget,
+    TargetRoleEnum,
+)
+
+# Bulk import models
+from .bulk_import import (
+    BulkImportItem,
+    BulkImportJob,
+    BulkItemStatus,
+    BulkJobStatus,
+)
+from .chat_llm_turn import ChatLlmTurn
+
 # Domain and Industry models (base models)
 from .domain import Domain
+from .faculty import Faculty
+
+# Faculty relationship models (junction tables)
+from .faculty_domain import FacultyDomain
+from .faculty_industry import FacultyIndustry
 
 # Group models (depend on User and Student)
 from .group import Group, GroupInvite, GroupMember
+from .group_document import (
+    DocTypeEnum,
+    DocumentFile,
+    DocumentVersion,
+    FilePurposeEnum,
+    GroupDocument,
+    SaveTriggerEnum,
+)
+from .group_milestone import GroupMilestone, SprintStatusEnum
 from .industry import Industry
+
+# Jury Assignment models
+from .jury_assignment import JuryAssignment, JuryAssignmentBatch, JuryBatchStatusEnum
+from .jury_pair import JuryPair
+from .milestone import AdminMilestone
 
 # Other models
 from .password_reset import PasswordResetToken
@@ -24,21 +61,29 @@ from .shortlisted_supervisor import ShortlistedSupervisor
 
 # Profile models (depend on User)
 from .student import Student
-from .supervisor import Supervisor
-
-# Supervisor relationship models (junction tables)
-from .supervisor_domain import SupervisorDomain
-from .supervisor_industry import SupervisorIndustry
+from .submission import (
+    Submission,
+    SubmissionFile,
+    SubmissionStatusEnum,
+    SubmissionTypeEnum,
+)
+from .supervisor_evaluation import SupervisorEvaluation
+from .task import Task, TaskPriorityEnum, TaskStatusEnum
+from .task_attachment import TaskAttachment
 
 # Base models first
 from .user import RoleEnum, User
+from .whiteboard import Whiteboard
+
+# Milestone Model
+
 
 # Export all models
 __all__ = [
     "User",
     "RoleEnum",
     "Student",
-    "Supervisor",
+    "Faculty",
     "Admin",
     "Group",
     "GroupMember",
@@ -48,9 +93,46 @@ __all__ = [
     "ShortlistedSupervisor",
     "Project",
     "ProjectDomain",
+    "AdminMilestone",
+    "GroupMilestone",
+    "SprintStatusEnum",
+    "Task",
+    "TaskPriorityEnum",
+    "TaskStatusEnum",
+    "TaskAttachment",
+    "SupervisorEvaluation",
+    # Submission and Announcement models
+    "Announcement",
+    "AnnouncementFile",
+    "AnnouncementTarget",
+    "AnnouncementRoleEnum",
+    "TargetRoleEnum",
+    "Submission",
+    "SubmissionFile",
+    "SubmissionTypeEnum",
+    "SubmissionStatusEnum",
     "Domain",
     "Industry",
-    "SupervisorDomain",
-    "SupervisorIndustry",
+    "FacultyDomain",
+    "FacultyIndustry",
     "PasswordResetToken",
+    # Bulk import models
+    "BulkImportJob",
+    "BulkImportItem",
+    "BulkJobStatus",
+    "BulkItemStatus",
+    "ChatLlmTurn",
+    # Jury models
+    "JuryPair",
+    "JuryAssignment",
+    "JuryAssignmentBatch",
+    "JuryBatchStatusEnum",
+    # Group document models
+    "GroupDocument",
+    "DocumentVersion",
+    "DocumentFile",
+    "DocTypeEnum",
+    "SaveTriggerEnum",
+    "FilePurposeEnum",
+    "Whiteboard",
 ]

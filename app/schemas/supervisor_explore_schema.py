@@ -1,10 +1,10 @@
-# app/schemas/supervisor_explore_schema.py
-
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from app.schemas.invite_schema import RequestSummaryItem
 
 
 # Basic supervisor info for list view
@@ -42,7 +42,6 @@ class IndustryInfo(BaseModel):
         from_attributes = True
 
 
-# Detailed supervisor info for individual view
 class SupervisorDetailedInfo(BaseModel):
     # User fields
     user_id: UUID
@@ -74,14 +73,17 @@ class SupervisorDetailedInfo(BaseModel):
     current_groups: int = Field(description="Number of groups currently supervising")
     total_supervised: int = Field(description="Total groups supervised (historical)")
 
+    # Student-specific: list of requests between student's group and this supervisor
+    request_history: Optional[list[RequestSummaryItem]] = None
+
     class Config:
         from_attributes = True
 
 
 # Pagination response wrapper
 class PaginatedSupervisorResponse(BaseModel):
-    supervisors: List[SupervisorBasicInfo]
-    total: int = Field(description="Total number of supervisors")
+    faculty: List[SupervisorBasicInfo]
+    total: int = Field(description="Total number of faculty")
     page: int = Field(description="Current page number")
     per_page: int = Field(description="Items per page")
     total_pages: int = Field(description="Total number of pages")

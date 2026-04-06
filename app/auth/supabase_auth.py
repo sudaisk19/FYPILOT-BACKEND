@@ -97,7 +97,7 @@ async def get_current_user(
                 select(User)
                 .options(
                     selectinload(User.student_profile),
-                    selectinload(User.supervisor_profile),
+                    selectinload(User.faculty_profile),
                     selectinload(User.admin_profile),
                 )
                 .where(User.user_id == user_id)
@@ -188,3 +188,43 @@ def require_roles(*allowed_roles: str):
         return user
 
     return role_checker
+
+
+async def get_ws_user(token_str: str) -> User | None:
+    """
+    Authenticate a WebSocket connection from a raw JWT string.
+
+    Used in WebSocket endpoints where the token is passed as a query parameter
+    (since WebSockets cannot carry custom HTTP headers).
+
+    Args:
+        token_str: Raw JWT string from the `?token=` query param
+
+    Returns:
+        User if valid, None if invalid/expired
+    """
+    from app.db import AsyncSessionLocal
+
+    try:
+        claims = decode_access_token(token_str)
+        user_id = UUID(claims["sub"])
+        role = claims.get("role")
+    except Exception as e:
+        logger.warning(f"WebSocket auth failed (token decode): {e}")
+        return None
+
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(User)
+                .options(
+                    selectinload(User.student_profile),
+                    selectinload(User.faculty_profile),
+                )
+                .where(User.user_id == user_id)
+                .where(User.role == role)
+            )
+            return result.scalars().first()
+    except SQLAlchemyError as e:
+        logger.error(f"WebSocket auth DB error: {e}")
+        return None

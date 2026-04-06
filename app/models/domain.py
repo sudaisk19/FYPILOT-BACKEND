@@ -18,6 +18,6 @@ class Domain(Base):
     projects = relationship(
         "Project", secondary="project_domains", back_populates="domains"
     )
-    supervisors = relationship(
-        "Supervisor", secondary="supervisor_domains", back_populates="domains"
+    faculty_members = relationship(
+        "Faculty", secondary="faculty_domains", back_populates="domains"
     )

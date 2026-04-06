@@ -31,7 +31,7 @@ if not JWT_SECRET and ENV == "production":
     raise ValueError("JWT_SECRET must be set in production environment")
 
 # Role type for type safety
-Role = Literal["student", "supervisor", "admin"]
+Role = Literal["student", "faculty", "admin"]
 
 # Password hashing configuration
 # Uses bcrypt in production, plaintext in development for easier testing

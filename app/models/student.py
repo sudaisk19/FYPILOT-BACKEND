@@ -1,7 +1,15 @@
 # Import required libraries
 import uuid
 
-from sqlalchemy import Column, ForeignKey, Numeric, Text  # SQLAlchemy column types
+from sqlalchemy import (  # SQLAlchemy column types
+    Boolean,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import (
     ARRAY,
     JSONB,
@@ -77,6 +85,34 @@ class Student(Base):
         default=dict,  # Initialize as empty dict
     )
 
+    # FYP batch registration fields
+    fyp_start_semester = Column(
+        Text,  # e.g. "Fall", "Spring"
+        nullable=True,
+    )
+
+    fyp_start_year = Column(
+        Integer,  # e.g. 2026
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    # ── Explicit indexes ──────────────────────────────────────────────────────
+    __table_args__ = (
+        # Student lifecycle scheduler filters by is_active heavily
+        Index("ix_students_is_active", "is_active"),
+        # Department-based filtering for recommendations and admin views
+        Index("ix_students_department", "department"),
+        # Combined filter: active students in a department
+        Index("ix_students_is_active_dept", "is_active", "department"),
+    )
+
     @hybrid_property
     def skills_levels_normalized(self):
         """
@@ -127,4 +163,10 @@ class Student(Base):
         viewonly=True,
         primaryjoin="Student.user_id == group_members.c.student_id",
         secondaryjoin="group_members.c.group_id == Group.group_id",
+    )
+
+    tasks = relationship(
+        "Task",
+        back_populates="assignee",
+        cascade="all, delete-orphan",
     )

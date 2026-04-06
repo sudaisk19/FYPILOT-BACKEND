@@ -11,6 +11,7 @@ from app.auth.supabase_auth import get_current_user
 from app.core.config import settings
 from app.db import get_db
 from app.models.domain import Domain
+from app.models.faculty import Faculty
 from app.models.group import (
     FYPCycleEnum,
     FYPStageEnum,
@@ -20,9 +21,13 @@ from app.models.group import (
     InviteStatusEnum,
 )
 from app.models.industry import Industry
-from app.models.project import Project, ProjectDomain, ProjectTypeEnum
+from app.models.project import (
+    Project,
+    ProjectDomain,
+    ProjectTypeEnum,
+    project_type_value,
+)
 from app.models.student import Student
-from app.models.supervisor import Supervisor
 from app.models.user import User
 from app.schemas.group_schema import (
     CreateGroupRequest,
@@ -84,7 +89,6 @@ async def create_group(
 
     # 3) Create the Group
     grp = Group(
-        name=body.name,
         fyp_stage=FYPStageEnum.ideation,
         fyp_cycle=FYPCycleEnum.fyp1,
         created_at=datetime.utcnow(),
@@ -110,7 +114,7 @@ async def create_group(
     if not existing_project:
         project = Project(
             group_id=grp.group_id,
-            name=grp.name,
+            name=body.project_name,
             project_type=ProjectTypeEnum.research,  # Use enum directly, not .value
         )
         db.add(project)
@@ -123,7 +127,7 @@ async def create_group(
     await db.commit()
 
     return GroupResponse(
-        group_id=grp.group_id, name=grp.name, project_id=project.project_id
+        group_id=grp.group_id, project_name=project.name, project_id=project.project_id
     )
 
 
@@ -588,7 +592,13 @@ async def delete_group(
 
     try:
         # Store group info for response before deletion
-        group_name = group.name
+        project_result_for_deletion = await db.execute(
+            select(Project).where(Project.group_id == group_id)
+        )
+        project_for_deletion = project_result_for_deletion.scalars().first()
+        project_name = (
+            project_for_deletion.name if project_for_deletion else "Unknown Project"
+        )
         deleted_at = datetime.utcnow().isoformat()
 
         # Delete the group (CASCADE will handle related records)
@@ -598,7 +608,7 @@ async def delete_group(
         await db.commit()
 
         return DeleteGroupResponse(
-            message=f"Group '{group_name}' has been successfully deleted",
+            message=f"Group for project '{project_name}' has been successfully deleted",
             group_id=group_id,
             deleted_at=deleted_at,
         )
@@ -703,13 +713,13 @@ async def get_group_profile(
             )
 
         # Get supervisor information
-        supervisors = {"primary": None, "co_supervisor": None}
+        supervisors = {"primary": None, "co_supervisors": []}
 
         if group.supervisor_id:
             supervisor_result = await db.execute(
-                select(Supervisor, User)
-                .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.supervisor_id)
+                select(Faculty, User)
+                .join(User, User.user_id == Faculty.user_id)
+                .where(Faculty.user_id == group.supervisor_id)
             )
             supervisor_data = supervisor_result.first()
             if supervisor_data:
@@ -723,22 +733,24 @@ async def get_group_profile(
                     avatar_url=supervisor_user.profile_avatar,
                 )
 
-        if group.cosupervisor_id:
-            cosupervisor_result = await db.execute(
-                select(Supervisor, User)
-                .join(User, User.user_id == Supervisor.user_id)
-                .where(Supervisor.user_id == group.cosupervisor_id)
+        if group.cosupervisor_ids and len(group.cosupervisor_ids) > 0:
+            cosupervisors_result = await db.execute(
+                select(Faculty, User)
+                .join(User, User.user_id == Faculty.user_id)
+                .where(Faculty.user_id.in_(group.cosupervisor_ids))
             )
-            cosupervisor_data = cosupervisor_result.first()
-            if cosupervisor_data:
-                cosupervisor, cosupervisor_user = cosupervisor_data
-                supervisors["co_supervisor"] = SupervisorInfo(
-                    user_id=cosupervisor_user.user_id,
-                    full_name=cosupervisor_user.full_name,
-                    department=cosupervisor.department,
-                    designation=cosupervisor.designation,
-                    email=cosupervisor_user.email,
-                    avatar_url=cosupervisor_user.profile_avatar,
+            cosupervisors_data = cosupervisors_result.all()
+
+            for cosupervisor, cosupervisor_user in cosupervisors_data:
+                supervisors["co_supervisors"].append(
+                    SupervisorInfo(
+                        user_id=cosupervisor_user.user_id,
+                        full_name=cosupervisor_user.full_name,
+                        department=cosupervisor.department,
+                        designation=cosupervisor.designation,
+                        email=cosupervisor_user.email,
+                        avatar_url=cosupervisor_user.profile_avatar,
+                    )
                 )
 
         # Get project information
@@ -757,9 +769,9 @@ async def get_group_profile(
                 raw_result = await db.execute(
                     text(
                         """
-                        SELECT project_id, group_id, name, description, objectives, 
+                           SELECT project_id, group_id, name, description, objectives, 
                                tech_stack, start_date, end_date, project_type, 
-                               industry_id, repo_links, created_at, updated_at
+                               industry_id, repo_links, created_at, updated_at, fyp_id
                         FROM projects 
                         WHERE group_id = :group_id
                     """
@@ -786,6 +798,7 @@ async def get_group_profile(
                             self.repo_links = data[10]
                             self.created_at = data[11]
                             self.updated_at = data[12]
+                            self.fyp_id = data[13]
 
                     project_data = MockProject(raw_data)
                 else:
@@ -821,14 +834,11 @@ async def get_group_profile(
                     )
 
             # Handle project_type - convert to string and validate
-            project_type = (
-                str(project_data.project_type)
-                if project_data.project_type
-                else "capstone"
-            )
+            project_type = project_type_value(project_data.project_type) or "capstone"
 
             project = ProjectInfo(
                 project_id=project_data.project_id,
+                fyp_id=getattr(project_data, "fyp_id", None),
                 name=project_data.name,
                 description=project_data.description,
                 objectives=project_data.objectives,
@@ -880,7 +890,7 @@ async def get_group_profile(
         # Build group basic info
         group_info = {
             "group_id": str(group.group_id),
-            "name": group.name,
+            "fyp_id": project.fyp_id if project else None,
             "fyp_stage": group.fyp_stage,
             "fyp_cycle": group.fyp_cycle,
             "cohort_year": group.cohort_year,
@@ -888,12 +898,30 @@ async def get_group_profile(
             "updated_at": group.updated_at.isoformat(),
         }
 
+        # Fetch supervisor acceptance feedback (if any)
+        supervisor_acceptance_feedback = None
+        if group.supervisor_id:
+            from app.models.request import Request
+
+            feedback_result = await db.execute(
+                select(Request.feedback)
+                .where(
+                    Request.group_id == group.group_id,
+                    Request.faculty_id == group.supervisor_id,
+                    Request.status == InviteStatusEnum.accepted,
+                    Request.feedback.is_not(None),
+                )
+                .order_by(Request.updated_at.desc())
+            )
+            supervisor_acceptance_feedback = feedback_result.scalars().first()
+
         return GroupProfileResponse(
             group=group_info,
             members=members,
             supervisors=supervisors,
             project=project,
             invites=invites_info,
+            supervisor_acceptance_feedback=supervisor_acceptance_feedback,
         )
 
     except Exception as e:
@@ -977,8 +1005,6 @@ async def update_group_profile(
         if update_data.group:
             group_updates = {}
 
-            if update_data.group.name is not None:
-                group_updates["name"] = update_data.group.name
             if update_data.group.fyp_stage is not None:
                 # Cast to proper enum type to avoid database constraint issues
                 group_updates["fyp_stage"] = update_data.group.fyp_stage
@@ -989,8 +1015,8 @@ async def update_group_profile(
                 group_updates["cohort_year"] = update_data.group.cohort_year
             if update_data.group.supervisor_id is not None:
                 group_updates["supervisor_id"] = update_data.group.supervisor_id
-            if update_data.group.cosupervisor_id is not None:
-                group_updates["cosupervisor_id"] = update_data.group.cosupervisor_id
+            if update_data.group.cosupervisor_ids is not None:
+                group_updates["cosupervisor_ids"] = update_data.group.cosupervisor_ids
 
             if group_updates:
                 group_updates["updated_at"] = updated_at

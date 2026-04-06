@@ -3,9 +3,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.db import Base
@@ -28,9 +28,9 @@ class Request(Base):
         ForeignKey("groups.group_id", ondelete="CASCADE"),
         nullable=False,
     )
-    supervisor_id = Column(
+    faculty_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("supervisors.user_id", ondelete="CASCADE"),
+        ForeignKey("faculty.user_id", ondelete="CASCADE"),
         nullable=False,
     )
     request_type = Column(
@@ -43,6 +43,7 @@ class Request(Base):
         default=InviteStatusEnum.pending,
     )
     message = Column(Text, nullable=True)
+    feedback = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(

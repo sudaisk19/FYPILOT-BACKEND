@@ -24,12 +24,28 @@ from app.auth.routes import router as auth_router  # your signup/login endpoints
 from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
+from app.middleware.whiteboard_patch_size_limit import (
+    WhiteboardPatchContentSizeLimitMiddleware,
+)
 from app.services.cache import cache  # Redis cache
+from app.services.jury_matching_client import (  # Jury Matching HTTP client
+    jury_matching_client,
+)
+from app.services.student_lifecycle_scheduler import (
+    create_scheduler,
+    run_student_lifecycle_job,
+)
+from app.services.supervisor_recommendation_client import (  # Supervisor Recommendation HTTP client
+    supervisor_recommendation_client,
+)
 
 # Configure logger
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="FYPilot Backend")
+
+# Initialize Scheduler
+scheduler = create_scheduler()
 
 # CORS origins
 origins = [
@@ -60,6 +76,9 @@ app.add_middleware(
     session_cookie="fyp_session",
 )
 
+# Enforce max PATCH body size for Excalidraw whiteboards (must be outermost = registered last).
+app.add_middleware(WhiteboardPatchContentSizeLimitMiddleware)
+
 # Mount routers
 app.include_router(
     auth_router, prefix="/auth"
@@ -68,6 +87,13 @@ app.include_router(
     api_router, prefix="/api"
 )  # /api/groups, /api/users, /api/students, /api/supervisors, /api/admins, /health
 app.include_router(llm_chat.router, prefix="/llm")
+
+# ── WebSocket routers (no /api prefix — WS uses ?token= for auth) ────────────
+from app.api.websocket import chat as ws_chat
+from app.api.websocket import document as ws_document
+
+app.include_router(ws_chat.router)
+app.include_router(ws_document.router)
 
 # Global exception handlers
 register_exception_handlers(app)
@@ -80,9 +106,14 @@ async def on_startup():
 
     # Initialize Redis cache connection (non-blocking with timeout)
     # If Redis fails, app will continue without cache
+    redis_ok = False
     try:
         # Add 3 second timeout to prevent blocking startup
-        await asyncio.wait_for(cache.connect(), timeout=3.0)
+        redis_ok = await asyncio.wait_for(cache.connect(), timeout=3.0)
+        if redis_ok:
+            logger.info("✅ Redis cache connected and ready.")
+        else:
+            logger.warning("⚠️ Redis not available. App will run without caching.")
     except asyncio.TimeoutError:
         logger.warning(
             "Redis connection timed out during startup. "
@@ -93,6 +124,25 @@ async def on_startup():
             f"Redis connection failed during startup: {e}. "
             "App will continue without cache. Caching will be disabled."
         )
+
+    if redis_ok:
+        from app.api.websocket.manager import start_redis_ws_subscriber
+        from app.services.chat_sse_hub import start_chat_sse_redis_subscriber
+
+        start_redis_ws_subscriber()
+        start_chat_sse_redis_subscriber()
+
+    from app.db.mongo import mongo_db
+    from app.repositories.chat_session_repository import chat_session_repo
+    from app.services.collaborative_chat_worker import start_chat_workers
+
+    try:
+        await chat_session_repo.ensure_indexes(mongo_db)
+        logger.info("MongoDB chat message indexes ensured.")
+    except Exception as e:
+        logger.warning("MongoDB chat index ensure failed (non-fatal): %s", e)
+
+    start_chat_workers()
 
     # Database tables will be created automatically on first use via SQLAlchemy
     # Or you can run migrations separately. This ensures fast startup.
@@ -114,11 +164,32 @@ async def on_startup():
     # Run database test in background (fire and forget)
     asyncio.create_task(test_db_connection())
 
+    # Start the background scheduler
+    try:
+        scheduler.start()
+        logger.info("✅ Student lifecycle scheduler started.")
+        # Run the deactivation job once on startup to catch up
+        asyncio.create_task(run_student_lifecycle_job())
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
     # Gracefully close Redis connection
     await cache.disconnect()
+
+    # Close Supervisor Recommendation HTTP client
+    await supervisor_recommendation_client.close()
+
+    # Close Jury Matching HTTP client
+    await jury_matching_client.close()
+
+    # Shutdown scheduler
+    scheduler.shutdown()
+    logger.info("Student lifecycle scheduler shut down.")
+
+    logger.info("Application shutdown complete.")
 
 
 if __name__ == "__main__":

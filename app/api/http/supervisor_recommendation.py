@@ -10,10 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.user import User
-from app.schemas.recommendation_schema import (
-    RecommendationRequest,
+from app.schemas.supervisor_recommendation_schema import (
+    SupervisorRecommendationRequest,
 )
-from app.services.recommendation_service import recommendation_service
+from app.services.supervisor_recommendation_service import (
+    supervisor_recommendation_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 @router.post("/supervisors")
 async def get_supervisor_recommendations(
-    request: RecommendationRequest,
+    request: SupervisorRecommendationRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -59,7 +61,7 @@ async def get_supervisor_recommendations(
         )
 
     try:
-        recommendations = await recommendation_service.recommend_supervisors(
+        recommendations = await supervisor_recommendation_service.recommend_supervisors(
             db=db,
             group_id=request.group_id,
             idea_domain=request.idea_domain,

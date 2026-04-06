@@ -8,12 +8,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class CreateGroupRequest(BaseModel):
-    name: str
+    project_name: str
 
 
 class GroupResponse(BaseModel):
     group_id: UUID
-    name: str
+    project_name: str
     project_id: Optional[UUID] = None
 
 
@@ -88,6 +88,7 @@ class IndustryInfo(BaseModel):
 
 class ProjectInfo(BaseModel):
     project_id: UUID
+    fyp_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     objectives: Optional[List[Any]] = Field(default_factory=list)
@@ -104,27 +105,32 @@ class ProjectInfo(BaseModel):
 class GroupProfileResponse(BaseModel):
     group: Dict[str, Any] = Field(..., description="Group basic information")
     members: List[GroupMemberInfo] = Field(default_factory=list)
-    supervisors: Dict[str, Optional[SupervisorInfo]] = Field(
-        default_factory=lambda: {"primary": None, "co_supervisor": None}
+    supervisors: Dict[str, Any] = Field(
+        default_factory=lambda: {"primary": None, "co_supervisors": []}
     )
     project: Optional[ProjectInfo] = None
     invites: GroupInvitesInfo = Field(
         ..., description="Pending invites with inviter details"
     )
+    supervisor_acceptance_feedback: Optional[str] = Field(
+        None, description="Supervisor's acceptance feedback if present"
+    )
 
 
 # PATCH Request Schemas
 class GroupUpdateData(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
     fyp_cycle: Optional[str] = Field(None, pattern="^(fyp1|fyp2)$")
     cohort_year: Optional[int] = Field(None, ge=2020, le=2030)
     supervisor_id: Optional[UUID] = None
-    cosupervisor_id: Optional[UUID] = None
+    cosupervisor_ids: Optional[List[UUID]] = None
 
 
 class ProjectUpdateData(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
+    fyp_id: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="External FYP identifier"
+    )
     objectives: Optional[List[Any]] = None
     tech_stack: Optional[List[str]] = None
     domain_ids: Optional[List[UUID]] = Field(None, max_items=10)

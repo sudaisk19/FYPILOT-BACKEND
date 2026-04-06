@@ -1,0 +1,79 @@
+# deploy/docker-compose.prod.yml
+# Production Docker Compose for DigitalOcean Droplet
+# Used by the deployment pipeline on the server.
+#
+# Set the image to your GHCR path, e.g. ghcr.io/your-org/fypilot-backend:latest
+# (see docs/deployment/digitalocean.md). Default uses GITHUB_OWNER if exported.
+#
+# WebSocket scaling: Redis Pub/Sub fan-out (app/api/websocket/redis_ws.py). For
+# multiple backend replicas behind a load balancer, enable sticky sessions or
+# rely on Redis so broadcasts reach all workers (document edit locks are still
+# per-process unless extended).
+
+version: "3.8"
+
+services:
+  backend:
+    image: ghcr.io/${GITHUB_OWNER:-your-github-username}/fypilot-backend:latest
+    container_name: fypilot-backend
+    restart: always
+    env_file:
+      - /opt/fypilot-backend/.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ENV=production
+    ports:
+      - "127.0.0.1:8000:8000"  # Only expose to localhost (Nginx will proxy)
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "1.0"
+        reservations:
+          memory: 192M
+
+  redis:
+    image: redis:alpine
+    container_name: fypilot-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"  # Only expose to localhost
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+        --appendonly yes
+        --maxmemory 64mb
+        --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: fypilot-network

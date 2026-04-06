@@ -15,8 +15,8 @@ class ShortlistedSupervisor(Base):
     group_id = Column(
         PGUUID(as_uuid=True), ForeignKey("groups.group_id"), nullable=False
     )
-    supervisor_id = Column(
-        PGUUID(as_uuid=True), ForeignKey("supervisors.user_id"), nullable=False
+    faculty_id = Column(
+        PGUUID(as_uuid=True), ForeignKey("faculty.user_id"), nullable=False
     )
     added_by = Column(PGUUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     added_at = Column(DateTime, default=datetime.utcnow, nullable=False)

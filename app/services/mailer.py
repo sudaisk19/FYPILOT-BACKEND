@@ -1,16 +1,47 @@
 # app/services/mailer.py
 
+import logging
 from email.message import EmailMessage
-from typing import Optional
+from typing import Awaitable, Optional
 
 import aiosmtplib
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 try:
     from sendgrid import SendGridAPIClient
 except ImportError:
     SendGridAPIClient = None  # type: ignore
+
+
+MAILTRAP_RATE_LIMIT_CODE = 550
+MAILTRAP_RATE_LIMIT_HINT = "Too many emails per second"
+MAILTRAP_RATE_LIMIT_DOC = "https://mailtrap.io/billing/plans/testing"
+
+
+async def _send_with_rate_limit_guard(
+    send_operation: Awaitable[None], *, context: str
+) -> None:
+    """Await a mailer send and swallow Mailtrap's per-second throttle errors."""
+
+    try:
+        await send_operation
+    except aiosmtplib.errors.SMTPDataError as exc:
+        detail = getattr(exc, "message", "")
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="ignore")
+        detail_text = detail or str(exc)
+
+        if exc.code == MAILTRAP_RATE_LIMIT_CODE and MAILTRAP_RATE_LIMIT_HINT in detail_text:
+            logger.warning(
+                "Mailtrap rate limit while sending %s. Email suppressed (see %s)",
+                context,
+                MAILTRAP_RATE_LIMIT_DOC,
+            )
+            return
+        raise
 
 
 def get_email_template(
@@ -279,7 +310,10 @@ async def send_password_reset_email(to_email: str, user_name: str, reset_link: s
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="password reset email",
+    )
 
 
 async def send_group_invitation_email(
@@ -341,18 +375,21 @@ async def send_group_invitation_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="group invitation email",
+    )
 
 
 async def send_supervisor_accepted_email(
-    to_email: str, group_name: str, supervisor_name: str, role: str
+    to_email: str, project_name: str, supervisor_name: str, role: str
 ):
     """
     Send email to group members when supervisor accepts their request.
 
     Args:
         to_email (str): Group member's email address
-        group_name (str): Name of the group
+        project_name (str): Name of the project
         supervisor_name (str): Name of the supervisor who accepted
         role (str): Role accepted (supervisor or cosupervisor)
     """
@@ -370,7 +407,7 @@ async def send_supervisor_accepted_email(
     <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <p style="margin: 0 0 8px; font-weight: 600; color: #065f46;">Request Status: Accepted ✓</p>
         <ul style="margin: 0; padding-left: 20px; color: #065f46;">
-            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
             <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
             <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
         </ul>
@@ -388,18 +425,21 @@ async def send_supervisor_accepted_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="supervisor request accepted email",
+    )
 
 
 async def send_supervisor_rejected_email(
-    to_email: str, group_name: str, supervisor_name: str, role: str
+    to_email: str, project_name: str, supervisor_name: str, role: str
 ):
     """
     Send email to group members when supervisor rejects their request.
 
     Args:
         to_email (str): Group member's email address
-        group_name (str): Name of the group
+        project_name (str): Name of the project
         supervisor_name (str): Name of the supervisor who rejected
         role (str): Role requested (supervisor or cosupervisor)
     """
@@ -417,7 +457,7 @@ async def send_supervisor_rejected_email(
     <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <p style="margin: 0 0 8px; font-weight: 600; color: #7f1d1d;">Request Status: Declined</p>
         <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
-            <li style="margin-bottom: 8px;"><strong>Group:</strong> {group_name}</li>
+            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
             <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
             <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
         </ul>
@@ -435,4 +475,7 @@ async def send_supervisor_rejected_email(
     )
 
     mailer = get_mailer()
-    await mailer.send(to_email, subject, html_body)
+    await _send_with_rate_limit_guard(
+        mailer.send(to_email, subject, html_body),
+        context="supervisor request rejected email",
+    )

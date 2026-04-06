@@ -1,18 +1,34 @@
 # app/api/http/supervisor_explore.py
+"""
+Supervisor Explore API Module - Partially Refactored to use Repository Pattern
 
+This module handles supervisor browsing and search operations.
+
+REFACTORED:
+- get_supervisor_details() uses supervisor_repository.get_with_user()
+  and supervisor_repository.get_domains/get_industries()
+
+NOT REFACTORED (complex relevance scoring logic):
+- explore_supervisors() - keeps direct SQLAlchemy for relevance scoring
+  The repository search() method doesn't support relevance scoring which
+  is critical for this endpoint's UX.
+"""
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
-from app.models.domain import Domain
-from app.models.supervisor import Supervisor
-from app.models.supervisor_domain import SupervisorDomain
+from app.models.group import InviteStatusEnum
 from app.models.user import User
+from app.repositories import (
+    request_repository,
+    student_repository,
+    supervisor_repository,
+)
+from app.models.request import Request
+from app.schemas.invite_schema import RequestSummaryItem
 from app.schemas.supervisor_explore_schema import (
     DomainInfo,
     IndustryInfo,
@@ -21,7 +37,7 @@ from app.schemas.supervisor_explore_schema import (
     SupervisorDetailedInfo,
 )
 
-router = APIRouter(prefix="/explore", tags=["supervisor-explore"])
+router = APIRouter(tags=["supervisor-explore"])
 
 
 # Department alias mapping for flexible department filtering
@@ -128,108 +144,23 @@ async def explore_supervisors(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Build base query - join users and supervisors
-    query = (
-        select(User, Supervisor)
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .where(User.role == "supervisor")
+    rows, total = await supervisor_repository.search_supervisors_with_scoring(
+        db,
+        department=department,
+        designation=designation,
+        domain=domain,
+        search=search,
+        page=page,
+        per_page=per_page,
     )
 
-    # Collect simple filters (department, designation, search)
-    simple_filters = []
-    relevance_score = None
-
-    # Department filter with alias support
-    if department:
-        normalized_dept = normalize_department(department)
-        simple_filters.append(Supervisor.department.ilike(f"%{normalized_dept}%"))
-
-    # Designation filter with relevance scoring
-    if designation:
-        simple_filters.append(Supervisor.designation.ilike(f"%{designation}%"))
-        # Create relevance score for designation:
-        # 3 = exact match (case-insensitive), 2 = prefix match, 1 = substring match
-        relevance_score = case(
-            (
-                func.lower(Supervisor.designation) == func.lower(designation),
-                3,
-            ),  # Exact match
-            (
-                func.lower(Supervisor.designation).startswith(func.lower(designation)),
-                2,
-            ),  # Prefix match
-            else_=1,  # Substring match
-        )
-
-    # Search filter (name or email) with relevance scoring
-    if search:
-        search_filter = or_(
-            User.full_name.ilike(f"%{search}%"), User.email.ilike(f"%{search}%")
-        )
-        simple_filters.append(search_filter)
-        # Create relevance score for name/email:
-        # 3 = starts with search term, 2 = contains search term, 1 = default
-        search_relevance = case(
-            (func.lower(User.full_name).startswith(func.lower(search)), 3),
-            (func.lower(User.full_name).contains(func.lower(search)), 2),
-            else_=1,
-        )
-        # Combine with designation relevance if both exist
-        if relevance_score is not None:
-            relevance_score = relevance_score + search_relevance
-        else:
-            relevance_score = search_relevance
-
-    # Domain filter (intersected with other filters via many-to-many join)
-    if domain:
-        query = (
-            query.join(
-                SupervisorDomain, Supervisor.user_id == SupervisorDomain.supervisor_id
-            )
-            .join(Domain, SupervisorDomain.domain_id == Domain.domain_id)
-            .where(Domain.name.ilike(f"%{domain}%"))
-        )
-
-    # Apply simple filters (department, designation, search) with AND logic
-    if simple_filters:
-        query = query.where(and_(*simple_filters))
-
-    # Apply distinct to avoid duplicate rows from many-to-many joins
-    query = query.distinct()
-
-    # Add relevance score to query if it exists
-    if relevance_score is not None:
-        query = query.add_columns(relevance_score.label("relevance_score"))
-
-    # Get total count BEFORE pagination (count filtered results only)
-    # Build a count query from the same filtered query
-    count_subquery = query.subquery()
-    count_query = select(func.count()).select_from(count_subquery)
-    total = (await db.execute(count_query)).scalar() or 0
-
-    # Calculate pagination
-    offset = (page - 1) * per_page
+    # Calculate pagination metadata
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
-    # Apply ordering by relevance score (if it exists) before pagination
-    if relevance_score is not None:
-        query = query.order_by(relevance_score.desc(), User.full_name.asc())
-    else:
-        # Default ordering by name if no relevance score
-        query = query.order_by(User.full_name.asc())
-
-    # Apply pagination
-    query = query.offset(offset).limit(per_page)
-
-    # Execute query
-    result = await db.execute(query)
-    rows = result.all()
 
     # Convert to response format
     supervisors = []
     for row in rows:
-        # Handle both cases: with and without relevance score
-        if relevance_score is not None:
+        if len(row) == 3:
             user, supervisor, _ = row  # Unpack user, supervisor, and relevance_score
         else:
             user, supervisor = row  # Unpack just user and supervisor
@@ -252,7 +183,7 @@ async def explore_supervisors(
         )
 
     return PaginatedSupervisorResponse(
-        supervisors=supervisors,
+        faculty=supervisors,
         total=total,
         page=page,
         per_page=per_page,
@@ -376,24 +307,18 @@ async def get_supervisor_details(
             detail="Access denied. This endpoint is only for students.",
         )
 
-    # Fetch supervisor with user details, domains and industries eagerly loaded
-    result = await db.execute(
-        select(User, Supervisor)
-        .options(
-            selectinload(Supervisor.domains),
-            selectinload(Supervisor.industries),
-        )
-        .join(Supervisor, User.user_id == Supervisor.user_id)
-        .where(User.user_id == supervisor_id, User.role == "supervisor")
-    )
-
-    row = result.first()
+    # Fetch supervisor with user details using repository
+    row = await supervisor_repository.get_with_user(db, supervisor_id)
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Supervisor not found"
         )
 
     user, supervisor = row
+
+    # Fetch domains and industries using repository
+    domains_list = await supervisor_repository.get_domains(db, supervisor_id)
+    industries_list = await supervisor_repository.get_industries(db, supervisor_id)
 
     # Calculate available slots
     available_slots = supervisor.capacity_max - supervisor.capacity_filled
@@ -411,17 +336,60 @@ async def get_supervisor_details(
     # For now, we'll use current_groups as a placeholder
     total_supervised = current_groups
 
-    # Extract domains with id and name
+    # Extract domains with id and name using repository data
     domains = [
         DomainInfo(domain_id=domain.domain_id, name=domain.name)
-        for domain in supervisor.domains
+        for domain in domains_list
     ]
 
-    # Extract industries with id and name
+    # Extract industries with id and name using repository data
     industries = [
         IndustryInfo(industry_id=industry.industry_id, name=industry.name)
-        for industry in supervisor.industries
+        for industry in industries_list
     ]
+
+    # --- Request history logic for students ---
+    request_history = None
+    if current_user.role == "student":
+        # Get the student's group (assume first group if multiple)
+        student = await student_repository.get_with_groups(db, current_user.user_id)
+        group = None
+        if student and student.groups:
+            group = student.groups[0]
+        if group:
+            # Fetch the most recent request with status in (pending, feedback, declined)
+            statuses = [
+                InviteStatusEnum.pending,
+                InviteStatusEnum.feedback,
+                InviteStatusEnum.declined,
+            ]
+            req = await request_repository.get_recent_by_group_supervisor_statuses(
+                db, group.group_id, supervisor_id, statuses
+            )
+            if req:
+                # Fetch all requests between this group and supervisor
+                from sqlalchemy import select as sa_select
+
+                all_requests_result = await db.execute(
+                    sa_select(Request)
+                    .where(
+                        Request.group_id == group.group_id,
+                        Request.faculty_id == supervisor_id,
+                    )
+                    .order_by(Request.created_at.asc())
+                )
+                all_requests = all_requests_result.scalars().all()
+                request_history = [
+                    RequestSummaryItem(
+                        request_id=r.request_id,
+                        status=r.status.value,
+                        message=r.message,
+                        feedback=r.feedback,
+                        created_at=r.created_at,
+                        updated_at=r.updated_at,
+                    )
+                    for r in all_requests
+                ]
 
     return SupervisorDetailedInfo(
         # User fields
@@ -446,4 +414,6 @@ async def get_supervisor_details(
         # Computed fields
         current_groups=current_groups,
         total_supervised=total_supervised,
+        # Add request_history as an extra attribute (will require schema update)
+        request_history=request_history,
     )
