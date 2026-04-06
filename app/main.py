@@ -42,6 +42,11 @@ from app.services.supervisor_recommendation_client import (  # Supervisor Recomm
 # Configure logger
 logger = logging.getLogger("uvicorn.error")
 
+
+def _is_testing_env() -> bool:
+    return str(getattr(settings, "ENV", "") or "").lower() in {"testing", "test"}
+
+
 app = FastAPI(title="FYPilot Backend")
 
 # Initialize Scheduler
@@ -83,9 +88,7 @@ app.add_middleware(WhiteboardPatchContentSizeLimitMiddleware)
 app.include_router(
     auth_router, prefix="/auth"
 )  # /auth/login, /auth/signup, /auth/oauth/...
-app.include_router(
-    api_router, prefix="/api"
-)  # /api/groups, /api/users, /api/students, /api/supervisors, /api/admins, /health
+app.include_router(api_router, prefix="/api")  # /api/groups, /api/users, …, /api/health
 app.include_router(llm_chat.router, prefix="/llm")
 
 # ── WebSocket routers (no /api prefix — WS uses ?token= for auth) ────────────
@@ -125,7 +128,7 @@ async def on_startup():
             "App will continue without cache. Caching will be disabled."
         )
 
-    if redis_ok:
+    if redis_ok and not _is_testing_env():
         from app.api.websocket.manager import start_redis_ws_subscriber
         from app.services.chat_sse_hub import start_chat_sse_redis_subscriber
 
@@ -136,13 +139,14 @@ async def on_startup():
     from app.repositories.chat_session_repository import chat_session_repo
     from app.services.collaborative_chat_worker import start_chat_workers
 
-    try:
-        await chat_session_repo.ensure_indexes(mongo_db)
-        logger.info("MongoDB chat message indexes ensured.")
-    except Exception as e:
-        logger.warning("MongoDB chat index ensure failed (non-fatal): %s", e)
+    if not _is_testing_env():
+        try:
+            await chat_session_repo.ensure_indexes(mongo_db)
+            logger.info("MongoDB chat message indexes ensured.")
+        except Exception as e:
+            logger.warning("MongoDB chat index ensure failed (non-fatal): %s", e)
 
-    start_chat_workers()
+        start_chat_workers()
 
     # Database tables will be created automatically on first use via SQLAlchemy
     # Or you can run migrations separately. This ensures fast startup.
@@ -164,14 +168,14 @@ async def on_startup():
     # Run database test in background (fire and forget)
     asyncio.create_task(test_db_connection())
 
-    # Start the background scheduler
-    try:
-        scheduler.start()
-        logger.info("✅ Student lifecycle scheduler started.")
-        # Run the deactivation job once on startup to catch up
-        asyncio.create_task(run_student_lifecycle_job())
-    except Exception as e:
-        logger.error(f"❌ Failed to start scheduler: {e}")
+    # Start the background scheduler (skip under pytest / TestClient — shared loop issues)
+    if not _is_testing_env():
+        try:
+            scheduler.start()
+            logger.info("✅ Student lifecycle scheduler started.")
+            asyncio.create_task(run_student_lifecycle_job())
+        except Exception as e:
+            logger.error(f"❌ Failed to start scheduler: {e}")
 
 
 @app.on_event("shutdown")
@@ -185,9 +189,13 @@ async def on_shutdown():
     # Close Jury Matching HTTP client
     await jury_matching_client.close()
 
-    # Shutdown scheduler
-    scheduler.shutdown()
-    logger.info("Student lifecycle scheduler shut down.")
+    # Shutdown scheduler (TestClient teardown can close the loop before this runs)
+    try:
+        if getattr(scheduler, "running", False):
+            scheduler.shutdown()
+            logger.info("Student lifecycle scheduler shut down.")
+    except RuntimeError:
+        logger.debug("Scheduler shutdown skipped (event loop already closed)")
 
     logger.info("Application shutdown complete.")
 
