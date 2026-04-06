@@ -2,8 +2,16 @@
 import uuid
 from enum import Enum
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime
-from sqlalchemy import ForeignKey, Text, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -24,6 +32,8 @@ class ProjectTypeEnum(str, Enum):
     research = "research"
     product = "product"
     product_and_research = "product_and_research"
+
+
 _LEGACY_PROJECT_TYPE_MAP = {
     "product and research": "product_and_research",
 }
@@ -142,7 +152,10 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (

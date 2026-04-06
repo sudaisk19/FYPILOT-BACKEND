@@ -54,7 +54,9 @@ class FacultyDashboardRepository:
         self.db = db
 
     async def count_supervised_groups(self, faculty_id: UUID) -> int:
-        stmt = select(func.count(Group.group_id)).where(Group.supervisor_id == faculty_id)
+        stmt = select(func.count(Group.group_id)).where(
+            Group.supervisor_id == faculty_id
+        )
         return await self._scalar_int(stmt)
 
     async def average_supervisor_marks(self, faculty_id: UUID) -> Optional[float]:
@@ -90,7 +92,9 @@ class FacultyDashboardRepository:
     async def fetch_supervised_group_overview(
         self, faculty_id: UUID, limit: int = 6
     ) -> List[SupervisorGroupRow]:
-        member_names = func.array_agg(func.distinct(User.full_name)).label("member_names")
+        member_names = func.array_agg(func.distinct(User.full_name)).label(
+            "member_names"
+        )
         sort_ts = func.coalesce(Project.updated_at, Group.updated_at).label("sort_ts")
         stmt = (
             select(
@@ -173,7 +177,9 @@ class FacultyDashboardRepository:
                 Group.group_id,
                 Project.name.label("project_name"),
                 Group.fyp_cycle,
-                func.bool_or(JuryEvaluation.evaluation_id.isnot(None)).label("evaluated"),
+                func.bool_or(JuryEvaluation.evaluation_id.isnot(None)).label(
+                    "evaluated"
+                ),
             )
             .select_from(JuryAssignment)
             .join(JuryPair, JuryAssignment.pair_id == JuryPair.jury_id)

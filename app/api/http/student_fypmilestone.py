@@ -9,15 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.group import FYPCycleEnum, Group, GroupMember
-from app.models.user import RoleEnum, User
 from app.models.milestone import JuryFormTypeEnum
+from app.models.user import RoleEnum, User
 from app.repositories import (
-    milestone_repository,
-    supervisor_evaluation_repository,
     jury_evaluation_repository,
+    milestone_repository,
     proposal_evaluation_repository,
+    supervisor_evaluation_repository,
 )
-from app.schemas.admin_milestone_schema import StudentMilestoneListItem, StudentMilestoneResponse
+from app.schemas.admin_milestone_schema import (
+    StudentMilestoneListItem,
+    StudentMilestoneResponse,
+)
 
 router = APIRouter(prefix="/milestones", tags=["student-milestones"])
 
@@ -102,14 +105,18 @@ async def get_student_milestone(
                     db, milestone_id=milestone_id, group_id=group_id
                 )
         else:
-            marks = await supervisor_evaluation_repository.get_marks_for_group_milestone(
-                db, milestone_id=milestone_id, group_id=group_id
+            marks = (
+                await supervisor_evaluation_repository.get_marks_for_group_milestone(
+                    db, milestone_id=milestone_id, group_id=group_id
+                )
             )
 
     return StudentMilestoneResponse(
         milestone_id=milestone.milestone_id,
         title=milestone.title,
-        weightage=float(milestone.weightage) if milestone.weightage is not None else None,
+        weightage=(
+            float(milestone.weightage) if milestone.weightage is not None else None
+        ),
         due_date=milestone.due_date,
         evaluator=milestone.evaluator,
         fyp_cycle=milestone.fyp_cycle,

@@ -7,7 +7,9 @@ import uuid
 from sqlalchemy import (
     TIMESTAMP,
     Column,
-    Enum as SAEnum,
+)
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,

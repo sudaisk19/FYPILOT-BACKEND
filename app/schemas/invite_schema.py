@@ -24,7 +24,9 @@ class SendSupervisorInviteRequest(BaseModel):
 class AcceptRequestBody(BaseModel):
     """Body for accepting a supervisor request."""
 
-    feedback: str | None = Field(None, description="Optional feedback/condition from supervisor")
+    feedback: str | None = Field(
+        None, description="Optional feedback/condition from supervisor"
+    )
 
 
 class RejectRequestBody(BaseModel):

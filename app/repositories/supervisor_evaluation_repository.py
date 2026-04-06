@@ -16,11 +16,13 @@ async def get_marks_for_group_milestone(
 ) -> Optional[float]:
     """Return marks from the first evaluation found for this group + milestone."""
     result = await db.execute(
-        select(SupervisorEvaluation.marks).where(
+        select(SupervisorEvaluation.marks)
+        .where(
             SupervisorEvaluation.milestone_id == milestone_id,
             SupervisorEvaluation.group_id == group_id,
             SupervisorEvaluation.marks.is_not(None),
-        ).limit(1)
+        )
+        .limit(1)
     )
     return result.scalar_one_or_none()
 

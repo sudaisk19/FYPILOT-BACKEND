@@ -2,12 +2,11 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-
 from pydantic import BaseModel, ConfigDict, Field
-from app.schemas.student_announcement_schema import StudentAnnouncementResponse
 
 from app.models.announcement import AnnouncementRoleEnum
 from app.models.submission import SubmissionStatusEnum, SubmissionTypeEnum
+from app.schemas.student_announcement_schema import StudentAnnouncementResponse
 
 
 class SubmissionFileResponse(BaseModel):
@@ -199,6 +198,7 @@ class EditSubmissionAnnouncementRequest(BaseModel):
 
 class StudentSubmissionFileResponse(BaseModel):
     """A single file attached to a student's submission."""
+
     file_id: UUID
     file_name: str
     url: Optional[str] = None
@@ -212,6 +212,7 @@ class StudentSubmissionFileResponse(BaseModel):
 
 class StudentAnnouncementTemplateFile(BaseModel):
     """A template/reference file attached to the linked announcement."""
+
     file_id: UUID
     file_name: str
     storage_key: str
@@ -223,12 +224,13 @@ class StudentAnnouncementTemplateFile(BaseModel):
 
 class StudentOfficialSubmissionListItem(BaseModel):
     """Lightweight item for the Official Submissions list view."""
+
     submission_id: UUID
     title: str
     status: SubmissionStatusEnum
-    due_date: Optional[datetime] = None   # from linked announcement
-    total_marks: Optional[float] = None   # from linked announcement
-    file_count: int = 0                   # number of student-uploaded files
+    due_date: Optional[datetime] = None  # from linked announcement
+    total_marks: Optional[float] = None  # from linked announcement
+    file_count: int = 0  # number of student-uploaded files
     created_by_role: Optional[AnnouncementRoleEnum] = None  # admin or supervisor
 
     model_config = ConfigDict(from_attributes=True)
@@ -244,6 +246,7 @@ class PaginatedStudentOfficialSubmissions(BaseModel):
 
 class StudentOfficialSubmissionDetail(BaseModel):
     """Full detail for a single Official Submission."""
+
     submission_id: UUID
     title: str
     note: Optional[str] = None
@@ -275,6 +278,7 @@ class StudentOfficialSubmissionDetail(BaseModel):
 
 class StudentUnofficialSubmissionListItem(BaseModel):
     """Lightweight item for the Unofficial Submissions list view."""
+
     submission_id: UUID
     title: str
     status: SubmissionStatusEnum
@@ -294,6 +298,7 @@ class PaginatedStudentUnofficialSubmissions(BaseModel):
 
 class StudentUnofficialSubmissionDetail(BaseModel):
     """Full detail for a single Unofficial Submission."""
+
     submission_id: UUID
     title: str
     note: Optional[str] = None

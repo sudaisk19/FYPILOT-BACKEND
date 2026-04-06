@@ -1,5 +1,5 @@
-from decimal import Decimal
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -117,7 +117,9 @@ async def create_evaluation(
     )
     adjusted["methodology"] = _enforce_max(payload.methodology, config.methodology_max)
     adjusted["planning"] = _enforce_max(payload.planning, config.planning_max)
-    adjusted["system_diagram"] = _enforce_max(payload.system_diagram, config.diagram_max)
+    adjusted["system_diagram"] = _enforce_max(
+        payload.system_diagram, config.diagram_max
+    )
     if payload.total_marks is not None:
         adjusted["total_marks"] = payload.total_marks
     else:
@@ -189,11 +191,13 @@ async def get_total_marks(
     group_id: UUID,
 ) -> Optional[float]:
     result = await db.execute(
-        select(ProposalEvaluation.total_marks).where(
+        select(ProposalEvaluation.total_marks)
+        .where(
             ProposalEvaluation.milestone_id == milestone_id,
             ProposalEvaluation.group_id == group_id,
             ProposalEvaluation.total_marks.is_not(None),
-        ).limit(1)
+        )
+        .limit(1)
     )
     total = result.scalar_one_or_none()
     return float(total) if total is not None else None

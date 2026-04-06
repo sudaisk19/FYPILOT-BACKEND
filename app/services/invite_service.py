@@ -118,14 +118,14 @@ async def send_supervisor_invite_svc(
     )
 
     # 7. Block only if there's already a pending or accepted request
-    existing_pending = await request_repository.exists_pending(
-        db, group_id, faculty_id
-    )
+    existing_pending = await request_repository.exists_pending(db, group_id, faculty_id)
     if existing_pending:
         raise ValueError("A pending request already exists for this supervisor")
 
-    existing_accepted = await request_repository.get_recent_by_group_supervisor_statuses(
-        db, group_id, faculty_id, [InviteStatusEnum.accepted]
+    existing_accepted = (
+        await request_repository.get_recent_by_group_supervisor_statuses(
+            db, group_id, faculty_id, [InviteStatusEnum.accepted]
+        )
     )
     if existing_accepted:
         raise ValueError(f"This supervisor has already been accepted as {role}")
@@ -501,6 +501,7 @@ async def get_request_details_svc(
 
     # Fetch all requests between this group and supervisor for history
     from sqlalchemy import select as sa_select
+
     from app.schemas.invite_schema import RequestSummaryItem
 
     all_requests_result = await db.execute(

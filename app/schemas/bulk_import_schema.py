@@ -28,8 +28,7 @@ class CreateStudentRequest(BaseModel):
         min_length=1,
         max_length=200,
         description=(
-            "Department must be one of: "
-            + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
+            "Department must be one of: " + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
         ),
     )
 
@@ -49,8 +48,7 @@ class CreateSupervisorRequest(BaseModel):
         min_length=1,
         max_length=200,
         description=(
-            "Department must be one of: "
-            + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
+            "Department must be one of: " + ", ".join(COMMON_UNIVERSITY_DEPARTMENTS)
         ),
     )
     designation: str = Field(..., min_length=1, max_length=200)

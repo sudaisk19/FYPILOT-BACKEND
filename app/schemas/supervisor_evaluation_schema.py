@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 
 class SupervisorEvaluationPayload(BaseModel):
     marks: Optional[float] = Field(None, description="Marks awarded for the milestone")
-    feedback: Optional[str] = Field(None, description="Supervisor feedback for the group")
+    feedback: Optional[str] = Field(
+        None, description="Supervisor feedback for the group"
+    )
     wbs_achieved: Optional[bool] = Field(
         None,
         description="Whether the group's WBS milestones were achieved",

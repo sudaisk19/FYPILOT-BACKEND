@@ -52,10 +52,11 @@ class PaginatedAnnouncements(BaseModel):
     class Config:
         from_attributes = True
 
+
 class AnnouncementCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    target_type: str # "all_students", "all_supervisors", "both", "specific_group"
+    target_type: str  # "all_students", "all_supervisors", "both", "specific_group"
     group_id: Optional[UUID] = None
 
 
