@@ -222,18 +222,21 @@ jobs:
 
             echo "🚀 Starting deployment..."
 
-            # Navigate to project directory
+            # Requires a git clone at this path (so compose file stays in sync with repo)
             cd /opt/fypilot-backend
 
-            # Pull latest docker image
+            # 1. Pull latest repo (updates deploy/docker-compose.prod.yml and any tracked files)
+            git pull origin main
+
+            # 2. Pull latest image from GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
 
-            # Stop existing containers gracefully
-            docker compose down --timeout 30
+            # 3. Recreate stack using the tracked production compose file
+            docker compose -f deploy/docker-compose.prod.yml down --timeout 30
 
-            # Start new containers
-            docker compose up -d
+            # 4. Start with the same file (REDIS_URL, env_file paths, etc. match repo)
+            docker compose -f deploy/docker-compose.prod.yml up -d
 
             # Wait for health check
             echo "⏳ Waiting for health check..."
@@ -244,7 +247,7 @@ jobs:
               fi
               if [ $i -eq 30 ]; then
                 echo "❌ Health check failed after 30 attempts"
-                docker compose logs --tail=50
+                docker compose -f deploy/docker-compose.prod.yml logs --tail=50
                 exit 1
               fi
               echo "  Attempt $i/30 - waiting..."
