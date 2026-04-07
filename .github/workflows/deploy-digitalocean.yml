@@ -1,5 +1,5 @@
 # .github/workflows/deploy-digitalocean.yml
-# CI/CD Pipeline: Test → Build → Push to GHCR → Deploy to DigitalOcean Droplet
+# CI/CD Pipeline: Lint → Test → Build → Push to GHCR → Deploy to DigitalOcean Droplet
 # Triggers on push to 'main' branch
 
 name: Deploy to DigitalOcean
@@ -52,7 +52,7 @@ jobs:
         run: python -m mypy app/
 
   # ──────────────────────────────────────────────────────────
-  # Job 2: Run Tests
+  # Job 2: Run Tests (Postgres + Redis for env parity with production drivers)
   # ──────────────────────────────────────────────────────────
   test:
     name: 🧪 Run Tests
@@ -60,6 +60,19 @@ jobs:
     needs: lint
 
     services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       redis:
         image: redis:alpine
         ports:
@@ -71,7 +84,6 @@ jobs:
           --health-retries 5
 
     env:
-      # Minimal env vars for tests (tests use mocks, not real services)
       DATABASE_URL: "postgresql://test:test@localhost:5432/test"
       SUPABASE_URL: "https://test.supabase.co"
       SUPABASE_KEY: "test-key"
