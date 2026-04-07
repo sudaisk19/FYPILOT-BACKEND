@@ -14,7 +14,7 @@ version: "3.8"
 
 services:
   backend:
-    image: ghcr.io/${GITHUB_OWNER:-your-github-username}/fypilot-backend:latest
+    image: ghcr.io/sudaisk19/fypilot-backend:latest
     container_name: fypilot-backend
     restart: always
     env_file:
