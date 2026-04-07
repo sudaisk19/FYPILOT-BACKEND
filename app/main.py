@@ -57,6 +57,12 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://fypilot-frontend.vercel.app",
+    # Add your new production domains below:
+    "http://fypilot.tech",
+    "https://fypilot.tech",
+    "http://www.fypilot.tech",
+    "https://www.fypilot.tech",
+    "http://168.144.90.160",  # Optional: Helpful if you are testing via direct IP
 ]
 
 app.add_middleware(
