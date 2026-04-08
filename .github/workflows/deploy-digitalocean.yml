@@ -235,11 +235,14 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
 
-            # 3. Recreate stack using the tracked production compose file
-            docker compose -f deploy/docker-compose.prod.yml down --timeout 30
+            # 3. Tear down stack (fixed compose `name:` + orphans from old project names)
+            docker compose -f deploy/docker-compose.prod.yml down --remove-orphans --timeout 30
 
-            # 4. Start with the same file (REDIS_URL, env_file paths, etc. match repo)
-            docker compose -f deploy/docker-compose.prod.yml up -d
+            # 3b. Remove fixed container_name leftovers if any (idempotent)
+            docker rm -f fypilot-backend fypilot-redis 2>/dev/null || true
+
+            # 4. Start (REDIS_URL, env_file paths, etc. match repo)
+            docker compose -f deploy/docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
             # Wait for health check
             echo "⏳ Waiting for health check..."

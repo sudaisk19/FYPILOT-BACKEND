@@ -13,6 +13,9 @@
 # Redis is NOT published to the host port 6379 — the backend uses redis://redis:6379
 # on the internal network only. Publishing 6379 caused "port already allocated" when
 # another Redis or an old container still held that port on the droplet.
+#
+# Fixed project name so `docker compose down` always targets the same stack on redeploy.
+name: fypilot-prod
 
 services:
   backend:
@@ -25,7 +28,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENV=production
     ports:
-      - "8000:8000"  
+      - "8000:8000"
     depends_on:
       redis:
         condition: service_healthy
