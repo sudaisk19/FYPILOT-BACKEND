@@ -9,8 +9,10 @@
 # multiple backend replicas behind a load balancer, enable sticky sessions or
 # rely on Redis so broadcasts reach all workers (document edit locks are still
 # per-process unless extended).
-
-version: "3.8"
+#
+# Redis is NOT published to the host port 6379 — the backend uses redis://redis:6379
+# on the internal network only. Publishing 6379 caused "port already allocated" when
+# another Redis or an old container still held that port on the droplet.
 
 services:
   backend:
@@ -50,8 +52,6 @@ services:
     image: redis:alpine
     container_name: fypilot-redis
     restart: always
-    ports:
-      - "127.0.0.1:6379:6379"  # Only expose to localhost
     volumes:
       - redis_data:/data
     command: >
