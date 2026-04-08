@@ -103,8 +103,8 @@ echo "fail2ban configured."
 # ─── 7. Create project directory ───────────────────────────
 echo ""
 echo "📁 Step 7: Creating project directory..."
-mkdir -p /opt/fypilot-backend
-chown deploy:deploy /opt/fypilot-backend
+mkdir -p /opt/fypilot-backend/deploy
+chown -R deploy:deploy /opt/fypilot-backend
 
 # ─── 8. Setup Nginx ────────────────────────────────────────
 echo ""
@@ -151,12 +151,18 @@ echo "🚀 Manual deployment..."
 
 cd /opt/fypilot-backend
 
+COMPOSE_FILE="deploy/docker-compose.prod.yml"
+if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "❌ Missing $COMPOSE_FILE — copy it from the repo (see docs/deployment/digitalocean.md)"
+    exit 1
+fi
+
 # Pull latest image
-docker compose pull
+docker compose -f "$COMPOSE_FILE" pull
 
 # Restart with new image
-docker compose down --timeout 30
-docker compose up -d
+docker compose -f "$COMPOSE_FILE" down --timeout 30
+docker compose -f "$COMPOSE_FILE" up -d
 
 # Wait for health
 echo "⏳ Waiting for health check..."
@@ -167,7 +173,7 @@ for i in $(seq 1 30); do
     fi
     if [ $i -eq 30 ]; then
         echo "❌ Health check failed"
-        docker compose logs --tail=50
+        docker compose -f "$COMPOSE_FILE" logs --tail=50
         exit 1
     fi
     sleep 2
@@ -187,7 +193,7 @@ echo "════════════════════════�
 echo ""
 echo "  Next steps:"
 echo "  1. Copy your .env file:       scp .env deploy@YOUR_IP:/opt/fypilot-backend/.env"
-echo "  2. Copy docker-compose:       scp deploy/docker-compose.prod.yml deploy@YOUR_IP:/opt/fypilot-backend/docker-compose.yml"
+echo "  2. Copy production compose:   scp deploy/docker-compose.prod.yml deploy@YOUR_IP:/opt/fypilot-backend/deploy/docker-compose.prod.yml"
 echo "  3. Copy nginx config:         scp deploy/nginx/fypilot-backend.conf root@YOUR_IP:/etc/nginx/sites-available/fypilot-backend"
 echo "  4. Enable nginx site:         ssh root@YOUR_IP 'ln -sf /etc/nginx/sites-available/fypilot-backend /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx'"
 echo "  5. Setup SSL:                 ssh root@YOUR_IP 'certbot --nginx -d api.fypilot.com'"

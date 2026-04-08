@@ -222,11 +222,14 @@ jobs:
 
             echo "🚀 Starting deployment..."
 
-            # Requires a git clone at this path (so compose file stays in sync with repo)
             cd /opt/fypilot-backend
 
-            # 1. Pull latest repo (updates deploy/docker-compose.prod.yml and any tracked files)
-            git pull origin main
+            # 1. Pull latest repo only if this path is a git clone (otherwise skip — see deploy docs)
+            if [ -d .git ]; then
+              git pull origin main
+            else
+              echo "⚠️ Skipping git pull: /opt/fypilot-backend is not a git clone."
+            fi
 
             # 2. Pull latest image from GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

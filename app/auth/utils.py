@@ -22,23 +22,25 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 # Environment and JWT Configuration
-ENV = os.getenv("ENV", "production")
+ENV = str(os.getenv("ENV", "production")).lower()
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 # Validate JWT configuration
-if not JWT_SECRET and ENV == "production":
+if not JWT_SECRET and ENV not in ("development", "dev"):
     raise ValueError("JWT_SECRET must be set in production environment")
 
 # Role type for type safety
 Role = Literal["student", "faculty", "admin"]
 
 # Password hashing configuration
-# Uses bcrypt in production, plaintext in development for easier testing
+# - Development: plaintext only (easy local testing).
+# - Production: bcrypt first (default for new hashes), and plaintext so legacy
+#   accounts created in dev still verify after switching ENV to production.
 pwd_context = CryptContext(
-    schemes=["plaintext"] if ENV == "development" else ["bcrypt"],
+    schemes=["plaintext"] if ENV in ("development", "dev") else ["bcrypt", "plaintext"],
     deprecated="auto",
-    bcrypt__rounds=12,  # Increased from default 10 for better security
+    bcrypt__rounds=12,
 )
 
 
@@ -112,7 +114,7 @@ def create_access_token(
     # Default expiration: 6 hours in dev, 1 hour in production
     if expires_delta is None:
         expires_delta = (
-            timedelta(hours=6) if ENV == "development" else timedelta(hours=1)
+            timedelta(hours=6) if ENV in ("development", "dev") else timedelta(hours=1)
         )
 
     payload = {
