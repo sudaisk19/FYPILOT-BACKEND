@@ -1,6 +1,8 @@
 # app/db/postgres.py
 import logging
+from time import perf_counter
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
@@ -11,6 +13,7 @@ from sqlalchemy.orm import (
 )
 
 from app.core.config import settings
+from app.metrics import observe_db_query
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +56,20 @@ engine = create_async_engine(
     max_overflow=5,
     pool_timeout=10,
 )
+
+
+@event.listens_for(engine.sync_engine, "before_cursor_execute")
+def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    context._query_start_time = perf_counter()
+
+
+@event.listens_for(engine.sync_engine, "after_cursor_execute")
+def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    start_time = getattr(context, "_query_start_time", None)
+    if start_time is None:
+        return
+    observe_db_query(statement, perf_counter() - start_time)
+
 
 AsyncSessionLocal = sessionmaker(
     bind=engine,
