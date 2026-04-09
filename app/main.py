@@ -4,15 +4,20 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.logging_setup import configure_logging
+
 # Load .env (override any existing OS env vars)
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path, override=True)
+
+configure_logging()
 
 import asyncio
 import logging
 
 import uvicorn
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware  # ← NEW
 
@@ -24,6 +29,7 @@ from app.auth.routes import router as auth_router  # your signup/login endpoints
 from app.core.config import settings  # ← NEW (for session_secret)
 from app.core.exceptions import register_exception_handlers
 from app.db import AsyncSessionLocal, Base, engine  # async engine & session
+from app.middleware.request_logging import RequestLoggingMiddleware
 from app.middleware.whiteboard_patch_size_limit import (
     WhiteboardPatchContentSizeLimitMiddleware,
 )
@@ -48,6 +54,7 @@ def _is_testing_env() -> bool:
 
 
 app = FastAPI(title="FYPilot Backend")
+Instrumentator().instrument(app).expose(app)
 
 # Initialize Scheduler
 scheduler = create_scheduler()
@@ -87,8 +94,10 @@ app.add_middleware(
     session_cookie="fyp_session",
 )
 
-# Enforce max PATCH body size for Excalidraw whiteboards (must be outermost = registered last).
 app.add_middleware(WhiteboardPatchContentSizeLimitMiddleware)
+
+# Request logging wraps the app so it can record request metadata and timing.
+app.add_middleware(RequestLoggingMiddleware)
 
 # Mount routers
 app.include_router(

@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import WebSocket
 
+from app.metrics import decrement_websocket_connections, increment_websocket_connections
+
 logger = logging.getLogger(__name__)
 
 _WS_SUB_TASK: Optional[asyncio.Task] = None
@@ -44,13 +46,18 @@ class ConnectionManager:
         await ws.accept()
         if room_key not in self._rooms:
             self._rooms[room_key] = {}
+        is_new_connection = user_id not in self._rooms[room_key]
         self._rooms[room_key][user_id] = ws
+        if is_new_connection:
+            increment_websocket_connections()
         logger.info(f"WS connected: user={user_id} room={room_key}")
 
     def disconnect(self, room_key: str, user_id: str) -> None:
         """Remove a connection from the room."""
         room = self._rooms.get(room_key, {})
-        room.pop(user_id, None)
+        removed = room.pop(user_id, None)
+        if removed is not None:
+            decrement_websocket_connections()
         if not room:
             self._rooms.pop(room_key, None)
         logger.info(f"WS disconnected: user={user_id} room={room_key}")
