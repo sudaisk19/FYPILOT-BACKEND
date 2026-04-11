@@ -265,6 +265,7 @@ async def get_admin_faculty_profile(
         if group.project:
             projects_data.append(
                 SupervisedProjectInfo(
+                    group_id=group.group_id,
                     project_id=group.project.project_id,
                     fyp_id=group.project.fyp_id,
                     name=group.project.name,
@@ -281,6 +282,7 @@ async def get_admin_faculty_profile(
             if group.project:
                 projects_data.append(
                     SupervisedProjectInfo(
+                        group_id=group.group_id,
                         project_id=group.project.project_id,
                         fyp_id=group.project.fyp_id,
                         name=f"{group.project.name} (Co-Supervisor)",
