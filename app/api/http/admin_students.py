@@ -117,7 +117,9 @@ async def list_students(
         filters.append(GroupMember.student_id.is_(None))
 
     if normalized_department:
-        filters.append(func.lower(func.trim(Student.department)) == normalized_department.lower())
+        filters.append(
+            func.lower(func.trim(Student.department)) == normalized_department.lower()
+        )
 
     if normalized_batch:
         filters.append(
