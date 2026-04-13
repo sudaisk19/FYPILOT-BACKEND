@@ -120,7 +120,9 @@ async def list_students(
         filters.append(func.lower(func.trim(Student.department)) == normalized_department.lower())
 
     if normalized_batch:
-        filters.append(func.lower(func.trim(Student.fyp_start_semester)) == batch_semester)
+        filters.append(
+            func.lower(func.trim(Student.fyp_start_semester)) == batch_semester
+        )
         filters.append(Student.fyp_start_year == batch_start_year)
 
     if cycle is not None:
