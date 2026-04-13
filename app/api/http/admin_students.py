@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import normalize_department
 from app.db import get_db
 from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.project import Project
@@ -50,7 +51,9 @@ async def list_students(
     ),
     cycle: Optional[FYPCycleEnum] = Query(None),
     group: Literal["all", "assigned", "unassigned"] = Query("all"),
-    department: Optional[str] = Query(None),
+    department: Optional[str] = Query(
+        None, description="Canonical department value from GET /api/departments"
+    ),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -59,6 +62,16 @@ async def list_students(
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    normalized_department = None
+    if department:
+        try:
+            normalized_department = normalize_department(department)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
     normalized_batch = None
     batch_semester = None
@@ -103,8 +116,8 @@ async def list_students(
     elif group == "unassigned":
         filters.append(GroupMember.student_id.is_(None))
 
-    if department:
-        filters.append(Student.department.ilike(f"%{department}%"))
+    if normalized_department:
+        filters.append(func.lower(func.trim(Student.department)) == normalized_department.lower())
 
     if normalized_batch:
         filters.append(func.lower(func.trim(Student.fyp_start_semester)) == batch_semester)
