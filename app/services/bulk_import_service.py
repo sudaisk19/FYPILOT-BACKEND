@@ -24,6 +24,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.auth.utils import hash_password
 from app.core.config import settings
@@ -377,33 +378,50 @@ async def create_bulk_import_job(
     if missing:
         return None, f"Missing required columns: {', '.join(missing)}"
 
-    # Create job
-    job = BulkImportJob(
-        created_by=admin_user_id,
-        target_role=target_role,
-        status=BulkJobStatus.pending,
-        total_rows=len(rows),
-        processed_rows=0,
-        success_count=0,
-        failed_count=0,
-        skipped_count=0,
-    )
-    db.add(job)
-    await db.flush()  # Get the job ID
-
-    # Create items
-    for row in rows:
-        row_number = row.pop("_row_number", 0)
-        item = BulkImportItem(
-            job_id=job.id,
-            row_number=row_number,
-            payload=row,
-            status=BulkItemStatus.pending,
+    try:
+        # Create job
+        job = BulkImportJob(
+            created_by=admin_user_id,
+            target_role=target_role,
+            status=BulkJobStatus.pending,
+            total_rows=len(rows),
+            processed_rows=0,
+            success_count=0,
+            failed_count=0,
+            skipped_count=0,
         )
-        db.add(item)
+        db.add(job)
+        await db.flush()  # Get the job ID
 
-    await db.commit()
-    await db.refresh(job)
+        # Create items
+        for row in rows:
+            row_number = row.pop("_row_number", 0)
+            item = BulkImportItem(
+                job_id=job.id,
+                row_number=row_number,
+                payload=row,
+                status=BulkItemStatus.pending,
+            )
+            db.add(item)
+
+        await db.commit()
+        await db.refresh(job)
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.exception("Integrity error while persisting bulk import job")
+        db_detail = str(getattr(exc, "orig", exc))
+        if target_role == RoleEnum.faculty:
+            return (
+                None,
+                "Database integrity error while creating faculty import job. "
+                "This is typically a DB constraint mismatch on bulk_import_jobs.target_role. "
+                f"Details: {db_detail}",
+            )
+        return None, f"Database integrity error while creating import job: {db_detail}"
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        logger.exception("Failed to persist bulk import job")
+        return None, f"Database error while creating import job: {exc.__class__.__name__}: {exc}"
 
     logger.info(
         f"Created bulk import job {job.id} with {len(rows)} rows for {target_role.value}s"

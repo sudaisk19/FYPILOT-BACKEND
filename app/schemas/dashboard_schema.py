@@ -137,7 +137,7 @@ class EvaluationStatusSummary(BaseModel):
     evaluations_submitted: int
     evaluations_required: int
     missing_evaluations: int
-    wbs_failure_count: int
+    wbs_failure_count: Optional[int] = None
     percentage_submitted: float
     last_updated: Optional[str] = None
 

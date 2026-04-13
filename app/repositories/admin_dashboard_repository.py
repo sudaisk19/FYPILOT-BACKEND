@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.faculty import Faculty
 from app.models.group import Group, GroupMember
+from app.models.jury_evaluation import JuryEvaluation, ProposalEvaluation
 from app.models.milestone import AdminMilestone
 from app.models.project import Project
 from app.models.student import Student
@@ -175,7 +176,25 @@ class AdminDashboardRepository:
         )
         return await self._scalar_int(stmt)
 
-    async def count_evaluations_for_milestone(self, milestone_id) -> Tuple[int, int]:
+    async def count_evaluations_for_milestone(
+        self, milestone: AdminMilestone
+    ) -> Tuple[int, int]:
+        milestone_id = milestone.milestone_id
+        evaluator_value = (milestone.evaluator or "").strip().lower()
+
+        if evaluator_value == "jury":
+            jury_form_type = getattr(milestone.jury_form_type, "value", None)
+            if jury_form_type == "proposal":
+                submitted_stmt = select(
+                    func.count(func.distinct(ProposalEvaluation.group_id))
+                ).where(ProposalEvaluation.milestone_id == milestone_id)
+            else:
+                submitted_stmt = select(
+                    func.count(func.distinct(JuryEvaluation.group_id))
+                ).where(JuryEvaluation.milestone_id == milestone_id)
+            submitted = await self._scalar_int(submitted_stmt)
+            return submitted, 0
+
         submitted_stmt = select(
             func.count(func.distinct(SupervisorEvaluation.group_id))
         ).where(SupervisorEvaluation.milestone_id == milestone_id)

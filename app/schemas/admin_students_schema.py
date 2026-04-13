@@ -11,6 +11,7 @@ class StudentCardInfo(BaseModel):
     email: str
     roll_number: str
     department: Optional[str] = None
+    batch: Optional[str] = None
     project_name: Optional[str] = None
     fyp_cycle: Optional[str] = None
     cohort_year: Optional[int] = None
