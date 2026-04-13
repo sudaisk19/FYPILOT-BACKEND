@@ -23,8 +23,8 @@ from uuid import UUID
 from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.utils import hash_password
 from app.core.config import settings
@@ -421,7 +421,10 @@ async def create_bulk_import_job(
     except SQLAlchemyError as exc:
         await db.rollback()
         logger.exception("Failed to persist bulk import job")
-        return None, f"Database error while creating import job: {exc.__class__.__name__}: {exc}"
+        return (
+            None,
+            f"Database error while creating import job: {exc.__class__.__name__}: {exc}",
+        )
 
     logger.info(
         f"Created bulk import job {job.id} with {len(rows)} rows for {target_role.value}s"

@@ -202,7 +202,9 @@ async def get_admin_group_profile(
                 experience=s.experience,
                 skills=s.skills or [],
                 portfolio_projects=(
-                    s.portfolio_projects if isinstance(s.portfolio_projects, dict) else {}
+                    s.portfolio_projects
+                    if isinstance(s.portfolio_projects, dict)
+                    else {}
                 ),
             )
         )
