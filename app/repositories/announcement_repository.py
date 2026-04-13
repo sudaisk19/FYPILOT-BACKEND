@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.db import supabase
 from app.models.announcement import (
@@ -373,7 +373,8 @@ class AnnouncementRepository(BaseRepository[Announcement]):
                 AnnouncementTarget,
                 AnnouncementTarget.announcement_id == Announcement.announcement_id,
             )
-            .options(selectinload(AnnouncementFile.announcement))
+            # Use joinedload to avoid follow-up SELECTs that can time out under load.
+            .options(joinedload(AnnouncementFile.announcement))
             .where(
                 Announcement.created_by_role == AnnouncementRoleEnum.admin,
                 AnnouncementFile.file_type == FileTypeEnum.Template,

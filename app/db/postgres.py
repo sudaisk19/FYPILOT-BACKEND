@@ -48,13 +48,13 @@ engine = create_async_engine(
             "jit": "off",
             "application_name": "fypilot_backend",
         },
-        "command_timeout": 10,
+        "command_timeout": 30,
     },
     pool_pre_ping=True,
     pool_recycle=300,
-    pool_size=3,
-    max_overflow=5,
-    pool_timeout=10,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
 )
 
 

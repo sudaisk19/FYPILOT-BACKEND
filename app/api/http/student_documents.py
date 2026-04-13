@@ -41,6 +41,8 @@ Endpoints:
 # print(r.status_code, r.text)
 # -------------------------------------------------------------------------------
 
+import asyncio
+import logging
 import os
 import tempfile
 import uuid
@@ -50,6 +52,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from supabase import Client
 
@@ -91,6 +94,7 @@ from app.services.storage_service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 DOC_TYPE_METADATA = {
@@ -344,7 +348,14 @@ async def list_workspace_documents(
     Returns an array of all GroupDocuments linked to this workspace.
     Used by the frontend to populate editor tabs on load.
     """
-    docs = await document_service.get_workspace_documents(db, session_id)
+    try:
+        docs = await document_service.get_workspace_documents(db, session_id)
+    except (TimeoutError, asyncio.TimeoutError, SQLAlchemyError) as exc:
+        logger.exception(
+            "Workspace documents query failed for session %s: %s", session_id, exc
+        )
+        # Return an empty list so the UI does not crash on non-array responses.
+        return []
     return [GroupDocumentResponse.model_validate(d) for d in docs]
 
 

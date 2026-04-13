@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
@@ -209,9 +210,13 @@ async def get_templates_for_student(
             [TargetRoleEnum.fyp1_students, TargetRoleEnum.fyp2_students]
         )
 
-    files = await announcement_repository.get_templates_for_student(
-        db, target_roles=relevant_roles
-    )
+    try:
+        files = await announcement_repository.get_templates_for_student(
+            db, target_roles=relevant_roles
+        )
+    except (TimeoutError, SQLAlchemyError):
+        # Keep response shape stable for the template picker on transient DB failures.
+        return []
 
     return [
         TemplateFileResponse(

@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import normalize_department
 from app.db import get_db
 from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.project import Project
@@ -21,12 +22,38 @@ from app.schemas.admin_students_schema import (
 router = APIRouter()
 
 
+def _normalize_batch_value(batch_value: str) -> tuple[str, int]:
+    """Normalize batch input into (<semester>, <year>)."""
+    batch_normalized = " ".join(batch_value.strip().lower().split())
+    parts = batch_normalized.split(" ", 1)
+    if len(parts) != 2 or parts[0] not in {"fall", "spring"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid batch format. Use "fall 2025" or "spring 2025".',
+        )
+
+    try:
+        start_year = int(parts[1])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid batch year. Use "fall 2025" or "spring 2025".',
+        ) from exc
+
+    return parts[0], start_year
+
+
 @router.get("/students", response_model=PaginatedStudentResponse)
 async def list_students(
-    batch: Optional[int] = Query(None),
+    batch: Optional[str] = Query(
+        None,
+        description='Student FYP start term in format "fall 2025" or "spring 2025"',
+    ),
     cycle: Optional[FYPCycleEnum] = Query(None),
     group: Literal["all", "assigned", "unassigned"] = Query("all"),
-    department: Optional[str] = Query(None),
+    department: Optional[str] = Query(
+        None, description="Canonical department value from GET /api/departments"
+    ),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -36,10 +63,27 @@ async def list_students(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
+    normalized_department = None
+    if department:
+        try:
+            normalized_department = normalize_department(department)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+    normalized_batch = None
+    batch_semester = None
+    batch_start_year = None
+    if batch:
+        batch_semester, batch_start_year = _normalize_batch_value(batch)
+        normalized_batch = f"{batch_semester} {batch_start_year}"
+
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
     # Construct unique key based on ALL filters
     cache_key = (
-        f"admin:students:{batch}:{cycle}:{group}:{department}:"
+        f"admin:students:{normalized_batch}:{cycle}:{group}:{department}:"
         f"{search}:{page}:{per_page}"
     )
     from app.services.cache import cache
@@ -72,12 +116,12 @@ async def list_students(
     elif group == "unassigned":
         filters.append(GroupMember.student_id.is_(None))
 
-    if department:
-        filters.append(Student.department.ilike(f"%{department}%"))
+    if normalized_department:
+        filters.append(func.lower(func.trim(Student.department)) == normalized_department.lower())
 
-    if batch is not None:
-        prefix = f"{batch - 2004}K"
-        filters.append(Student.roll_number.ilike(f"{prefix}%"))
+    if normalized_batch:
+        filters.append(func.lower(func.trim(Student.fyp_start_semester)) == batch_semester)
+        filters.append(Student.fyp_start_year == batch_start_year)
 
     if cycle is not None:
         filters.append(Group.fyp_cycle == cycle)
@@ -144,6 +188,11 @@ async def list_students(
                 email=user.email,
                 roll_number=student.roll_number,
                 department=student.department,
+                batch=(
+                    f"{' '.join(student.fyp_start_semester.strip().lower().split())} {student.fyp_start_year}"
+                    if student.fyp_start_semester and student.fyp_start_year
+                    else None
+                ),
                 project_name=project_name if project_name else None,
                 fyp_cycle=group.fyp_cycle.value if group else None,
                 cohort_year=group.cohort_year if group else None,

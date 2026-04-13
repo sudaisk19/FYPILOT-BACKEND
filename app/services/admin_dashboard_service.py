@@ -5,7 +5,6 @@ from typing import Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.admin_dashboard_repository import AdminDashboardRepository
 from app.schemas.dashboard_schema import (
     AdminDashboardEnvelope,
     AdminDashboardInsights,
@@ -16,11 +15,12 @@ from app.schemas.dashboard_schema import (
     ProjectsPerCycleEntry,
     StudentsPerTermChart,
     StudentsPerTermPoint,
-    SupervisorCapacityUsage,
     SupervisorsPerDepartment,
+    SupervisorCapacityUsage,
     SupervisorWorkloadInsights,
     UpcomingMilestones,
 )
+from app.repositories.admin_dashboard_repository import AdminDashboardRepository
 
 
 class AdminDashboardService:
@@ -165,11 +165,7 @@ class AdminDashboardService:
             MilestoneSummary(
                 milestone=m.title,
                 date=m.due_date,
-                cycle=(
-                    m.fyp_cycle.value
-                    if hasattr(m.fyp_cycle, "value")
-                    else str(m.fyp_cycle)
-                ),
+                cycle=m.fyp_cycle.value if hasattr(m.fyp_cycle, "value") else str(m.fyp_cycle),
             )
             for m in milestones
         ]
@@ -190,17 +186,19 @@ class AdminDashboardService:
                 evaluations_submitted=0,
                 evaluations_required=0,
                 missing_evaluations=0,
-                wbs_failure_count=0,
+                wbs_failure_count=None,
                 percentage_submitted=0.0,
                 last_updated=None,
             )
 
         expected = await self.repo.count_expected_evaluations_for_milestone(milestone)
         submitted, wbs_failures = await self.repo.count_evaluations_for_milestone(
-            milestone.milestone_id
+            milestone
         )
         missing = max(expected - submitted, 0)
         percentage = (submitted / expected * 100) if expected else 0.0
+        evaluator_value = (milestone.evaluator or "").strip().lower()
+        wbs_failure_count = wbs_failures if evaluator_value == "supervisor" else None
         last_updated_field = (
             milestone.updated_at or milestone.activated_at or milestone.created_at
         )
@@ -215,7 +213,7 @@ class AdminDashboardService:
             evaluations_submitted=submitted,
             evaluations_required=expected,
             missing_evaluations=missing,
-            wbs_failure_count=wbs_failures,
+            wbs_failure_count=wbs_failure_count,
             percentage_submitted=round(percentage, 2),
             last_updated=last_updated,
         )

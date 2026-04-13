@@ -21,6 +21,22 @@ from app.repositories.group_document_repository import group_document_repo
 
 
 class DocumentService:
+    async def _ensure_initial_version_snapshot(
+        self, db: AsyncSession, doc_id: UUID, created_by: UUID
+    ) -> None:
+        """
+        Ensure at least one immutable snapshot exists for a document.
+        This protects clients that rely on autosave but never call POST /versions.
+        """
+        existing_versions = await group_document_repo.get_versions(db, doc_id)
+        if existing_versions:
+            return
+        await group_document_repo.create_snapshot(
+            db=db,
+            doc_id=doc_id,
+            save_trigger=SaveTriggerEnum.student,
+            created_by=created_by,
+        )
 
     # ── Workspace Queries ───────────────────────────────────────────────────
 
@@ -56,6 +72,7 @@ class DocumentService:
             chat_session_id=chat_session_id,
             content=content,
         )
+        await self._ensure_initial_version_snapshot(db, doc.id, created_by)
         await db.commit()
         await db.refresh(doc)
         return doc
@@ -81,6 +98,7 @@ class DocumentService:
             expected_lock_version=expected_lock_version,
             updated_by=updated_by,
         )
+        await self._ensure_initial_version_snapshot(db, doc_id, updated_by)
         await db.commit()
         return doc
 

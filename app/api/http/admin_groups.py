@@ -9,6 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.auth.supabase_auth import get_current_user
 from app.db import get_db
 from app.models.group import FYPCycleEnum
+from app.models.project import project_type_value
 from app.models.user import RoleEnum, User
 from app.repositories.group_repository import group_repository
 from app.repositories.supervisor_repository import supervisor_repository
@@ -200,7 +201,9 @@ async def get_admin_group_profile(
                 cgpa=s.cgpa or 0.0,
                 experience=s.experience,
                 skills=s.skills or [],
-                portfolio_projects=s.portfolio_projects or [],
+                portfolio_projects=(
+                    s.portfolio_projects if isinstance(s.portfolio_projects, dict) else {}
+                ),
             )
         )
 
@@ -242,7 +245,7 @@ async def get_admin_group_profile(
             description=p.description,
             objectives=p.objectives or [],
             tech_stack=p.tech_stack or [],
-            project_type=str(p.project_type),
+            project_type=project_type_value(p.project_type),
             repo_links=p.repo_links or [],
             updated_at=p.updated_at,
             domains=[DomainInfo(domain_id=d.domain_id, name=d.name) for d in p.domains],
