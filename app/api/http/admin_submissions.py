@@ -273,7 +273,7 @@ async def _create_placeholder_submissions_for_groups(
             group_id=group_id,
             created_by=announcement.created_by,
             title=announcement.title,
-            note=announcement.description,
+            note=None,
             type=SubmissionTypeEnum.official,
             status=SubmissionStatusEnum.pending,
             linked_announcement_id=announcement.announcement_id,
