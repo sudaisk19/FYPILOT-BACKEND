@@ -60,11 +60,28 @@ class FacultyDashboardRepository:
         return await self._scalar_int(stmt)
 
     async def average_supervisor_marks(self, faculty_id: UUID) -> Optional[float]:
-        stmt = select(func.avg(SupervisorEvaluation.marks)).where(
+        # Primary source: milestone supervisor evaluations.
+        eval_stmt = select(func.avg(SupervisorEvaluation.marks)).where(
             SupervisorEvaluation.supervisor_id == faculty_id
         )
-        value = await self.db.scalar(stmt)
-        return self._to_float(value)
+        eval_value = await self.db.scalar(eval_stmt)
+        if eval_value is not None:
+            return self._to_float(eval_value)
+
+        # Fallback source: submission-level grading stored on Submission.
+        # This keeps top-cards meaningful for deployments using submissions
+        # grading but not milestone evaluation records.
+        submission_stmt = (
+            select(func.avg(Submission.supervisor_marks))
+            .select_from(Submission)
+            .join(Group, Submission.group_id == Group.group_id)
+            .where(
+                Group.supervisor_id == faculty_id,
+                Submission.supervisor_marks.is_not(None),
+            )
+        )
+        submission_value = await self.db.scalar(submission_stmt)
+        return self._to_float(submission_value)
 
     async def count_jury_assigned_groups(self, faculty_id: UUID) -> int:
         stmt = (
