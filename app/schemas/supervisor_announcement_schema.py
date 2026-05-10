@@ -11,7 +11,7 @@ from app.models.announcement import FileTypeEnum
 class SupervisorAnnouncementFileResponse(BaseModel):
     file_id: UUID
     file_name: str
-    storage_key: str
+    url: str
     file_type: FileTypeEnum
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None

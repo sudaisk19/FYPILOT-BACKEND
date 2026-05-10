@@ -90,6 +90,7 @@ class FacultyDashboardService:
                 fyp_cycle=row.fyp_cycle,
                 members=row.members,
                 avg_marks=self._round_marks(row.avg_marks),
+                eval_avg_marks=self._round_marks(row.eval_avg_marks),
             )
             for row in group_rows
         ]
@@ -99,7 +100,7 @@ class FacultyDashboardService:
             data=[
                 SupervisorPerformancePoint(
                     project_name=row.project_name,
-                    avg_marks=self._round_marks(row.avg_marks) or 0.0,
+                    avg_marks=self._round_marks(row.eval_avg_marks) or 0.0,
                 )
                 for row in group_rows
             ],

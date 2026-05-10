@@ -14,6 +14,7 @@ from app.api.http.admin_supervisors import router as admin_faculty_router
 # Import bulk import router
 from app.api.http.bulk_import import router as bulk_import_router
 from app.api.http.departments import router as departments_router
+from app.api.http.industries import router as industries_router
 from app.api.http.faculty_dashboard import router as faculty_dashboard_router
 from app.api.http.group import router as group_router
 
@@ -48,6 +49,7 @@ router = APIRouter()
 # Single /health segment: router defines @router.get("/health") → /api/health
 router.include_router(health_router, tags=["health"])
 router.include_router(departments_router, tags=["departments"])
+router.include_router(industries_router, tags=["industries"])
 
 router.include_router(group_router, tags=["groups"])
 router.include_router(user_router, prefix="/users")

@@ -30,13 +30,9 @@ class SubmissionTypeEnum(str, enum.Enum):
 
 
 class SubmissionStatusEnum(str, enum.Enum):
-    draft = "draft"
     pending = "pending"
     missing = "missing"
     submitted = "submitted"
-    returned = "returned"
-    approved = "approved"
-    rejected = "rejected"
     graded = "graded"
 
 
