@@ -21,6 +21,7 @@ class CreateStudentRequest(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=200)
     email: EmailStr
     roll_number: str = Field(..., min_length=1, max_length=50)
+    cgpa: float = Field(..., ge=0.0, le=4.0)
     fyp_start_semester: Literal["fall", "spring", "summer"]
     fyp_start_year: int = Field(..., ge=2000, le=2100)
     department: str = Field(

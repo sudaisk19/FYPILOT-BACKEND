@@ -54,6 +54,7 @@ STUDENT_REQUIRED_COLUMNS = {
     "full_name",
     "email",
     "roll_number",
+    "cgpa",
     "fyp_start_semester",
     "fyp_start_year",
     "department",
@@ -323,6 +324,16 @@ def validate_row(row: dict, target_role: RoleEnum) -> Optional[str]:
         except ValueError as exc:
             return str(exc)
 
+        cgpa_raw = str(row.get("cgpa", "")).strip()
+        if not cgpa_raw:
+            return "cgpa is required for students"
+        try:
+            cgpa_val = float(cgpa_raw)
+        except (ValueError, TypeError):
+            return f"Invalid cgpa: '{cgpa_raw}'. Must be a number between 0 and 4"
+        if cgpa_val < 0.0 or cgpa_val > 4.0:
+            return f"Invalid cgpa: {cgpa_val}. Must be between 0 and 4"
+
     # Validate department and designation for supervisors
     if target_role == RoleEnum.faculty:
         department = row.get("department", "").strip()
@@ -485,11 +496,22 @@ async def process_single_item(
             item.error = str(exc)
             return "failed"
 
+        try:
+            cgpa_val = round(float(str(payload.get("cgpa", "")).strip()), 2)
+        except (ValueError, TypeError):
+            item.status = BulkItemStatus.failed
+            item.error = "Invalid cgpa (must be a number between 0 and 4)"
+            return "failed"
+        if cgpa_val < 0.0 or cgpa_val > 4.0:
+            item.status = BulkItemStatus.failed
+            item.error = "Invalid cgpa (must be between 0 and 4)"
+            return "failed"
+
         student = Student(
             user_id=user.user_id,
             roll_number=payload["roll_number"].strip(),
             department=student_department,
-            cgpa=None,
+            cgpa=cgpa_val,
             interests=[],
             skills=[],
             skills_levels={},
@@ -956,6 +978,7 @@ async def get_job_results(
                 "full_name": payload.get("full_name", ""),
                 "email": payload.get("email", ""),
                 "roll_number": payload.get("roll_number", ""),
+                "cgpa": payload.get("cgpa", ""),
                 "department": payload.get("department", ""),
                 "status": item.status.value if item.status else "",
                 "error": item.error or "",
@@ -975,6 +998,7 @@ async def create_single_student(
     full_name: str,
     email: str,
     roll_number: str,
+    cgpa: float,
     fyp_start_semester: str,
     fyp_start_year: int,
     department: str,
@@ -1023,7 +1047,7 @@ async def create_single_student(
         user_id=user.user_id,
         roll_number=roll_number.strip(),
         department=normalized_department,
-        cgpa=None,
+        cgpa=round(cgpa, 2),
         interests=[],
         skills=[],
         skills_levels={},
