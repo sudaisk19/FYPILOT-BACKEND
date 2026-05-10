@@ -23,6 +23,7 @@ class StudentDashboardProfile(BaseModel):
     supervisor_name: Optional[str] = None
     cosupervisor_names: List[str] = []
     group_members: List[DashboardGroupMember] = []
+    project_repositories: List[str] = []
 
 
 # ─── 2. UPCOMING DEADLINES ────────────────────────────────────────────────────

@@ -120,7 +120,7 @@ class SubmissionAnnouncementResponse(BaseModel):
 class SubmissionFileInfo(BaseModel):
     fileId: UUID
     fileName: str
-    storageKey: str
+    url: str
     mimeType: Optional[str] = None
     sizeBytes: Optional[int] = None
     supervisorComment: Optional[str] = None

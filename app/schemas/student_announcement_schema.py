@@ -11,6 +11,7 @@ from app.models.announcement import FileTypeEnum
 class StudentAnnouncementFileResponse(BaseModel):
     file_id: UUID
     file_name: str
+    url: Optional[str] = None
     storage_key: str
     file_type: FileTypeEnum
     mime_type: Optional[str] = None
@@ -46,6 +47,8 @@ class TemplateFileResponse(BaseModel):
 
     file_id: UUID
     file_name: str
+    url: Optional[str] = None
+    storage_key: str
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
     uploaded_at: datetime

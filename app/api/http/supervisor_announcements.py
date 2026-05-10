@@ -40,6 +40,7 @@ from app.schemas.supervisor_announcement_schema import (
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
     delete_file_from_supabase,
+    get_public_file_url,
     upload_file_to_supabase,
 )
 
@@ -131,7 +132,7 @@ def _build_response(
         SupervisorAnnouncementFileResponse(
             file_id=f.file_id,
             file_name=f.file_name,
-            storage_key=f.storage_key,
+            url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
             file_type=f.file_type,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,

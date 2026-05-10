@@ -18,6 +18,7 @@ class TargetResponse(BaseModel):
 class FileResponse(BaseModel):
     file_id: UUID
     file_name: str
+    url: Optional[str] = None
     storage_key: str
     file_type: FileTypeEnum
     mime_type: Optional[str] = None
