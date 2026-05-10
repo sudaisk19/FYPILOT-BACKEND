@@ -19,6 +19,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db import Base
+from app.models.user import RoleEnum
 
 
 class BulkJobStatus(str, enum.Enum):
@@ -37,9 +38,6 @@ class BulkItemStatus(str, enum.Enum):
     success = "success"
     failed = "failed"
     skipped = "skipped"
-
-
-from app.models.user import RoleEnum
 
 
 class BulkImportJob(Base):

@@ -26,12 +26,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
-from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS
 from app.db import get_db
 from app.models.bulk_import import (
     BulkJobStatus,
 )
-from app.models.user import User
+from app.models.user import RoleEnum, User
 from app.repositories.bulk_import_repository import bulk_import_repository
 from app.schemas.bulk_import_schema import (
     BulkImportItemSummary,
@@ -44,7 +43,6 @@ from app.schemas.bulk_import_schema import (
     BulkImportUploadResponse,
     CreateStudentRequest,
     CreateSupervisorRequest,
-    DepartmentListResponse,
     ProcessorResponse,
     RetryResponse,
     SingleUserResponse,
@@ -144,7 +142,7 @@ async def download_student_csv_template(current_user: User = Depends(require_adm
 async def upload_bulk_import(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="CSV or Excel file with user data"),
-    target_role: str = Form(..., description="Target role: 'student' or 'supervisor'"),
+    target_role: str = Form(..., description="Target role: 'student' or 'faculty'"),
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -161,15 +159,17 @@ async def upload_bulk_import(
     Departments must match the predefined dropdown options (case-insensitive).
     """
     # Validate target_role
-    try:
-        target_role_lower = target_role.lower()
-        if target_role_lower not in ("student", "faculty"):
-            raise ValueError()
-        role_enum = target_role_lower
-    except ValueError:
+    target_role_lower = target_role.strip().lower()
+    role_aliases = {
+        "student": RoleEnum.student,
+        "faculty": RoleEnum.faculty,
+        "supervisor": RoleEnum.faculty,
+    }
+    role_enum = role_aliases.get(target_role_lower)
+    if role_enum is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="target_role must be 'student' or 'faculty'",
+            detail="target_role must be 'student', 'faculty', or 'supervisor'",
         )
 
     # Validate file

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import normalize_department
 from app.db import get_db
 from app.models.group import InviteStatusEnum
 from app.models.user import User
@@ -38,29 +39,6 @@ from app.schemas.supervisor_explore_schema import (
 )
 
 router = APIRouter(tags=["supervisor-explore"])
-
-
-# Department alias mapping for flexible department filtering
-DEPARTMENT_ALIASES = {
-    "se": "Software Engineering",
-    "software engineering": "Software Engineering",
-    "cs": "Computer Science",
-    "computer science": "Computer Science",
-    "ee": "Electrical Engineering",
-    "electrical engineering": "Electrical Engineering",
-    "me": "Mechanical Engineering",
-    "mechanical engineering": "Mechanical Engineering",
-    "ce": "Civil Engineering",
-    "civil engineering": "Civil Engineering",
-}
-
-
-def normalize_department(dept: str) -> str:
-    """Normalize department name to handle aliases (e.g., SE -> Software Engineering)"""
-    if not dept:
-        return dept
-    normalized = dept.lower().strip()
-    return DEPARTMENT_ALIASES.get(normalized, dept)
 
 
 @router.get(
@@ -107,7 +85,7 @@ async def explore_supervisors(
     # Query parameters for filtering
     department: Optional[str] = Query(
         None,
-        description="Filter by department (e.g., SE, Software Engineering, CS, Computer Science)",
+        description="Filter by canonical department value from GET /api/departments",
     ),
     designation: Optional[str] = Query(None, description="Filter by designation"),
     domain: Optional[str] = Query(None, description="Filter by domain expertise"),
@@ -128,12 +106,7 @@ async def explore_supervisors(
     - Combine multiple filters for precise results (intersected filters with AND logic)
     - Paginate through results
 
-    Department aliases supported:
-    - SE, Software Engineering → Software Engineering
-    - CS, Computer Science → Computer Science
-    - EE, Electrical Engineering → Electrical Engineering
-    - ME, Mechanical Engineering → Mechanical Engineering
-    - CE, Civil Engineering → Civil Engineering
+    Department filter accepts canonical values from GET /api/departments.
 
     Only students can access this endpoint.
     """
@@ -144,9 +117,19 @@ async def explore_supervisors(
             detail="Access denied. This endpoint is only for students.",
         )
 
+    normalized_department = None
+    if department:
+        try:
+            normalized_department = normalize_department(department)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
     rows, total = await supervisor_repository.search_supervisors_with_scoring(
         db,
-        department=department,
+        department=normalized_department,
         designation=designation,
         domain=domain,
         search=search,
@@ -382,6 +365,7 @@ async def get_supervisor_details(
                 request_history = [
                     RequestSummaryItem(
                         request_id=r.request_id,
+                        requested_role=r.request_type.value,
                         status=r.status.value,
                         message=r.message,
                         feedback=r.feedback,

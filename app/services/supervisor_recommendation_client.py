@@ -15,6 +15,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Paths on the AI microservice — must match its OpenAPI (versioned routes).
+AI_SUPERVISOR_RECOMMEND_PATH = "/api/v1/supervisor/recommend"
+
 
 class SupervisorRecommendationServiceError(Exception):
     """Custom exception for Supervisor Recommendation service errors."""
@@ -109,7 +112,9 @@ class SupervisorRecommendationClient:
         logger.debug(f"Sending recommendation request to AI service: {payload}")
 
         try:
-            response = await self.client.post("/recommend", json=payload)
+            response = await self.client.post(
+                AI_SUPERVISOR_RECOMMEND_PATH, json=payload
+            )
 
             if response.status_code == 200:
                 result = response.json()

@@ -13,6 +13,9 @@ from app.models.user import User
 from app.schemas.supervisor_recommendation_schema import (
     SupervisorRecommendationRequest,
 )
+from app.services.supervisor_recommendation_client import (
+    SupervisorRecommendationServiceError,
+)
 from app.services.supervisor_recommendation_service import (
     supervisor_recommendation_service,
 )
@@ -76,15 +79,21 @@ async def get_supervisor_recommendations(
 
         return {"recommendations": recommendations}
 
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
+    except SupervisorRecommendationServiceError as e:
+        logger.error(f"AI recommender error: {e.message}")
+        code = e.status_code or status.HTTP_502_BAD_GATEWAY
+        raise HTTPException(status_code=code, detail=e.message)
     except Exception as e:
-        logger.error(f"Error generating recommendations: {e}")
+        logger.exception("Error generating recommendations")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate recommendations",
-        )
+        ) from e

@@ -33,6 +33,7 @@ class PaginatedFacultyResponse(BaseModel):
 
 # Projects listed inside the supervisor profile
 class SupervisedProjectInfo(BaseModel):
+    group_id: UUID
     project_id: UUID
     fyp_id: Optional[str] = None
     name: str

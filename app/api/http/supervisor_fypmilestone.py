@@ -100,6 +100,18 @@ def _ensure_active_jury(user: User) -> None:
         )
 
 
+def _ensure_active_faculty(user: User) -> None:
+    if user.role != RoleEnum.faculty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
+        )
+    if not user.faculty_profile or not user.faculty_profile.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your faculty account is inactive. Contact an administrator.",
+        )
+
+
 async def _get_managed_group(
     db: AsyncSession, *, supervisor_id: UUID, group_id: UUID
 ) -> Optional[Group]:
@@ -238,27 +250,7 @@ async def list_supervisor_milestones(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.faculty:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
-        )
-
-    # Active check
-    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your faculty account is inactive. Contact an administrator.",
-        )
-
-    # Check if faculty has supervisor OR jury privileges
-    if (
-        not current_user.faculty_profile.is_supervisor
-        and not current_user.faculty_profile.is_jury
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only faculty with supervisor or jury privileges can access milestones",
-        )
+    _ensure_active_faculty(current_user)
 
     # When cycle is omitted, return both FYP1 and FYP2 milestones.
     return await milestone_repository.list_milestones(db, fyp_cycle=cycle)
@@ -270,27 +262,7 @@ async def get_supervisor_milestone(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != RoleEnum.faculty:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Faculty only"
-        )
-
-    # Active check
-    if not current_user.faculty_profile or not current_user.faculty_profile.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your faculty account is inactive. Contact an administrator.",
-        )
-
-    # Check if faculty has supervisor OR jury privileges
-    if (
-        not current_user.faculty_profile.is_supervisor
-        and not current_user.faculty_profile.is_jury
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only faculty with supervisor or jury privileges can access milestone details",
-        )
+    _ensure_active_faculty(current_user)
 
     milestone = await milestone_repository.get_milestone(db, milestone_id)
     if not milestone:

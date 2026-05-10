@@ -3,13 +3,31 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from supabase import Client
 
+from app.core.config import settings
+
 ANNOUNCEMENTS_BUCKET = "announcement_files"
+SUBMISSION_FILES_BUCKET = "submission_files"
+
+
+def get_public_file_url(bucket: str, storage_key: str) -> str:
+    """Build a public Supabase Storage URL for a file.
+    
+    Args:
+        bucket: The Supabase bucket name
+        storage_key: The file path within the bucket
+        
+    Returns:
+        Full public URL to access the file
+    """
+    supabase_url = settings.supabase_url.rstrip("/")
+    return f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_key}"
 
 
 def _coerce_error(response: Optional[dict]) -> Optional[str]:
@@ -45,7 +63,20 @@ async def upload_file_to_supabase(
             file_options={"content-type": content_type, "upsert": upsert},
         )
 
-    response = await run_in_threadpool(_upload)
+    try:
+        response = await asyncio.wait_for(
+            run_in_threadpool(_upload),
+            timeout=settings.storage_upload_timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "File upload timed out while contacting storage service. "
+                "Please retry with a smaller file or try again shortly."
+            ),
+        ) from exc
+
     error_message = _coerce_error(response)
     if error_message:
         raise HTTPException(

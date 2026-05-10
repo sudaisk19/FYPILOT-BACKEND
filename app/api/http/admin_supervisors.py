@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import normalize_department
 from app.db import get_db
 from app.models.faculty import Faculty
 from app.models.user import RoleEnum, User
@@ -131,7 +132,9 @@ async def get_faculty_dropdown(
 
 @router.get("/faculty", response_model=PaginatedFacultyResponse)
 async def list_faculty(
-    department: Optional[str] = Query(None),
+    department: Optional[str] = Query(
+        None, description="Canonical department value from GET /api/departments"
+    ),
     availability: Literal["all", "available", "full"] = Query("all"),
     status_filter: Literal["all", "active", "inactive"] = Query("all"),
     search: Optional[str] = Query(None),
@@ -142,6 +145,16 @@ async def list_faculty(
 ):
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    normalized_department = None
+    if department:
+        try:
+            normalized_department = normalize_department(department)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
     # ── 1. Check Redis Cache ──────────────────────────────────────────────
     cache_key = (
@@ -161,8 +174,10 @@ async def list_faculty(
     )
 
     filters = []
-    if department:
-        filters.append(Faculty.department.ilike(f"%{department}%"))
+    if normalized_department:
+        filters.append(
+            func.lower(func.trim(Faculty.department)) == normalized_department.lower()
+        )
 
     if availability == "available":
         filters.append(Faculty.capacity_filled < Faculty.capacity_max)
@@ -265,6 +280,7 @@ async def get_admin_faculty_profile(
         if group.project:
             projects_data.append(
                 SupervisedProjectInfo(
+                    group_id=group.group_id,
                     project_id=group.project.project_id,
                     fyp_id=group.project.fyp_id,
                     name=group.project.name,
@@ -281,6 +297,7 @@ async def get_admin_faculty_profile(
             if group.project:
                 projects_data.append(
                     SupervisedProjectInfo(
+                        group_id=group.group_id,
                         project_id=group.project.project_id,
                         fyp_id=group.project.fyp_id,
                         name=f"{group.project.name} (Co-Supervisor)",

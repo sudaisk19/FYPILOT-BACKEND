@@ -137,7 +137,7 @@ class EvaluationStatusSummary(BaseModel):
     evaluations_submitted: int
     evaluations_required: int
     missing_evaluations: int
-    wbs_failure_count: int
+    wbs_failure_count: Optional[int] = None
     percentage_submitted: float
     last_updated: Optional[str] = None
 
@@ -217,7 +217,8 @@ class SupervisorGroupOverviewEntry(BaseModel):
     project_name: str
     fyp_cycle: str
     members: List[str]
-    avg_marks: Optional[float] = None
+    avg_marks: Optional[float] = None  # Most recent submission supervisor marks
+    eval_avg_marks: Optional[float] = None  # Supervisor evaluation average for bar chart
 
 
 class SupervisorPerformancePoint(BaseModel):

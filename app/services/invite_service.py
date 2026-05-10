@@ -10,6 +10,7 @@ enforcing the Repository Pattern.
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from uuid import UUID
+from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks
 from sqlalchemy import select
@@ -48,6 +49,67 @@ from app.services.mailer import (
 
 def _extract_role_val(role_attr) -> str:
     return role_attr.value if hasattr(role_attr, "value") else role_attr
+
+
+def _portfolio_projects_to_items(raw_portfolio_projects) -> List[PortfolioProject]:
+    """Normalize stored portfolio projects into response items."""
+    if not raw_portfolio_projects:
+        return []
+
+    if isinstance(raw_portfolio_projects, list):
+        candidates = raw_portfolio_projects
+    elif isinstance(raw_portfolio_projects, dict):
+        if "links" in raw_portfolio_projects and isinstance(
+            raw_portfolio_projects["links"], list
+        ):
+            candidates = [{"link": link} for link in raw_portfolio_projects["links"]]
+        elif "projects" in raw_portfolio_projects and isinstance(
+            raw_portfolio_projects["projects"], list
+        ):
+            candidates = raw_portfolio_projects["projects"]
+        elif "items" in raw_portfolio_projects and isinstance(
+            raw_portfolio_projects["items"], list
+        ):
+            candidates = raw_portfolio_projects["items"]
+        if any(
+            key in raw_portfolio_projects
+            for key in ("title", "name", "link", "url", "repository", "repo_link")
+        ):
+            candidates = [raw_portfolio_projects]
+        elif "links" not in raw_portfolio_projects:
+            candidates = raw_portfolio_projects.values()
+    else:
+        return []
+
+    portfolio_projects: List[PortfolioProject] = []
+    for project in candidates:
+        if not isinstance(project, dict):
+            continue
+
+        title = (
+            project.get("title")
+            or project.get("name")
+            or project.get("project_name")
+            or ""
+        )
+        link = (
+            project.get("link")
+            or project.get("url")
+            or project.get("repository")
+            or project.get("repo_link")
+            or ""
+        )
+
+        title = str(title).strip()
+        link = str(link).strip()
+        if not title and link:
+            parsed = urlparse(link)
+            title = parsed.path.rstrip("/").split("/")[-1] if parsed.path else ""
+            title = title or parsed.netloc or link
+        if title or link:
+            portfolio_projects.append(PortfolioProject(title=title, link=link))
+
+    return portfolio_projects
 
 
 # ---------------------------------------------------------------------------
@@ -473,16 +535,7 @@ async def get_request_details_svc(
 
     students = []
     for member, user, student in members_data:
-        portfolio_projects = []
-        if student.portfolio_projects and isinstance(student.portfolio_projects, list):
-            for proj in student.portfolio_projects:
-                if isinstance(proj, dict):
-                    portfolio_projects.append(
-                        PortfolioProject(
-                            title=proj.get("title", ""),
-                            link=proj.get("link", ""),
-                        )
-                    )
+        portfolio_projects = _portfolio_projects_to_items(student.portfolio_projects)
 
         students.append(
             StudentDetail(
@@ -516,6 +569,7 @@ async def get_request_details_svc(
     request_history = [
         RequestSummaryItem(
             request_id=r.request_id,
+            requested_role=r.request_type.value,
             status=r.status.value,
             message=r.message,
             feedback=r.feedback,

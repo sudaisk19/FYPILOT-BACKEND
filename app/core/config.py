@@ -139,6 +139,13 @@ class Settings(BaseSettings):
         default=24, validation_alias="TEMP_PASSWORD_TTL_HOURS"
     )
 
+    # ─── Storage Upload Timeout ───────────────────────────
+    storage_upload_timeout_seconds: float = Field(
+        default=60.0,
+        validation_alias="STORAGE_UPLOAD_TIMEOUT_SECONDS",
+        description="Timeout in seconds for single file upload to Supabase Storage",
+    )
+
     # ─── Collaborative chat (SSE + job workers) ─────────────
     chat_context_message_limit: int = Field(
         default=20,

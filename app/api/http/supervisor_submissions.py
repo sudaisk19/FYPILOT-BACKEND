@@ -55,14 +55,14 @@ from app.schemas.submission_schema import (
 )
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
+    SUBMISSION_FILES_BUCKET,
     delete_file_from_supabase,
+    get_public_file_url,
     upload_file_to_supabase,
 )
 
 router = APIRouter(tags=["faculty-submissions"])
 logger = logging.getLogger(__name__)
-
-SUBMISSION_FILES_BUCKET = "submission_files"
 
 
 # ─── LOCAL SCHEMAS ────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ def _build_response(
             FileOutput(
                 id=f.file_id,
                 name=f.file_name,
-                url=f.storage_key,
+                url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
                 type=f.file_type.value,
                 mimeType=f.mime_type,
                 size=f.size_bytes,
@@ -289,7 +289,7 @@ async def download_announcement_file(
 
     # Download from storage
     try:
-        file_content = supabase.storage.from_(SUBMISSION_FILES_BUCKET).download(
+        file_content = supabase.storage.from_(ANNOUNCEMENTS_BUCKET).download(
             file_record.storage_key
         )
     except Exception as e:
@@ -790,7 +790,7 @@ async def get_submission_responses(
     announcement_id: UUID,
     search: Optional[str] = Query(None, description="Search by project name or FYP ID"),
     status_filter: Optional[str] = Query(
-        None, description="Filter by status: submitted, missing, graded, returned"
+        None, description="Filter by status: submitted, missing, graded, pending"
     ),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -858,7 +858,6 @@ async def get_submission_responses(
     status_map = {
         SubmissionStatusEnum.submitted: "Submitted",
         SubmissionStatusEnum.graded: "Graded",
-        SubmissionStatusEnum.returned: "Returned",
         SubmissionStatusEnum.pending: "Pending",
         SubmissionStatusEnum.missing: "Missing",
     }
@@ -971,7 +970,7 @@ async def get_submission_evaluation(
         SubmissionFileInfo(
             fileId=f.file_id,
             fileName=f.file_name,
-            storageKey=f.storage_key,
+            url=get_public_file_url(SUBMISSION_FILES_BUCKET, f.storage_key),
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
             supervisorComment=f.supervisor_comment,
@@ -1070,7 +1069,7 @@ async def update_supervisor_grading(
         SubmissionFileInfo(
             fileId=f.file_id,
             fileName=f.file_name,
-            storageKey=f.storage_key,
+            url=get_public_file_url(SUBMISSION_FILES_BUCKET, f.storage_key),
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
             supervisorComment=f.supervisor_comment,
