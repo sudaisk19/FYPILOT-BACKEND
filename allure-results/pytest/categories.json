@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Service Logic Failures",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*AssertionError.*"
+  },
+  {
+    "name": "Mock Setup Failures",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*MagicMock.*|.*AsyncMock.*"
+  },
+  {
+    "name": "Async Test Failures",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*coroutine.*|.*await.*"
+  }
+]

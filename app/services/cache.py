@@ -130,6 +130,23 @@ class Cache:
         except Exception as e:
             logger.debug(f"Cache delete error for key '{key}': {e}")
 
+    async def clear_pattern(self, pattern: str) -> None:
+        """Delete all keys matching a Redis glob pattern (e.g. ``admin:students:*``)."""
+        if not self._is_connected or not self._client:
+            return
+        try:
+            cursor = 0
+            while True:
+                cursor, keys = await self._client.scan(
+                    cursor=cursor, match=pattern, count=100
+                )
+                if keys:
+                    await self._client.delete(*keys)
+                if cursor == 0:
+                    break
+        except Exception as e:
+            logger.debug(f"Cache clear_pattern error for '{pattern}': {e}")
+
     async def acquire_lock(self, key: str, ttl_seconds: int = 30) -> bool:
         if not self._is_connected or not self._client:
             return True

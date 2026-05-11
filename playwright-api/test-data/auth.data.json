@@ -1,0 +1,70 @@
+{
+  "valid": {
+    "signup": {
+      "full_name": "Playwright API User",
+      "email": "apitest.seed@example.com",
+      "password": "SecureP@ss123",
+      "role": "student"
+    },
+    "login": {
+      "email": "student.seed@example.com",
+      "password": "SecureP@ss123",
+      "remember_me": false
+    }
+  },
+  "invalid": {
+    "missing_fields": [
+      {
+        "case": "signup_missing_email",
+        "expected_status": 500,
+        "note": "FastAPI/Pydantic gap surfaces as SERVER_INTERNAL_ERROR (verify if backend fixes)",
+        "data": {
+          "full_name": "No Email",
+          "password": "SecureP@ss123",
+          "role": "student"
+        }
+      },
+      {
+        "case": "signup_missing_password",
+        "expected_status": 422,
+        "data": {
+          "full_name": "No Password",
+          "email": "missing-pw@example.com",
+          "role": "student"
+        }
+      }
+    ],
+    "wrong_types": [
+      {
+        "case": "signup_role_not_string",
+        "expected_status": 422,
+        "data": {
+          "full_name": "Bad Role Type",
+          "email": "bad-role@example.com",
+          "password": "SecureP@ss123",
+          "role": 123
+        }
+      }
+    ],
+    "login_missing_fields": [
+      {
+        "case": "login_missing_email",
+        "expected_status": 500,
+        "note": "Incomplete body can yield SERVER_INTERNAL_ERROR until validated at schema layer",
+        "data": {
+          "password": "SecureP@ss123",
+          "remember_me": false
+        }
+      },
+      {
+        "case": "login_missing_password",
+        "expected_status": 422,
+        "data": {
+          "email": "missing-password-field@example.com",
+          "remember_me": false
+        }
+      }
+    ]
+  },
+  "edge_cases": []
+}

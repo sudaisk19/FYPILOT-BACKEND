@@ -1,0 +1,190 @@
+{
+  "ids": {
+    "milestone_id": "00000000-0000-4000-8000-000000000001",
+    "submission_id": "00000000-0000-4000-8000-000000000002",
+    "fake_uuid": "00000000-0000-4000-8000-000000000099"
+  },
+  "valid": {
+    "wizard_profile_minimal": {
+      "roll_number": "API-TEST-001",
+      "department": "Computer Science",
+      "cgpa": 3.5,
+      "interests": ["testing"],
+      "experience": "Playwright API tests",
+      "skills": ["TypeScript"],
+      "skills_levels": { "TypeScript": 3 }
+    },
+    "patch_profile_minimal": {
+      "experience": "Matrix PATCH smoke"
+    },
+    "announcements_query": { "page": 1, "per_page": 10 },
+    "submissions_query": { "page": 1, "per_page": 10 }
+  },
+  "invalid": {
+    "wizard_profile_bad_cgpa_type": {
+      "roll_number": "BAD-CGPA",
+      "cgpa": "not-a-number"
+    },
+    "patch_profile_bad_cgpa": {
+      "cgpa": "not-a-float"
+    }
+  },
+  "edge_cases": {
+    "fake_milestone_id": "00000000-0000-4000-8000-000000000001",
+    "fake_submission_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "endpoint_matrix": [
+    {
+      "name": "student profile",
+      "method": "GET",
+      "path": "/api/students/profile",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["user_id", "email", "roll_number"]
+    },
+    {
+      "name": "patch student profile",
+      "method": "PATCH",
+      "path": "/api/students/profile",
+      "role": "student",
+      "wrongRole": "admin",
+      "body": { "experience": "Matrix PATCH smoke" },
+      "happyStatuses": [200, 404],
+      "supportsNotFound": false,
+      "invalidBody": { "cgpa": "not-a-float" },
+      "expectObjectKeys": ["message", "profile"]
+    },
+    {
+      "name": "wizard profile",
+      "method": "POST",
+      "path": "/api/students/wizard-profile",
+      "role": "student",
+      "wrongRole": "faculty",
+      "body": {
+        "roll_number": "API-TEST-001",
+        "department": "Computer Science",
+        "cgpa": 3.5,
+        "interests": ["testing"],
+        "experience": "Playwright API tests",
+        "skills": ["TypeScript"],
+        "skills_levels": { "TypeScript": 3 }
+      },
+      "happyStatuses": [200, 201, 400],
+      "supportsNotFound": false,
+      "invalidBody": {
+        "roll_number": "BAD-CGPA",
+        "cgpa": "not-a-number"
+      }
+    },
+    {
+      "name": "dashboard insights",
+      "method": "GET",
+      "path": "/api/students/dashboard/insights",
+      "role": "student",
+      "wrongRole": "admin",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["student_dashboard"]
+    },
+    {
+      "name": "milestones list",
+      "method": "GET",
+      "path": "/api/students/milestones",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "supportsNotFound": false,
+      "expectJsonArray": true
+    },
+    {
+      "name": "milestone by id",
+      "method": "GET",
+      "path": "/api/students/milestones/{milestone_id}",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404, 403],
+      "supportsNotFound": true,
+      "expectObjectKeys": ["milestone_id"]
+    },
+    {
+      "name": "announcements supervisor",
+      "method": "GET",
+      "path": "/api/students/announcements/supervisor",
+      "query": "?page=1&per_page=10",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["announcements"]
+    },
+    {
+      "name": "announcements admin",
+      "method": "GET",
+      "path": "/api/students/announcements/admin",
+      "query": "?page=1&per_page=10",
+      "role": "student",
+      "wrongRole": "admin",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["announcements"]
+    },
+    {
+      "name": "announcement templates",
+      "method": "GET",
+      "path": "/api/students/announcements/templates",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectJsonArray": true
+    },
+    {
+      "name": "official submissions list",
+      "method": "GET",
+      "path": "/api/students/submissions/official",
+      "query": "?page=1&per_page=10",
+      "role": "student",
+      "wrongRole": "admin",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["submissions", "total_items"]
+    },
+    {
+      "name": "official submission detail",
+      "method": "GET",
+      "path": "/api/students/submissions/official/{submission_id}",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404, 403],
+      "supportsNotFound": true,
+      "expectObjectKeys": ["submission_id"]
+    },
+    {
+      "name": "unofficial submissions list",
+      "method": "GET",
+      "path": "/api/students/submissions/unofficial",
+      "query": "?page=1&per_page=10",
+      "role": "student",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["submissions", "total_items"]
+    },
+    {
+      "name": "document types (any authenticated)",
+      "method": "GET",
+      "path": "/api/students/document-types",
+      "role": "student",
+      "wrongRole": "faculty",
+      "skipWrongRole": true,
+      "happyStatuses": [200],
+      "supportsNotFound": false
+    }
+  ]
+}

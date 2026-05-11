@@ -1,0 +1,97 @@
+{
+  "ids": {
+    "batch_id": "00000000-0000-4000-8000-000000000005",
+    "assignment_id": "00000000-0000-4000-8000-000000000016",
+    "pair_id": "00000000-0000-4000-8000-000000000017",
+    "fake_uuid": "00000000-0000-4000-8000-000000000099"
+  },
+  "valid": {
+    "assignment_patch": { "pair_id": "00000000-0000-4000-8000-000000000017" }
+  },
+  "invalid": {
+    "assignment_patch_missing_pair": {},
+    "assignment_patch_bad_pair": { "pair_id": 123 }
+  },
+  "endpoint_matrix": [
+    {
+      "name": "jury pairs dropdown",
+      "method": "GET",
+      "path": "/api/jury-matching/jury-pairs",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 500],
+      "supportsNotFound": false,
+      "expectJsonArray": true
+    },
+    {
+      "name": "jury assignment status by batch",
+      "method": "GET",
+      "path": "/api/jury-matching/assign/{batch_id}/status",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["batch_id", "status"]
+    },
+    {
+      "name": "jury assignments list",
+      "method": "GET",
+      "path": "/api/jury-matching/assignments",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["jury_matches", "status"]
+    },
+    {
+      "name": "patch assignment jury pair",
+      "method": "PATCH",
+      "path": "/api/jury-matching/assignments/{assignment_id}/jury",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "pair_id": "00000000-0000-4000-8000-000000000017" },
+      "happyStatuses": [200, 404],
+      "invalidBody": {},
+      "expectObjectKeys": ["id", "new_pair_id"]
+    },
+    {
+      "name": "delete all assignments",
+      "method": "DELETE",
+      "path": "/api/jury-matching/assignments",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200]
+    },
+    {
+      "name": "health endpoint (AI service)",
+      "method": "GET",
+      "path": "/api/jury-matching/health",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "AI service health endpoint intentionally skipped"
+    },
+    {
+      "name": "batch jury matching (AI)",
+      "method": "POST",
+      "path": "/api/jury-matching/batch",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "AI matching endpoint intentionally skipped"
+    },
+    {
+      "name": "reindex jury data (AI)",
+      "method": "POST",
+      "path": "/api/jury-matching/reindex",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "AI indexing endpoint intentionally skipped"
+    },
+    {
+      "name": "trigger assignment (AI background)",
+      "method": "POST",
+      "path": "/api/jury-matching/assign",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "AI assignment endpoint intentionally skipped"
+    }
+  ]
+}

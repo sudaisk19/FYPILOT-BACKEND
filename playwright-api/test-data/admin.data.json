@@ -1,0 +1,434 @@
+{
+  "ids": {
+    "student_user_id": "00000000-0000-4000-8000-000000000004",
+    "faculty_id": "00000000-0000-4000-8000-000000000010",
+    "group_id": "00000000-0000-4000-8000-000000000011",
+    "announcement_id": "00000000-0000-4000-8000-000000000012",
+    "milestone_id": "00000000-0000-4000-8000-000000000013",
+    "submission_id": "00000000-0000-4000-8000-000000000014",
+    "file_id": "00000000-0000-4000-8000-000000000015",
+    "fake_uuid": "00000000-0000-4000-8000-000000000099"
+  },
+  "valid": {
+    "toggle_active": { "is_active": true },
+    "faculty_profile_update": { "capacity_max": 5, "is_supervisor": true },
+    "assign_supervisor": { "supervisor_id": "00000000-0000-4000-8000-000000000010" },
+    "cohort_cycle_update": { "target_cycle": "fyp1" },
+    "admin_wizard_profile": { "phone": "+923001112233", "profile_pic": "https://example.com/pic.png" },
+    "admin_patch_profile": { "phone": "+923009998887" },
+    "milestone_create": {
+      "title": "Matrix Milestone",
+      "weightage": 10,
+      "fyp_cycle": "fyp1",
+      "is_active": false,
+      "marks_visible_to_students": false
+    },
+    "milestone_update": { "title": "Updated Matrix Milestone" }
+  },
+  "invalid": {
+    "toggle_missing_field": {},
+    "faculty_profile_bad_capacity": { "capacity_max": "bad" },
+    "assign_supervisor_bad_uuid": { "supervisor_id": "bad-uuid" },
+    "cohort_cycle_bad": { "target_cycle": "bad-cycle" },
+    "admin_profile_bad_email": { "email": "not-an-email" },
+    "milestone_create_invalid": { "title": "" },
+    "milestone_update_invalid": { "weightage": "bad" }
+  },
+  "endpoint_matrix": [
+    {
+      "name": "admin profile",
+      "method": "GET",
+      "path": "/api/admins/profile",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["user_id", "email"]
+    },
+    {
+      "name": "admin wizard profile",
+      "method": "POST",
+      "path": "/api/admins/wizard-profile",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "body": { "phone": "+923001112233", "profile_pic": "https://example.com/pic.png" },
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidBody": { "email": "not-an-email" },
+      "expectObjectKeys": ["message", "profile"]
+    },
+    {
+      "name": "admin patch profile",
+      "method": "PATCH",
+      "path": "/api/admins/profile",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "phone": "+923009998887" },
+      "happyStatuses": [200, 404],
+      "supportsNotFound": false,
+      "invalidBody": { "email": "not-an-email" },
+      "expectObjectKeys": ["message", "profile"]
+    },
+    {
+      "name": "admin dashboard insights",
+      "method": "GET",
+      "path": "/api/admin/dashboard/insights",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["admin_dashboard"]
+    },
+    {
+      "name": "admin list students",
+      "method": "GET",
+      "path": "/api/admin/students",
+      "query": "?page=1&per_page=10&group=all",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["students", "total"]
+    },
+    {
+      "name": "admin toggle student active",
+      "method": "PATCH",
+      "path": "/api/admin/students/{student_user_id}/toggle-active",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "is_active": true },
+      "happyStatuses": [200, 404],
+      "invalidBody": {}
+    },
+    {
+      "name": "admin faculty dropdown",
+      "method": "GET",
+      "path": "/api/admin/faculty/dropdown",
+      "query": "?search=dr&available_only=false",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&available_only=bad",
+      "expectJsonArray": true
+    },
+    {
+      "name": "admin list faculty",
+      "method": "GET",
+      "path": "/api/admin/faculty",
+      "query": "?page=1&per_page=10&availability=all&status_filter=all",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["faculty", "total"]
+    },
+    {
+      "name": "admin faculty profile",
+      "method": "GET",
+      "path": "/api/admin/faculty/{faculty_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["user_id", "email"]
+    },
+    {
+      "name": "admin faculty profile update",
+      "method": "PATCH",
+      "path": "/api/admin/faculty/{faculty_id}/profile-update",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "capacity_max": 5, "is_supervisor": true },
+      "happyStatuses": [200, 404, 400],
+      "invalidBody": { "capacity_max": "bad" }
+    },
+    {
+      "name": "admin list groups",
+      "method": "GET",
+      "path": "/api/admin/groups",
+      "query": "?page=1&per_page=10&supervisor=all",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["groups", "total"]
+    },
+    {
+      "name": "admin update cohort cycle",
+      "method": "PATCH",
+      "path": "/api/admin/groups/cohort/F24/cycle",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "body": { "target_cycle": "fyp1" },
+      "happyStatuses": [200, 404],
+      "supportsNotFound": false,
+      "invalidBody": { "target_cycle": "bad-cycle" }
+    },
+    {
+      "name": "admin group profile",
+      "method": "GET",
+      "path": "/api/admin/groups/{group_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["group", "members"]
+    },
+    {
+      "name": "admin assign supervisor",
+      "method": "POST",
+      "path": "/api/admin/groups/{group_id}/assign-supervisor",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "supervisor_id": "00000000-0000-4000-8000-000000000010" },
+      "happyStatuses": [200, 404, 409],
+      "invalidBody": { "supervisor_id": "bad-uuid" }
+    },
+    {
+      "name": "admin assign cosupervisor",
+      "method": "POST",
+      "path": "/api/admin/groups/{group_id}/assign-cosupervisor",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "supervisor_id": "00000000-0000-4000-8000-000000000010" },
+      "happyStatuses": [200, 404, 409],
+      "invalidBody": { "supervisor_id": "bad-uuid" }
+    },
+    {
+      "name": "admin remove supervisor",
+      "method": "DELETE",
+      "path": "/api/admin/groups/{group_id}/remove-supervisor",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404, 400]
+    },
+    {
+      "name": "admin remove cosupervisor",
+      "method": "DELETE",
+      "path": "/api/admin/groups/{group_id}/remove-cosupervisor",
+      "query": "?supervisor_id={faculty_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404]
+    },
+    {
+      "name": "admin list announcements",
+      "method": "GET",
+      "path": "/api/admin/announcements",
+      "query": "?page=1&per_page=10",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["announcements", "total_items"]
+    },
+    {
+      "name": "admin announcement by id",
+      "method": "GET",
+      "path": "/api/admin/announcements/{announcement_id}",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["announcement_id"]
+    },
+    {
+      "name": "admin create announcement (multipart)",
+      "method": "POST",
+      "path": "/api/admin/announcements",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "admin delete announcement",
+      "method": "DELETE",
+      "path": "/api/admin/announcements/{announcement_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404]
+    },
+    {
+      "name": "admin patch announcement (multipart)",
+      "method": "PATCH",
+      "path": "/api/admin/announcements/{announcement_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "admin milestones list",
+      "method": "GET",
+      "path": "/api/admin/milestones",
+      "query": "?fyp_cycle=fyp1",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&fyp_cycle=bad",
+      "expectJsonArray": true
+    },
+    {
+      "name": "admin milestone detail",
+      "method": "GET",
+      "path": "/api/admin/milestones/{milestone_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["milestone_id"]
+    },
+    {
+      "name": "admin milestone evaluations",
+      "method": "GET",
+      "path": "/api/admin/milestones/{milestone_id}/evaluations",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectJsonArray": true
+    },
+    {
+      "name": "admin create milestone",
+      "method": "POST",
+      "path": "/api/admin/milestones",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "body": {
+        "title": "Matrix Milestone",
+        "weightage": 10,
+        "fyp_cycle": "fyp1",
+        "is_active": false,
+        "marks_visible_to_students": false
+      },
+      "happyStatuses": [201, 400],
+      "supportsNotFound": false,
+      "invalidBody": { "title": "" },
+      "expectObjectKeys": ["milestone_id"]
+    },
+    {
+      "name": "admin patch milestone",
+      "method": "PATCH",
+      "path": "/api/admin/milestones/{milestone_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "title": "Updated Matrix Milestone" },
+      "happyStatuses": [200, 404],
+      "invalidBody": { "weightage": "bad" },
+      "expectObjectKeys": ["milestone_id"]
+    },
+    {
+      "name": "admin proposal evaluation config",
+      "method": "GET",
+      "path": "/api/admin/milestones/proposal-evaluation-config",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["intro_max", "diagram_max"]
+    },
+    {
+      "name": "admin patch proposal config (disabled by backend)",
+      "method": "PATCH",
+      "path": "/api/admin/milestones/proposal-evaluation-config",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "body": { "intro_max": 2 },
+      "happyStatuses": [409],
+      "supportsNotFound": false,
+      "invalidBody": { "intro_max": "bad" }
+    },
+    {
+      "name": "admin delete milestone",
+      "method": "DELETE",
+      "path": "/api/admin/milestones/{milestone_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [204, 404]
+    },
+    {
+      "name": "admin submission list",
+      "method": "GET",
+      "path": "/api/admin/submission-list",
+      "query": "?page=1&per_page=10",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["tasks", "total"]
+    },
+    {
+      "name": "admin submission responses",
+      "method": "GET",
+      "path": "/api/admin/submission-responses/{announcement_id}",
+      "query": "?page=1&per_page=10",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["submissions", "total"]
+    },
+    {
+      "name": "admin submission evaluation detail",
+      "method": "GET",
+      "path": "/api/admin/submission-evaluation/{submission_id}",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["submissionId", "files"]
+    },
+    {
+      "name": "admin submission evaluation update",
+      "method": "POST",
+      "path": "/api/admin/submission-evaluation-update/{submission_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "body": { "adminMarks": 8, "adminFeedback": "Good effort" },
+      "happyStatuses": [200, 404],
+      "invalidBody": { "adminMarks": "bad" },
+      "expectObjectKeys": ["submissionId"]
+    },
+    {
+      "name": "admin submission file download",
+      "method": "GET",
+      "path": "/api/admin/submission-files/{submission_id}/{file_id}/download",
+      "role": "admin",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404]
+    },
+    {
+      "name": "admin create submission announcement (multipart)",
+      "method": "POST",
+      "path": "/api/admin/submission-create",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "admin submission details",
+      "method": "GET",
+      "path": "/api/admin/submission-details/{announcement_id}",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["announcement_id", "title"]
+    },
+    {
+      "name": "admin submission update (multipart)",
+      "method": "PATCH",
+      "path": "/api/admin/submission-update/{announcement_id}",
+      "role": "admin",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "admin announcement file download",
+      "method": "GET",
+      "path": "/api/admin/announcement-files/{file_id}/download",
+      "role": "admin",
+      "wrongRole": "faculty",
+      "happyStatuses": [200, 404]
+    }
+  ]
+}

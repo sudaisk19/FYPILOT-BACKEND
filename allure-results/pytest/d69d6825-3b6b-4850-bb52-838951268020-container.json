@@ -1,0 +1,1 @@
+{"uuid": "4e53fb40-ea73-4d1a-b026-27218e8edf71", "children": ["ab3eb7e1-b915-4f01-afe2-8078e580f808"], "befores": [{"name": "apply_allure_test_metadata", "status": "passed", "start": 1778488104870, "stop": 1778488104870}], "start": 1778488104870, "stop": 1778488104880}
