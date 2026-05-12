@@ -191,6 +191,7 @@ async def post_room_message(
         or current_user.full_name
         or uid
     )
+    workspace_action = body.workspace_action.value if body.workspace_action else "chat"
 
     user_message_id = await chat_session_repo.save_message(
         mongo_db,
@@ -208,7 +209,10 @@ async def post_room_message(
         ),
         sender_name=sender_name,
         request_id=request_id,
-        metadata={"request_id": request_id},
+        metadata={
+            "request_id": request_id,
+            "workspace_action": workspace_action,
+        },
     )
 
     await publish(
@@ -233,6 +237,7 @@ async def post_room_message(
             "user_message_id": user_message_id,
             "model": body.model or "gpt-4o",
             "active_document_id": body.active_document_id,
+            "workspace_action": workspace_action,
         }
     )
 
@@ -278,6 +283,7 @@ async def stream_chat_events(
         finally:
             await unregister(room_id, q)
 
+    # CORSMiddleware merges Access-Control-*; these keys do not replace allow_origins.
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

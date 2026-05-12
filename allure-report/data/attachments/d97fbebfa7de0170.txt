@@ -1,0 +1,1 @@
+[31m[1mERROR   [0m app.services.jury_matching_service:jury_matching_service.py:86 Jury Matching service error: down

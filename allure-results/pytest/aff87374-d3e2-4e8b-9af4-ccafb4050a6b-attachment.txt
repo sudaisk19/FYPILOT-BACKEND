@@ -1,0 +1,1 @@
+ERROR    app.auth.supabase_auth:supabase_auth.py:130 Unexpected error in get_current_user: 401: Invalid authentication token

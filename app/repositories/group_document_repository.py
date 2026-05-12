@@ -4,7 +4,7 @@ Handles all Postgres CRUD for group_documents, document_versions, document_files
 """
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Set
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -59,6 +59,33 @@ class GroupDocumentRepository(BaseRepository[GroupDocument]):
         q = q.order_by(GroupDocument.created_at)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def get_existing_active_id_strings(
+        self, db: AsyncSession, id_strings: List[str]
+    ) -> Set[str]:
+        """
+        Which of the given ID strings refer to an existing, active group_documents row.
+        Returns lowercase canonical UUID strings for comparison.
+        """
+        unique: List[UUID] = []
+        seen: Set[UUID] = set()
+        for s in id_strings:
+            try:
+                u = UUID(str(s).strip())
+            except ValueError:
+                continue
+            if u not in seen:
+                seen.add(u)
+                unique.append(u)
+        if not unique:
+            return set()
+        result = await db.execute(
+            select(GroupDocument.id).where(
+                GroupDocument.id.in_(unique),
+                GroupDocument.is_active.is_(True),
+            )
+        )
+        return {str(i).lower() for i in result.scalars().all()}
 
     # ── Document Mutations ──────────────────────────────────────────────────
 
@@ -156,6 +183,29 @@ class GroupDocumentRepository(BaseRepository[GroupDocument]):
                 updated_by=updated_by,
                 # Optionally, bump lock_version so other clients know it changed?
                 # lock_version=GroupDocument.lock_version + 1,
+            )
+            .returning(GroupDocument)
+        )
+        result = await db.execute(stmt)
+        row = result.scalars().first()
+        if row:
+            await db.flush()
+        return row
+
+    async def attach_to_session(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        chat_session_id: str,
+        updated_by: UUID,
+    ) -> Optional[GroupDocument]:
+        """Point an existing GroupDocument at a workspace (Mongo session id)."""
+        stmt = (
+            update(GroupDocument)
+            .where(GroupDocument.id == doc_id)
+            .values(
+                chat_session_id=chat_session_id,
+                updated_by=updated_by,
             )
             .returning(GroupDocument)
         )

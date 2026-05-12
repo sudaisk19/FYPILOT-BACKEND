@@ -1,0 +1,37 @@
+---
+description: 
+alwaysApply: true
+---
+
+Always follow these standards for ALL Playwright API test files:
+
+STRUCTURE:
+- Every test file must use test.describe() to group related tests
+- Every test file must have these hooks where applicable:
+  test.beforeAll()  → login once, get tokens, setup shared data
+  test.afterAll()   → cleanup created resources, logout/invalidate tokens
+  test.beforeEach() → reset request context, log test name starting
+  test.afterEach()  → log test result, attach response to Allure report
+
+DATA DRIVEN:
+- ALL test payloads live in test-data/*.json — never hardcoded in spec files
+- Each JSON file has sections: valid, invalid, boundary, edge_cases
+- Loop over invalid/boundary datasets using test.each() or forEach
+
+ALLURE REPORTING:
+- Every test must have:
+  allure.epic()     → module name (Auth, Student, Faculty etc)
+  allure.feature()  → feature name (Login, Register, Proposal etc)
+  allure.story()    → specific scenario
+  allure.severity() → critical / normal / minor
+  allure.step()     → wrap every action block in a named step
+- Attach request payload and response body to every test as Allure attachment
+- Attach status code as Allure parameter
+
+CODE QUALITY:
+- No hardcoded URLs — always use baseURL from config
+- No hardcoded credentials — always from .env via process.env
+- No magic numbers — use named constants for status codes
+- Every test is independent — no test depends on state from another
+- All spec files must have a JSDoc comment block at the top explaining 
+  what module is being tested and what is covered

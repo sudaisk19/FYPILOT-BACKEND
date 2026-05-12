@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "url": "/auth/login",
+  "body": {
+    "email": "no-user-1778518520996@example.com",
+    "password": "SecureP@ss123",
+    "remember_me": false
+  }
+}

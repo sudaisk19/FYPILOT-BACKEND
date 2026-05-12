@@ -4,7 +4,7 @@ Centralizes all system prompts, AI personas, and prompt-building logic
 used across the documentation workspace and LLM services.
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 BASE_SYSTEM_PROMPT = (
     "You are an expert academic writing assistant helping university students "
@@ -100,23 +100,28 @@ def build_chat_system_prompt(
     document_content: Optional[str],
     doc_type: Optional[str],
     system_extra: Optional[str] = None,
+    leading_document_context: Optional[str] = None,
 ) -> str:
     """
     Assembles a comprehensive system prompt for the workspace chat.
     Injects document context and type-specific guidance.
-    """
-    system_parts = [BASE_SYSTEM_PROMPT]
 
+    When leading_document_context is set (collaborative room worker path),
+    it is prepended first; the legacy document_content block is omitted so
+    the document is not duplicated.
+    """
     normalized_doc_type = (doc_type or "other").strip().lower()
     doc_type_guidance = DOC_TYPE_GUIDANCE.get(
         normalized_doc_type, DOC_TYPE_GUIDANCE["other"]
     )
 
-    system_parts.append(
-        f"Document-type guidance ({normalized_doc_type}): {doc_type_guidance}"
-    )
+    system_parts: List[str] = [
+        BASE_SYSTEM_PROMPT,
+        f"Document-type guidance ({normalized_doc_type}): {doc_type_guidance}",
+    ]
 
-    if document_content:
+    inject_legacy_doc = bool(document_content) and not leading_document_context
+    if inject_legacy_doc:
         doc_type_str = f" ({normalized_doc_type})"
         system_parts.append(
             f"\n\nThe student currently has the following document{doc_type_str} open:\n"
@@ -125,7 +130,56 @@ def build_chat_system_prompt(
             "If asked to improve or rewrite a section, return only the revised text."
         )
 
-    if system_extra:
-        system_parts.append(system_extra)
+    body = "\n".join(system_parts)
 
-    return "\n".join(system_parts)
+    if leading_document_context:
+        prefix = (
+            "The user currently has the following document open. "
+            "Use it as context when answering:\n\n"
+            f"{leading_document_context}"
+        )
+        body = f"{prefix}\n\n{body}"
+
+    if system_extra:
+        body = f"{body}\n{system_extra}"
+
+    return body
+
+
+# Max HTML injected into modify-mode system prompt when caller does not override
+# (GitHub Models and similar APIs reject oversized JSON bodies with 413).
+DOCUMENT_MODIFY_HTML_MAX_CHARS = 120_000
+
+
+def build_document_modify_system_extra(
+    document_html: str,
+    *,
+    max_html_chars: Optional[int] = None,
+) -> str:
+    """
+    Instructions for ``workspace_action=modify``: model must emit a single JSON object.
+    ``document_html`` should be the current TipTap ``content.html`` (may be truncated).
+    """
+    cap = (
+        max_html_chars if max_html_chars is not None else DOCUMENT_MODIFY_HTML_MAX_CHARS
+    )
+    html = (document_html or "").strip()
+    if len(html) > cap:
+        html = html[:cap] + "\n<!-- truncated -->"
+
+    return (
+        "\n## MODIFY MODE (document edit proposal)\n"
+        "The user chose **Modify**: you must output **only** a single JSON object "
+        "(no markdown fences, no text before or after the JSON).\n"
+        "Schema:\n"
+        '- "kind": must be exactly "document_edit_proposal"\n'
+        '- "summary_markdown": short markdown summary of the change for the UI\n'
+        '- "html_fragment": non-empty HTML fragment to merge into the open TipTap document '
+        "(same conventions as TipTap export; no full document wrapper required)\n"
+        '- "warnings": JSON array of strings (empty array if none)\n'
+        "Rules:\n"
+        "- Base the fragment on the user's request and the current document HTML below.\n"
+        "- Do not invent citations, data, or requirements not implied by the document.\n"
+        "- Prefer minimal, surgical edits over rewriting unrelated sections.\n"
+        f"\n### Current document HTML\n```html\n{html}\n```\n"
+    )

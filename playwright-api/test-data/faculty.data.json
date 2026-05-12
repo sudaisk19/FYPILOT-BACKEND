@@ -1,0 +1,252 @@
+{
+  "ids": {
+    "milestone_id": "00000000-0000-4000-8000-000000000003",
+    "announcement_id": "00000000-0000-4000-8000-000000000006",
+    "group_id": "00000000-0000-4000-8000-000000000007",
+    "request_id": "00000000-0000-4000-8000-000000000008",
+    "fake_uuid": "00000000-0000-4000-8000-000000000099"
+  },
+  "valid": {
+    "wizard_profile_minimal": {
+      "designation": "Lecturer",
+      "office": "TBD",
+      "requirements": ["Meet weekly"],
+      "project_type": "product",
+      "capacity_max": 5
+    },
+    "patch_profile_minimal": {
+      "designation": "Senior Lecturer"
+    },
+    "invite_accept": { "feedback": "Approved" },
+    "invite_reject": { "feedback": "Not aligned right now" }
+  },
+  "invalid": {
+    "wizard_bad_capacity": { "capacity_max": "not-int" },
+    "patch_bad_capacity": { "capacity_max": "bad" },
+    "invite_reject_missing_feedback": {}
+  },
+  "endpoint_matrix": [
+    {
+      "name": "faculty profile",
+      "method": "GET",
+      "path": "/api/faculty/profile",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["user_id", "email"]
+    },
+    {
+      "name": "faculty wizard profile",
+      "method": "POST",
+      "path": "/api/faculty/wizard-profile",
+      "role": "faculty",
+      "wrongRole": "student",
+      "body": {
+        "designation": "Lecturer",
+        "office": "TBD",
+        "requirements": ["Meet weekly"],
+        "project_type": "product",
+        "capacity_max": 5
+      },
+      "happyStatuses": [200, 201],
+      "supportsNotFound": false,
+      "invalidBody": { "capacity_max": "not-int" },
+      "expectObjectKeys": ["message", "profile"]
+    },
+    {
+      "name": "faculty patch profile",
+      "method": "PATCH",
+      "path": "/api/faculty/profile",
+      "role": "faculty",
+      "wrongRole": "admin",
+      "body": { "designation": "Senior Lecturer" },
+      "happyStatuses": [200, 404],
+      "supportsNotFound": false,
+      "invalidBody": { "capacity_max": "bad" },
+      "expectObjectKeys": ["message", "profile"]
+    },
+    {
+      "name": "faculty dashboard insights",
+      "method": "GET",
+      "path": "/api/faculty/dashboard/insights",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["faculty_dashboard"]
+    },
+    {
+      "name": "faculty announcements list",
+      "method": "GET",
+      "path": "/api/faculty/announcements",
+      "query": "?page=1&per_page=10",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["announcements"]
+    },
+    {
+      "name": "faculty admin announcements",
+      "method": "GET",
+      "path": "/api/faculty/announcements/admin-announcements",
+      "query": "?page=1&per_page=10",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&page=0",
+      "expectObjectKeys": ["announcements"]
+    },
+    {
+      "name": "faculty announcement by id",
+      "method": "GET",
+      "path": "/api/faculty/announcements/{announcement_id}",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 403, 404],
+      "expectObjectKeys": ["announcement_id"]
+    },
+    {
+      "name": "faculty announcement create (multipart)",
+      "method": "POST",
+      "path": "/api/faculty/announcements",
+      "role": "faculty",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "faculty announcement delete",
+      "method": "DELETE",
+      "path": "/api/faculty/announcements/{announcement_id}",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404, 403]
+    },
+    {
+      "name": "faculty announcement patch (multipart)",
+      "method": "PATCH",
+      "path": "/api/faculty/announcements/{announcement_id}",
+      "role": "faculty",
+      "wrongRole": "student",
+      "skip": "Multipart/form-data endpoint intentionally skipped in JSON matrix"
+    },
+    {
+      "name": "supervisor my groups",
+      "method": "GET",
+      "path": "/api/supervisors/my-groups",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["group_directory"]
+    },
+    {
+      "name": "supervisor groups dropdown",
+      "method": "GET",
+      "path": "/api/supervisors/my-groups/dropdown",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["groups"]
+    },
+    {
+      "name": "supervisor group profile",
+      "method": "GET",
+      "path": "/api/supervisors/my-groups/{group_id}",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 403, 404],
+      "expectObjectKeys": ["group", "members"]
+    },
+    {
+      "name": "faculty milestones list",
+      "method": "GET",
+      "path": "/api/faculty/milestones",
+      "query": "?fyp_cycle=fyp1",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "invalidQueryAppend": "&fyp_cycle=bad-cycle",
+      "expectJsonArray": true
+    },
+    {
+      "name": "faculty milestone by id",
+      "method": "GET",
+      "path": "/api/faculty/milestones/{milestone_id}",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectObjectKeys": ["milestone_id"]
+    },
+    {
+      "name": "faculty milestone evaluations list",
+      "method": "GET",
+      "path": "/api/faculty/milestones/{milestone_id}/evaluations",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404],
+      "expectJsonArray": true
+    },
+    {
+      "name": "faculty jury groups by milestone",
+      "method": "GET",
+      "path": "/api/faculty/milestones/{milestone_id}/jury-groups",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 403, 404, 409],
+      "expectJsonArray": true
+    },
+    {
+      "name": "faculty jury evaluations by milestone",
+      "method": "GET",
+      "path": "/api/faculty/milestones/{milestone_id}/jury-evaluations",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 403, 404],
+      "expectJsonArray": true
+    },
+    {
+      "name": "faculty pending invites",
+      "method": "GET",
+      "path": "/api/invites/supervisor/pending/requests",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200],
+      "supportsNotFound": false,
+      "expectObjectKeys": ["requests"]
+    },
+    {
+      "name": "faculty accept request",
+      "method": "POST",
+      "path": "/api/invites/supervisor/{request_id}/accept",
+      "role": "faculty",
+      "wrongRole": "student",
+      "body": { "feedback": "Approved" },
+      "happyStatuses": [200, 404, 409],
+      "invalidBody": { "feedback": 123 }
+    },
+    {
+      "name": "faculty reject request",
+      "method": "POST",
+      "path": "/api/invites/supervisor/{request_id}/reject",
+      "role": "faculty",
+      "wrongRole": "student",
+      "body": { "feedback": "Not aligned right now" },
+      "happyStatuses": [200, 404, 409],
+      "invalidBody": {}
+    },
+    {
+      "name": "faculty request details",
+      "method": "GET",
+      "path": "/api/invites/supervisor/{request_id}/details",
+      "role": "faculty",
+      "wrongRole": "student",
+      "happyStatuses": [200, 404]
+    }
+  ]
+}

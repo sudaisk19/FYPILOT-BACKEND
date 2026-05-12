@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "url": "/auth/login",
+  "body": {
+    "email": "replace-me@example.com",
+    "password": "ReplaceMe1!",
+    "remember_me": false
+  }
+}

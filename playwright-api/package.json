@@ -1,0 +1,24 @@
+{
+  "name": "fypilot-playwright-api",
+  "private": true,
+  "version": "1.0.0",
+  "description": "API tests for FYPilot backend",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:all": "playwright test",
+    "test:auth": "playwright test tests/auth/auth.spec.ts",
+    "report": "allure serve allure-results",
+    "report:generate": "allure generate allure-results -o allure-report --clean",
+    "report:open": "allure open allure-report",
+    "clean": "rm -rf allure-results allure-report test-results"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^25.6.2",
+    "allure-js-commons": "^3.7.2",
+    "allure-playwright": "^3.7.2",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.6.3"
+  }
+}

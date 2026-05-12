@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS
 from app.db import get_db
 from app.models.bulk_import import (
     BulkJobStatus,
@@ -43,6 +44,7 @@ from app.schemas.bulk_import_schema import (
     BulkImportUploadResponse,
     CreateStudentRequest,
     CreateSupervisorRequest,
+    DepartmentListResponse,
     ProcessorResponse,
     RetryResponse,
     SingleUserResponse,
@@ -79,6 +81,55 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+# ─── Reference Data ────────────────────────────────────────────
+
+
+@router.get(
+    "/departments",
+    response_model=DepartmentListResponse,
+    summary="List allowed departments",
+    description="Return the canonical list of departments for dropdown population.",
+)
+async def get_departments(
+    current_user: User = Depends(require_admin),
+):
+    """Expose canonical departments so FE dropdowns stay in sync with backend validation."""
+
+    return DepartmentListResponse(departments=COMMON_UNIVERSITY_DEPARTMENTS)
+
+
+# ─── CSV template (must be registered before `/{job_id}` routes) ─
+
+
+@router.get(
+    "/templates/student.csv",
+    summary="Download student CSV template",
+    description="Empty CSV with required column headers for bulk student registration.",
+)
+async def download_student_csv_template(current_user: User = Depends(require_admin)):
+    """Headers match STUDENT_REQUIRED_COLUMNS (normalized snake_case in uploads)."""
+    output = io.StringIO()
+    fieldnames = [
+        "full_name",
+        "email",
+        "roll_number",
+        "cgpa",
+        "fyp_start_semester",
+        "fyp_start_year",
+        "department",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="student_registration_template.csv"',
+        },
+    )
+
+
 # ─── Upload + Auto-Process ──────────────────────────────────────
 
 
@@ -88,7 +139,9 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     status_code=status.HTTP_201_CREATED,
     summary="Upload bulk import file",
     description="Upload a CSV or Excel file to create multiple student or supervisor accounts. "
-    "Processing starts automatically in the background after upload.",
+    "Processing starts automatically in the background after upload. "
+    "Student files must include columns: full_name, email, roll_number, cgpa, "
+    "fyp_start_semester, fyp_start_year, department.",
 )
 async def upload_bulk_import(
     background_tasks: BackgroundTasks,
@@ -104,8 +157,8 @@ async def upload_bulk_import(
     The admin gets an immediate 201 response with the job_id, then can
     poll GET /{job_id} or GET /{job_id}/report for progress and results.
 
-    Required columns for students: full_name, email, roll_number, department,
-    fyp_start_semester, fyp_start_year
+    Required columns for students: full_name, email, roll_number, cgpa,
+    fyp_start_semester, fyp_start_year, department
     Required columns for faculty: full_name, email, department, designation
     Departments must match the predefined dropdown options (case-insensitive).
     """
@@ -375,6 +428,7 @@ async def download_results_csv(
         "full_name",
         "email",
         "roll_number",
+        "cgpa",
         "department",
         "status",
         "error",
@@ -586,6 +640,7 @@ async def register_single_student(
             full_name=body.full_name,
             email=body.email,
             roll_number=body.roll_number,
+            cgpa=body.cgpa,
             fyp_start_semester=body.fyp_start_semester,
             fyp_start_year=body.fyp_start_year,
             department=body.department,

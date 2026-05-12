@@ -4,13 +4,15 @@ Pydantic models for request validation and response serialisation
 across the Unified Group Documentation Module.
 """
 
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.group_document import DocTypeEnum, FilePurposeEnum, SaveTriggerEnum
+from app.schemas.workspace_chat import WorkspaceAction
 
 # ── Shared ──────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,24 @@ class CreateDocumentRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     chat_session_id: Optional[str] = None
     content: Optional[Dict[str, Any]] = None
+    blank_tab: bool = Field(
+        False,
+        description=(
+            "Set true when intentionally opening a new empty editor tab. "
+            "If omitted with empty content, the server may resolve an existing "
+            "uploaded document instead of creating another row (see POST handler)."
+        ),
+    )
+
+
+class UploadDocumentRequest(BaseModel):
+    """Schema for document file upload.
+    
+    Note: file is passed as multipart/form-data (not in this schema),
+    but doc_type, title, and group_id/session_id are form fields.
+    """
+    doc_type: DocTypeEnum = Field(default=DocTypeEnum.other)
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
 
 
 class GroupDocumentResponse(BaseModel):
@@ -46,6 +66,26 @@ class GroupDocumentResponse(BaseModel):
     updated_by: Optional[UUID]
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def normalize_content(cls, v: Any) -> Any:
+        """Accept dict or JSON string (legacy / mis-typed jsonb)."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError:
+                return {}
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, str):
+                return {"type": "doc", "html": parsed}
+            return {}
+        return {}
 
 
 class DocumentTypeOptionResponse(BaseModel):
@@ -166,11 +206,21 @@ class SendMessageRequest(BaseModel):
         default="gpt-4o",
         description="The LLM model to use: gpt-4o, gpt-4o-mini, deepseek, llama",
     )
+    workspace_action: Optional[WorkspaceAction] = Field(
+        default=None,
+        description=(
+            "modify = JSON html_fragment proposal + pending row; "
+            "suggest, improve, or omitted = standard chat reply."
+        ),
+    )
 
 
 class ChatMessageResponse(BaseModel):
     message_id: Optional[str] = None
     reply: str
+    assistant_message_id: Optional[str] = None
+    proposal_id: Optional[str] = None
+    proposal_summary: Optional[str] = None
 
 
 class MessageListResponse(BaseModel):

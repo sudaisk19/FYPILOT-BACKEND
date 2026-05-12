@@ -132,6 +132,7 @@ class StudentDashboardService:
             supervisor_name=super_name,
             cosupervisor_names=co_super_names,
             group_members=members,
+            project_repositories=(group.project.repo_links if group.project else []),
         )
 
     async def _get_upcoming_deadlines(

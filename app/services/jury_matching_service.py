@@ -37,6 +37,11 @@ from app.services.jury_matching_client import (
 
 logger = logging.getLogger(__name__)
 
+# Domain invariant: a jury is one pair of faculty evaluators (always two members).
+JURY_PAIR_MEMBER_COUNT = 2
+# Minimum distinct jury pairs each project must receive (not part of public assign body).
+DEFAULT_MIN_JURY_PAIRS_PER_PROJECT = 1
+
 
 class JuryMatchingService:
     """Service for jury matching via the external AI microservice."""
@@ -53,6 +58,7 @@ class JuryMatchingService:
     async def get_batch_matches(
         self,
         fyp_cycles: Optional[List[str]] = None,
+        min_groups_per_pair: Optional[int] = None,
         max_groups_per_pair: Optional[int] = None,
         min_jury_per_project: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
@@ -67,6 +73,7 @@ class JuryMatchingService:
         try:
             results = await self._client.batch_match(
                 fyp_cycles=fyp_cycles,
+                min_groups_per_pair=min_groups_per_pair,
                 max_groups_per_pair=max_groups_per_pair,
                 min_jury_per_project=min_jury_per_project,
             )
@@ -428,13 +435,18 @@ class JuryMatchingService:
         self,
         batch_id: UUID,
         fyp_cycles: List[str],
+        min_groups_per_pair: int = 1,
         max_groups_per_pair: int = 10,
-        min_jury_per_project: int = 1,
     ) -> None:
         """
         Background task: execute the full jury assignment flow.
 
         Creates its own DB session (runs outside request lifecycle).
+
+        Each jury pair always represents exactly ``JURY_PAIR_MEMBER_COUNT`` faculty
+        members. Per-pair workload is controlled by ``min_groups_per_pair`` /
+        ``max_groups_per_pair`` from the assign request. Minimum jury pairs per
+        project uses ``DEFAULT_MIN_JURY_PAIRS_PER_PROJECT`` (not client-supplied).
 
         Flow:
         1. Reset all existing jury data (clean slate)
@@ -466,8 +478,9 @@ class JuryMatchingService:
                 logger.info(f"Batch {batch_id}: calling AI service")
                 ai_results = await self.get_batch_matches(
                     fyp_cycles=fyp_cycles,
+                    min_groups_per_pair=min_groups_per_pair,
                     max_groups_per_pair=max_groups_per_pair,
-                    min_jury_per_project=min_jury_per_project,
+                    min_jury_per_project=DEFAULT_MIN_JURY_PAIRS_PER_PROJECT,
                 )
 
                 if not ai_results:
@@ -606,8 +619,19 @@ class JuryMatchingService:
                     )
                     return
 
+                min_groups = max(1, int(min_groups_per_pair))
                 max_groups = max(1, int(max_groups_per_pair))
-                min_jury = max(1, int(min_jury_per_project))
+                min_jury = max(1, int(DEFAULT_MIN_JURY_PAIRS_PER_PROJECT))
+
+                if min_groups > max_groups:
+                    await self._fail_batch(
+                        db,
+                        batch_id,
+                        "Invalid constraints: min_groups_per_pair cannot exceed "
+                        "max_groups_per_pair "
+                        f"(min={min_groups}, max={max_groups})",
+                    )
+                    return
 
                 overloaded_pairs = {
                     str(pid): count
@@ -620,6 +644,20 @@ class JuryMatchingService:
                         batch_id,
                         "AI assignments violate max_groups_per_pair. "
                         f"max={max_groups}, overloaded={overloaded_pairs}",
+                    )
+                    return
+
+                underloaded_pairs = {
+                    str(pid): count
+                    for pid, count in pair_load.items()
+                    if count < min_groups
+                }
+                if underloaded_pairs:
+                    await self._fail_batch(
+                        db,
+                        batch_id,
+                        "AI assignments violate min_groups_per_pair. "
+                        f"min={min_groups}, underloaded={underloaded_pairs}",
                     )
                     return
 
@@ -643,8 +681,9 @@ class JuryMatchingService:
                     await self._fail_batch(
                         db,
                         batch_id,
-                        "AI assignments violate min_jury_per_project. "
-                        f"min={min_jury}, missing_or_underfilled_projects={missing_projects[:20]}",
+                        "AI assignments violate minimum jury pairs per project "
+                        f"(internal min={min_jury}). "
+                        f"missing_or_underfilled_projects={missing_projects[:20]}",
                     )
                     return
 
@@ -661,7 +700,9 @@ class JuryMatchingService:
                     f"{len(pair_objects)} pairs, "
                     f"{len(assignment_objects)} assignments"
                     f" (skipped={skipped_assignments})"
-                    f" validated(min={min_jury}, max={max_groups})"
+                    f" validated(min_groups={min_groups}, max_groups={max_groups}, "
+                    f"min_jury_pairs_per_project={min_jury}, "
+                    f"jury_pair_members={JURY_PAIR_MEMBER_COUNT})"
                 )
 
             except Exception as e:

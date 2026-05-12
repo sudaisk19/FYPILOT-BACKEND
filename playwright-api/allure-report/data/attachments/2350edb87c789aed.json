@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/auth/login",
+  "request": {
+    "email": "no-user-1778491204466@example.com",
+    "password": "SecureP@ss123",
+    "remember_me": false
+  },
+  "status": 401,
+  "responseBody": "{\"success\":false,\"error\":\"Invalid email or password\",\"error_code\":\"AUTH_INVALID_CREDENTIALS\",\"timestamp\":\"2026-05-11T09:20:05.773803+00:00\"}"
+}

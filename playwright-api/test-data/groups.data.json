@@ -1,0 +1,13 @@
+{
+  "valid": {
+    "create_placeholder": {
+      "note": "Define payloads when group creation tests are added (app/schemas/group_schema.py)."
+    }
+  },
+  "invalid": {
+    "missing_fields": [],
+    "wrong_types": [],
+    "boundary": []
+  },
+  "edge_cases": []
+}

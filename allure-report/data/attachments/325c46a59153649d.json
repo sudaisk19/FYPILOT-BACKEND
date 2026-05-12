@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "url": "/auth/me",
+  "body": {
+    "Authorization": "Bearer not.a.valid.jwt"
+  }
+}

@@ -71,6 +71,7 @@ class RequestSummaryItem(BaseModel):
     """Summary of a request between a group and supervisor."""
 
     request_id: UUID
+    requested_role: str = Field(..., description="supervisor or cosupervisor")
     status: str = Field(..., description="pending, accepted, declined, or cancelled")
     message: str | None = Field(None, description="Student's message to supervisor")
     feedback: str | None = Field(None, description="Supervisor's feedback/reason")

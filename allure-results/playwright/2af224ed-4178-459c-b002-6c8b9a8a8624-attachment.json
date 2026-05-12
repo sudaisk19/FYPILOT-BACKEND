@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/auth/signup",
+  "request": {
+    "full_name": "No Password",
+    "email": "missing-pw@example.com",
+    "role": "student"
+  },
+  "status": 422,
+  "responseBody": "{\"success\":false,\"error\":\"Field required\",\"error_code\":\"VALIDATION_MISSING_PASSWORD\",\"details\":[{\"field\":\"password\",\"message\":\"Field required\",\"code\":\"missing\"}],\"timestamp\":\"2026-05-11T08:28:58.024366+00:00\"}"
+}

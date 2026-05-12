@@ -3,12 +3,20 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import allure
 import pytest
 
 from app.repositories.student_repository import student_repository
 
+pytestmark = [
+    allure.epic("FYPilot Unit Tests"),
+    allure.feature("Services"),
+]
+
 
 @pytest.mark.asyncio
+@allure.story("Deactivate expired students returns rowcount")
+@allure.severity(allure.severity_level.MINOR)
 async def test_deactivate_expired_students_returns_rowcount():
     """Repository delegates to SQL UPDATE; assert execute is used and rowcount is returned."""
     mock_db = AsyncMock()
@@ -28,6 +36,8 @@ async def test_deactivate_expired_students_returns_rowcount():
 
 
 @pytest.mark.asyncio
+@allure.story("Deactivate expired students zero updates")
+@allure.severity(allure.severity_level.CRITICAL)
 async def test_deactivate_expired_students_zero_updates():
     """When no rows match, rowcount should be 0."""
     mock_db = AsyncMock()

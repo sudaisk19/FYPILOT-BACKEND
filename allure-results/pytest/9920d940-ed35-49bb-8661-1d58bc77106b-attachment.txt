@@ -1,0 +1,1 @@
+[1m[31mERROR   [0m app.services.supervisor_recommendation_service:supervisor_recommendation_service.py:185 AI Recommender service error for group 4107fe47-ac65-4ac4-af40-ffe573292e80: boom

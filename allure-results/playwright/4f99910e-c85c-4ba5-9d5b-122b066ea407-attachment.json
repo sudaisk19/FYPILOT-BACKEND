@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "path": "/auth/login",
+  "request": {
+    "email": "missing-password-field@example.com",
+    "remember_me": false
+  },
+  "status": 422,
+  "responseBody": "{\"success\":false,\"error\":\"Field required\",\"error_code\":\"VALIDATION_MISSING_PASSWORD\",\"details\":[{\"field\":\"password\",\"message\":\"Field required\",\"code\":\"missing\"}],\"timestamp\":\"2026-05-11T09:20:05.928993+00:00\"}"
+}

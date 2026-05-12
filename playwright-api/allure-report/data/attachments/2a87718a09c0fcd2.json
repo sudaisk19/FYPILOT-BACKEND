@@ -1,0 +1,13 @@
+{
+  "success": false,
+  "error": "Input should be 'student', 'faculty' or 'admin'",
+  "error_code": "VALIDATION_ERROR",
+  "details": [
+    {
+      "field": "role",
+      "message": "Input should be 'student', 'faculty' or 'admin'",
+      "code": "literal_error"
+    }
+  ],
+  "timestamp": "2026-05-11T16:55:13.562161+00:00"
+}

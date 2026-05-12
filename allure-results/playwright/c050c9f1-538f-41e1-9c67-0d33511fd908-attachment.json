@@ -1,0 +1,21 @@
+{
+  "message": "Login successful",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjMDllMTQ1NC1lZDVjLTQ5YjQtODYyZi1iNTdhY2IxMzI5YTEiLCJyb2xlIjoic3R1ZGVudCIsImV4cCI6MTc3ODQ5MTc0MywiaWF0IjoxNzc4NDg4MTQzfQ.cOt609OxcmU1ywU3aUJei51IlgrPnJCjMYqPlm-UA4I",
+  "token_type": "bearer",
+  "role": "student",
+  "user": {
+    "user_id": "c09e1454-ed5c-49b4-862f-b57acb1329a1",
+    "full_name": "Playwright API User",
+    "email": "playwright.seed.1778488116885@example.com",
+    "role": "student",
+    "profile_avatar": null,
+    "has_student_profile": false,
+    "has_faculty_profile": false,
+    "has_admin_profile": false,
+    "faculty_info": {
+      "is_supervisor": false,
+      "is_jury": false,
+      "is_active": false
+    }
+  }
+}

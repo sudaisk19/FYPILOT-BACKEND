@@ -1,0 +1,4 @@
+{
+  "status": 500,
+  "body": "{\"success\":false,\"error\":\"An unexpected error occurred. Please try again later.\",\"error_code\":\"SERVER_INTERNAL_ERROR\",\"timestamp\":\"2026-05-11T17:13:53.394144+00:00\"}"
+}

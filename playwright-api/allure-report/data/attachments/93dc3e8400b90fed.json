@@ -1,0 +1,4 @@
+{
+  "status": 400,
+  "body": "{\"success\":false,\"error\":\"Email already registered\",\"error_code\":\"UNKNOWN_ERROR\",\"timestamp\":\"2026-05-11T08:28:57.869681+00:00\"}"
+}

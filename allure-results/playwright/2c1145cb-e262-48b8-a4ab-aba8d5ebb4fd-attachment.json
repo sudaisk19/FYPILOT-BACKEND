@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "url": "/auth/login",
+  "body": {
+    "email": "missing-password-field@example.com",
+    "remember_me": false
+  }
+}

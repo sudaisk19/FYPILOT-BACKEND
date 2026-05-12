@@ -595,7 +595,7 @@ async def _get_task_for_group(db: AsyncSession, task_id: UUID, group_id: UUID) -
 def _task_to_response(task: Task) -> TaskResponse:
     assignee = _member_summary(task)
     # Supabase Public Storage ka base path
-    BASE_URL = f"{settings.supabase_url}/storage/v1/object/public/task_attachment/"
+    BASE_URL = f"{settings.supabase_url}/storage/v1/object/public/task_attachments/"
 
     attachments_payload = []
     for att in task.attachments:

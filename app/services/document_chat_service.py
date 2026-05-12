@@ -6,15 +6,40 @@ fetches its live content, and injects it into the LLM system prompt.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
+from app.services.chat_llm_errors import format_chat_stream_llm_error
+from app.services.html_plaintext import tip_tap_html_from_content
 from app.services.llm import call_llm
+from app.services.prompts import build_document_modify_system_extra
+from app.services.workspace_modify_proposal import (
+    finalize_modify_mode_reply,
+    link_proposal_to_assistant_message,
+)
+
+
+def _ordered_existing_document_ids(raw: List[str], valid_lower: Set[str]) -> List[str]:
+    """Preserve order from Mongo, drop unknown UUIDs and duplicates."""
+    out: List[str] = []
+    seen_lower: Set[str] = set()
+    for x in raw:
+        try:
+            u = UUID(str(x).strip())
+        except ValueError:
+            continue
+        key = str(u).lower()
+        if key not in valid_lower or key in seen_lower:
+            continue
+        seen_lower.add(key)
+        out.append(str(u))
+    return out
 
 
 class DocumentChatService:
@@ -79,6 +104,35 @@ class DocumentChatService:
     async def delete_workspace(self, db: AsyncIOMotorDatabase, session_id: str) -> bool:
         return await chat_session_repo.delete_session(db, session_id)
 
+    async def reconcile_workspace_sessions_document_ids(
+        self,
+        pg_db: AsyncSession,
+        mongo_db: AsyncIOMotorDatabase,
+        sessions: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Drop MongoDB document_ids that no longer exist on active Postgres group_documents
+        (e.g. row deleted in Supabase/Postgres). Writes back pruned arrays when changed.
+        """
+        if not sessions:
+            return sessions
+        collected: List[str] = []
+        for s in sessions:
+            collected.extend(s.get("document_ids") or [])
+        valid_lower = await group_document_repo.get_existing_active_id_strings(
+            pg_db, collected
+        )
+        for s in sessions:
+            sid = s.get("_id")
+            raw = s.get("document_ids") or []
+            cleaned = _ordered_existing_document_ids(raw, valid_lower)
+            if cleaned != raw and sid is not None:
+                await chat_session_repo.set_document_ids(
+                    mongo_db, str(sid), cleaned
+                )
+            s["document_ids"] = cleaned
+        return sessions
+
     # ── Message + LLM ───────────────────────────────────────────────────────
 
     async def get_messages(
@@ -102,7 +156,8 @@ class DocumentChatService:
         active_document_id: Optional[str],
         model_choice: str = "gpt-4o",
         sender_name: Optional[str] = None,
-    ) -> str:
+        workspace_action: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Full message round-trip:
         1. Persist the student's message to MongoDB.
@@ -110,12 +165,17 @@ class DocumentChatService:
         3. Build LLM history from the last 10 messages.
         4. Call GitHub Models with document context injected into system prompt.
         5. Persist the LLM reply to MongoDB.
-        6. Return the reply text.
+        6. Return reply text and optional modify proposal metadata.
         """
+        wa = (workspace_action or "chat").strip().lower()
+        is_modify = wa == "modify"
+
         # Build doc_context payload for the student message
         doc_context: Optional[Dict[str, Any]] = None
         document_content_str: Optional[str] = None
         doc_type_str: Optional[str] = None
+        doc_html_raw: Optional[str] = None
+        baseline_lock_version: Optional[int] = None
 
         if active_document_id:
             doc = await group_document_repo.get_by_id(pg_db, UUID(active_document_id))
@@ -123,12 +183,18 @@ class DocumentChatService:
                 if doc.doc_type:
                     doc_type_str = doc.doc_type.value
 
+                baseline_lock_version = doc.lock_version
                 if doc.content:
                     document_content_str = json.dumps(doc.content, indent=2)
                     doc_context = {
                         "active_document_id": active_document_id,
                         "version_number": doc.lock_version,
                     }
+                    html_raw = tip_tap_html_from_content(doc.content)
+                    if html_raw:
+                        doc_html_raw = html_raw
+
+        modify_valid = is_modify and bool(doc_html_raw) and bool(active_document_id)
 
         display_name = sender_name or sender_id
 
@@ -141,11 +207,13 @@ class DocumentChatService:
             content=content,
             doc_context=doc_context,
             sender_name=display_name,
+            metadata={"workspace_action": wa},
         )
 
-        # 2. Fetch recent history for LLM context
+        # 2. Fetch recent history for LLM context (modify: smaller window)
+        _hist_limit = settings.chat_modify_context_message_limit if modify_valid else 10
         recent = await chat_session_repo.get_recent_messages_for_context(
-            mongo_db, chat_session_id, n=10
+            mongo_db, chat_session_id, n=_hist_limit
         )
 
         # 3. Shape history into OpenAI message format
@@ -154,29 +222,90 @@ class DocumentChatService:
             role = "assistant" if msg["sender_type"] == "llm" else "user"
             history.append({"role": role, "content": msg["content"]})
 
+        if is_modify and not modify_valid:
+            reply = (
+                "[Modify] Open a document tab with readable HTML content "
+                "to use modify mode."
+            )
+            assistant_mid = await chat_session_repo.save_message(
+                mongo_db,
+                chat_session_id=chat_session_id,
+                sender_id="llm",
+                sender_type="llm",
+                content=reply,
+                doc_context=doc_context,
+                sender_name="Assistant",
+                metadata={"modify_skipped": True, "model": model_choice},
+            )
+            return {
+                "reply": reply,
+                "proposal_id": None,
+                "proposal_summary": None,
+                "assistant_message_id": assistant_mid,
+            }
+
         # 4. Call LLM
         try:
-            reply = await call_llm(
-                history=history,
-                document_content=document_content_str,
-                model_choice=model_choice,
-                doc_type=doc_type_str,
-            )
+            if modify_valid:
+                system_extra = build_document_modify_system_extra(
+                    doc_html_raw or "",
+                    max_html_chars=settings.chat_modify_html_max_chars,
+                )
+                reply = await call_llm(
+                    history=history,
+                    document_content=None,
+                    system_extra=system_extra,
+                    model_choice=model_choice,
+                    doc_type=doc_type_str,
+                    leading_document_context=None,
+                    history_message_max_chars=settings.chat_modify_llm_message_max_chars,
+                )
+            else:
+                reply = await call_llm(
+                    history=history,
+                    document_content=document_content_str,
+                    model_choice=model_choice,
+                    doc_type=doc_type_str,
+                )
         except Exception as exc:
-            reply = f"[AI Error] {exc}"
+            detail, _ = format_chat_stream_llm_error(exc)
+            reply = f"[AI Error] {detail}"
+
+        final_content, assistant_meta, proposal_id = await finalize_modify_mode_reply(
+            mongo_db,
+            chat_session_id=chat_session_id,
+            user_id=sender_id,
+            full_reply=reply,
+            is_modify=modify_valid,
+            active_document_id=active_document_id,
+            baseline_lock_version=baseline_lock_version,
+            doc_context=doc_context,
+            request_id=None,
+            model_choice=model_choice,
+        )
 
         # 5. Persist LLM reply
-        await chat_session_repo.save_message(
+        assistant_mid = await chat_session_repo.save_message(
             mongo_db,
             chat_session_id=chat_session_id,
             sender_id="llm",
             sender_type="llm",
-            content=reply,
+            content=final_content,
             doc_context=doc_context,
             sender_name="Assistant",
+            metadata=assistant_meta,
         )
+        if proposal_id:
+            await link_proposal_to_assistant_message(
+                mongo_db, proposal_id, assistant_mid
+            )
 
-        return reply
+        return {
+            "reply": final_content,
+            "proposal_id": proposal_id,
+            "proposal_summary": assistant_meta.get("proposal_summary"),
+            "assistant_message_id": assistant_mid,
+        }
 
 
 document_chat_service = DocumentChatService()

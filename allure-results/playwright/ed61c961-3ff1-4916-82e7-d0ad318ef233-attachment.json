@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "path": "/auth/signup",
+  "request": {
+    "full_name": "Bad Role Type",
+    "email": "bad-role@example.com",
+    "password": "SecureP@ss123",
+    "role": 123
+  },
+  "status": 422,
+  "responseBody": "{\"success\":false,\"error\":\"Input should be 'student', 'faculty' or 'admin'\",\"error_code\":\"VALIDATION_ERROR\",\"details\":[{\"field\":\"role\",\"message\":\"Input should be 'student', 'faculty' or 'admin'\",\"code\":\"literal_error\"}],\"timestamp\":\"2026-05-11T16:55:13.562161+00:00\"}"
+}

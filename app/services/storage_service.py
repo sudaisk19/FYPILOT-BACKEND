@@ -13,6 +13,22 @@ from supabase import Client
 from app.core.config import settings
 
 ANNOUNCEMENTS_BUCKET = "announcement_files"
+SUBMISSION_FILES_BUCKET = "submission_files"
+DOCUMENT_FILES_BUCKET = "group_document_files"
+
+
+def get_public_file_url(bucket: str, storage_key: str) -> str:
+    """Build a public Supabase Storage URL for a file.
+
+    Args:
+        bucket: The Supabase bucket name
+        storage_key: The file path within the bucket
+
+    Returns:
+        Full public URL to access the file
+    """
+    supabase_url = settings.supabase_url.rstrip("/")
+    return f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_key}"
 
 
 def _coerce_error(response: Optional[dict]) -> Optional[str]:

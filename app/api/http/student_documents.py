@@ -15,7 +15,8 @@ Endpoints:
   PATCH  /students/chat-sessions/{session_id}                - Rename workspace
   DELETE /students/chat-sessions/{session_id}                - Delete workspace
   GET    /students/chat-sessions                             - List workspaces for a group
-  POST   /students/chat-sessions/{session_id}/documents      - Link/create a doc in a workspace
+  POST   /students/chat-sessions/{session_id}/documents      - Create a new doc tab in a workspace
+  POST   /students/chat-sessions/{session_id}/documents/link - Attach an existing Postgres doc to the workspace
   POST   /students/chat-sessions/{session_id}/messages       - Send a chat message (with LLM)
   GET    /students/chat-sessions/{session_id}/messages       - Paginate chat history
 """
@@ -46,10 +47,13 @@ import logging
 import os
 import tempfile
 import uuid
-from typing import List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -65,7 +69,9 @@ from app.models.announcement import AnnouncementFile
 from app.models.group import GroupMember
 from app.models.group_document import DocTypeEnum
 from app.models.user import User
+from app.repositories.group_document_repository import group_document_repo
 from app.schemas.document_schema import (
+    AddDocumentToSessionRequest,
     AutosaveRequest,
     AutosaveResponse,
     ChatMessageResponse,
@@ -82,6 +88,7 @@ from app.schemas.document_schema import (
     RestoreVersionRequest,
     RestoreVersionResponse,
     SendMessageRequest,
+    UploadDocumentRequest,
     WorkspaceResponse,
 )
 from app.services.document_access import require_group_document_for_user
@@ -95,6 +102,21 @@ from app.services.storage_service import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _implicit_empty_content(content: Optional[Dict[str, Any]]) -> bool:
+    return content is None or content == {}
+
+
+def _document_has_editor_body(doc: Any) -> bool:
+    """True when live draft has usable HTML/editor payload (upload/autosave), not bare {}."""
+    c = doc.content
+    if not c or not isinstance(c, dict) or c == {}:
+        return False
+    html = c.get("html")
+    if isinstance(html, str) and html.strip():
+        return True
+    return any(k not in ("type", "html") for k in c)
 
 
 DOC_TYPE_METADATA = {
@@ -201,6 +223,191 @@ async def list_document_types(
     return options
 
 
+# ── Document Upload ──────────────────────────────────────────────────────────
+
+
+# Example usage (curl) — session_id is required (workspace Mongo _id):
+# curl -X POST http://localhost:8000/api/students/documents/upload \
+#   -H "Authorization: Bearer <token>" \
+#   -F "file=@document.pdf" \
+#   -F "session_id=<workspace_session_uuid>" \
+#   -F "doc_type=proposal" \
+#   -F "title=My Document"
+#
+# Example usage (JavaScript fetch):
+# const formData = new FormData();
+# formData.append('file', fileInputElement.files[0]);
+# formData.append('session_id', workspaceSessionId);  // required
+# formData.append('doc_type', 'proposal');
+# formData.append('title', 'My Document');
+# // optional: formData.append('group_id', groupId);  // must match workspace group if sent
+# const response = await fetch(`${baseURL}/api/students/documents/upload`, {
+#   method: 'POST',
+#   headers: { Authorization: `Bearer ${token}` },
+#   body: formData,
+# });
+
+
+@router.post(
+    "/students/documents/upload",
+    response_model=GroupDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a document file and create a new document",
+    tags=["student-documents"],
+)
+async def upload_document(
+    file: UploadFile = File(..., description="Document file to upload (PDF, DOCX, TXT, etc.)"),
+    session_id: str = Form(
+        ...,
+        min_length=1,
+        description="Chat workspace session id (MongoDB workspace document _id). Required.",
+    ),
+    doc_type: str = Form(DocTypeEnum.other, description="Document type enum value"),
+    title: str = Form(None, description="Document title (defaults to filename)"),
+    group_id: str = Form(
+        None,
+        description="Optional safety check: if provided, must equal the workspace's group_id.",
+    ),
+    clean: bool = Query(True, description="Use AI to clean PDF formatting (takes 3-5s)"),
+    db: AsyncSession = Depends(get_db),
+    mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload a document file (PDF, DOCX, TXT, etc.), extract its content,
+    and create a new editable GroupDocument scoped to the chat workspace.
+
+    **session_id is required.** The backend resolves `group_id` from the workspace
+    record in MongoDB and sets `group_documents.chat_session_id` before insert,
+    then links the new document id to the workspace session.
+
+    Raw file bytes are not stored in object storage — HTML lives in `group_documents.content`.
+    """
+    # 1. Validate file is present and not empty
+    if not file or not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="No file was uploaded or file is empty"
+        )
+    
+    # 2. Validate file type
+    ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Supported formats: PDF, DOCX, DOC, TXT. Got: {file_ext or 'unknown'}"
+        )
+    
+    # 3. Max size enforced after reading body (UploadFile.size is often unset)
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+    
+    # 4. Resolve group from workspace (session_id is required)
+    sid = session_id.strip()
+    session = await document_chat_service.get_workspace(mongo_db, sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Workspace session not found")
+    group_id_str = session.get("group_id")
+    if not group_id_str:
+        raise HTTPException(status_code=404, detail="Workspace not linked to a group")
+    try:
+        target_group_id = UUID(str(group_id_str))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid group_id in workspace")
+
+    if group_id is not None and str(group_id).strip():
+        try:
+            claimed = UUID(str(group_id).strip())
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid group_id format")
+        if claimed != target_group_id:
+            raise HTTPException(
+                status_code=400,
+                detail="group_id does not match the workspace's group.",
+            )
+    
+    # 5. Verify user is a member of the group
+    if not await _user_is_group_member(db, current_user.user_id, target_group_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a member of this group"
+        )
+    
+    # 6. Generate document title from filename if not provided
+    document_title = title if title and title.strip() else file.filename or "Untitled Document"
+    document_title = document_title.strip()[:255]  # Truncate to max length
+
+    # 7. Read upload into memory and extract HTML (no object storage)
+    temp_path = ""
+    try:
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file is empty",
+            )
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is 50MB, got {len(file_bytes) / 1024 / 1024:.1f}MB",
+            )
+
+        ext = os.path.splitext(file.filename or "")[1].lower() or ".pdf"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(file_bytes)
+            temp_path = tmp.name
+
+        html_content = await process_document_import_async(temp_path, clean_pdf=clean)
+        content_json = {"type": "doc", "html": html_content}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Error processing uploaded document: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process document content",
+        ) from e
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
+    # 8. Create GroupDocument in database
+    try:
+        doc = await document_service.create_document(
+            db=db,
+            group_id=target_group_id,
+            doc_type=doc_type,
+            title=document_title,
+            created_by=current_user.user_id,
+            chat_session_id=sid,
+            content=content_json,
+        )
+        logger.info(f"Created document {doc.id} from uploaded file")
+    except Exception as e:
+        logger.error(f"Error creating document: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create document in database"
+        )
+    
+    # 9. Append document id to Mongo workspace (same session as Postgres chat_session_id)
+    try:
+        await document_chat_service.link_document_to_session(
+            db=mongo_db,
+            session_id=sid,
+            document_id=str(doc.id),
+        )
+    except Exception as e:
+        logger.warning("Failed to link document to workspace %s: %s", sid, e)
+
+    return GroupDocumentResponse.model_validate(doc)
+
+
 # ── Workspace (Session) Endpoints ────────────────────────────────────────────
 
 
@@ -213,6 +420,7 @@ async def list_document_types(
 )
 async def create_workspace(
     body: CreateWorkspaceRequest,
+    db: AsyncSession = Depends(get_db),
     mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -229,6 +437,10 @@ async def create_workspace(
         created_by=str(current_user.user_id),
         document_ids=body.document_ids,
     )
+    aligned = await document_chat_service.reconcile_workspace_sessions_document_ids(
+        db, mongo_db, [session]
+    )
+    session = aligned[0]
     return WorkspaceResponse(
         session_id=session["_id"],
         group_id=session["group_id"],
@@ -248,10 +460,14 @@ async def create_workspace(
 )
 async def list_workspaces(
     group_id: str = Query(..., description="Postgres group UUID"),
+    db: AsyncSession = Depends(get_db),
     mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
     current_user: User = Depends(get_current_user),
 ):
     sessions = await document_chat_service.list_workspaces(mongo_db, group_id)
+    sessions = await document_chat_service.reconcile_workspace_sessions_document_ids(
+        db, mongo_db, sessions
+    )
     return [
         WorkspaceResponse(
             session_id=s["_id"],
@@ -297,6 +513,10 @@ async def rename_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     session = await document_chat_service.get_workspace(mongo_db, session_id)
+    aligned = await document_chat_service.reconcile_workspace_sessions_document_ids(
+        db, mongo_db, [session]
+    )
+    session = aligned[0]
     return WorkspaceResponse(
         session_id=session["_id"],
         group_id=session["group_id"],
@@ -376,6 +596,12 @@ async def create_document_in_workspace(
     """
     Creates a new Postgres GroupDocument with chat_session_id set,
     then appends its UUID to the MongoDB session's document_ids array.
+
+    If `content` is empty and `blank_tab` is false (legacy clients that POST after
+    multipart upload), the handler first tries to return an **existing** tab:
+    same `title` with real content, otherwise the newest doc with body created by
+    this user in the last few minutes. That avoids 422 and duplicate empty shells.
+    Use `blank_tab: true` when intentionally opening a truly empty editor tab.
     """
     # Always use the URL path param as the canonical session_id.
     # Never let body.chat_session_id override it — doing so causes a Postgres/Mongo
@@ -383,9 +609,48 @@ async def create_document_in_workspace(
     session = await document_chat_service.get_workspace(mongo_db, session_id)
     group_id_str = session["group_id"] if session else None
     if not group_id_str:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Workspace session not found.")
+
+    implicit_empty = _implicit_empty_content(body.content)
+
+    if implicit_empty and not body.blank_tab:
+        try:
+            existing_docs = await document_service.get_workspace_documents(db, session_id)
+        except (TimeoutError, asyncio.TimeoutError, SQLAlchemyError):
+            existing_docs = []
+
+        title_norm = body.title.strip()
+
+        for doc_row in sorted(existing_docs, key=lambda d: d.created_at, reverse=True):
+            if doc_row.title.strip() != title_norm:
+                continue
+            if _document_has_editor_body(doc_row):
+                payload = jsonable_encoder(GroupDocumentResponse.model_validate(doc_row))
+                return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
+
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
+        for doc_row in sorted(existing_docs, key=lambda d: d.created_at, reverse=True):
+            if doc_row.created_by != current_user.user_id:
+                continue
+            ca = doc_row.created_at
+            if ca.tzinfo is None:
+                ca = ca.replace(tzinfo=timezone.utc)
+            else:
+                ca = ca.astimezone(timezone.utc)
+            if ca < cutoff:
+                continue
+            if _document_has_editor_body(doc_row):
+                payload = jsonable_encoder(GroupDocumentResponse.model_validate(doc_row))
+                return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Empty document content requires blank_tab=true for a new empty tab, "
+                "or pass initial content. After a file upload, use the upload response "
+                "or repeat this call with the same title as the uploaded document."
+            ),
+        )
 
     doc = await document_service.create_document(
         db=db,
@@ -405,6 +670,69 @@ async def create_document_in_workspace(
     )
 
     return GroupDocumentResponse.model_validate(doc)
+
+
+@router.post(
+    "/students/chat-sessions/{session_id}/documents/link",
+    response_model=GroupDocumentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Attach an existing GroupDocument to this workspace",
+    tags=["student-documents"],
+)
+async def link_document_into_workspace(
+    session_id: str,
+    body: AddDocumentToSessionRequest,
+    db: AsyncSession = Depends(get_db),
+    mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sets `chat_session_id` on an existing Postgres row and adds its id to the
+    MongoDB workspace. Use this after uploading a document without a session,
+    or to fix duplicate tabs (empty new doc vs uploaded doc with content).
+    """
+    session = await document_chat_service.get_workspace(mongo_db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Workspace session not found.")
+    group_id_str = session.get("group_id")
+    if not group_id_str:
+        raise HTTPException(
+            status_code=404, detail="Workspace is not linked to a group."
+        )
+
+    try:
+        doc_uuid = UUID(body.document_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid document_id.")
+
+    doc = await require_group_document_for_user(db, doc_uuid, current_user)
+    try:
+        workspace_group_id = UUID(str(group_id_str))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid group_id on workspace.")
+    if doc.group_id != workspace_group_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Document belongs to a different group than this workspace.",
+        )
+
+    updated = await group_document_repo.attach_to_session(
+        db,
+        doc_id=doc_uuid,
+        chat_session_id=session_id,
+        updated_by=current_user.user_id,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    await document_chat_service.link_document_to_session(
+        db=mongo_db,
+        session_id=session_id,
+        document_id=str(doc_uuid),
+    )
+    await db.commit()
+    await db.refresh(updated)
+    return GroupDocumentResponse.model_validate(updated)
 
 
 @router.post(
@@ -704,8 +1032,14 @@ async def send_message(
         content=body.content,
         active_document_id=body.active_document_id,
         model_choice=body.model or "gpt-4o",
+        workspace_action=body.workspace_action.value if body.workspace_action else None,
     )
-    return ChatMessageResponse(reply=reply)
+    return ChatMessageResponse(
+        reply=reply["reply"],
+        proposal_id=reply.get("proposal_id"),
+        proposal_summary=reply.get("proposal_summary"),
+        assistant_message_id=reply.get("assistant_message_id"),
+    )
 
 
 @router.get(

@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "url": "/auth/forgot-password",
+  "body": {
+    "email": "playwright.seed.1778518530935@example.com"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "path": "/auth/signup",
+  "request": {
+    "full_name": "Playwright API User",
+    "email": "dup.1778488132435@example.com",
+    "password": "SecureP@ss123",
+    "role": "student"
+  },
+  "status": 400,
+  "responseBody": "{\"success\":false,\"error\":\"Email already registered\",\"error_code\":\"UNKNOWN_ERROR\",\"timestamp\":\"2026-05-11T08:28:57.869681+00:00\"}"
+}

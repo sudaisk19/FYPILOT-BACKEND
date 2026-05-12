@@ -42,6 +42,12 @@ class IndustryInfo(BaseModel):
         from_attributes = True
 
 
+class IndustryListResponse(BaseModel):
+    """Available industries for dropdown population."""
+
+    industries: List[IndustryInfo]
+
+
 class SupervisorDetailedInfo(BaseModel):
     # User fields
     user_id: UUID

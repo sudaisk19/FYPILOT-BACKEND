@@ -24,6 +24,7 @@ from app.models.group import FYPCycleEnum, Group, GroupMember
 from app.models.user import RoleEnum, User
 from app.repositories.announcement_repository import announcement_repository
 from app.schemas.admin_announcement_schema import (
+    AnnouncementResponse,
     PaginatedAnnouncements as PaginatedAdminAnnouncements,
 )
 from app.schemas.student_announcement_schema import (
@@ -31,6 +32,10 @@ from app.schemas.student_announcement_schema import (
     StudentAnnouncementFileResponse,
     StudentAnnouncementResponse,
     TemplateFileResponse,
+)
+from app.services.storage_service import (
+    ANNOUNCEMENTS_BUCKET,
+    get_public_file_url,
 )
 
 router = APIRouter(tags=["student-announcements"])
@@ -99,6 +104,7 @@ async def get_supervisor_announcements_for_student(
                 StudentAnnouncementFileResponse(
                     file_id=f.file_id,
                     file_name=f.file_name,
+                    url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
                     storage_key=f.storage_key,
                     file_type=f.file_type,
                     mime_type=f.mime_type,
@@ -166,8 +172,35 @@ async def get_admin_announcements_for_student(
 
     total_pages = (total_items + per_page - 1) // per_page if total_items > 0 else 1
 
+    # Map announcements and build URLs for files
+    mapped_announcements = [
+        AnnouncementResponse(
+            announcement_id=a.announcement_id,
+            title=a.title,
+            description=a.description,
+            is_submission_request=a.is_submission_request,
+            total_marks=a.total_marks,
+            created_at=a.created_at,
+            updated_at=a.updated_at,
+            targets=a.targets,
+            files=[
+                {
+                    "file_id": f.file_id,
+                    "file_name": f.file_name,
+                    "url": get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
+                    "storage_key": f.storage_key,
+                    "file_type": f.file_type,
+                    "mime_type": f.mime_type,
+                    "size_bytes": f.size_bytes,
+                }
+                for f in a.files
+            ],
+        )
+        for a in announcements
+    ]
+
     return PaginatedAdminAnnouncements(
-        announcements=announcements,
+        announcements=mapped_announcements,
         total_items=total_items,
         total_pages=total_pages,
         current_page=page,
@@ -222,6 +255,8 @@ async def get_templates_for_student(
         TemplateFileResponse(
             file_id=f.file_id,
             file_name=f.file_name,
+            url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
+            storage_key=f.storage_key,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,
             uploaded_at=f.uploaded_at,

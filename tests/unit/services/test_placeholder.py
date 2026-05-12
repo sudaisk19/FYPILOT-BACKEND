@@ -1,16 +1,27 @@
+import allure
+
 # tests/unit/services/test_placeholder.py
 """
 Placeholder service tests.
 Add real service unit tests here as you build them out.
 """
 
+pytestmark = [
+    allure.epic("FYPilot Unit Tests"),
+    allure.feature("Services"),
+]
 
+
+@allure.epic("FYPilot Unit Tests")
+@allure.feature("Services")
 class TestServicePlaceholders:
     """
     Placeholder tests for services.
     Replace with actual tests as services are developed.
     """
 
+    @allure.story("Placeholder passes")
+    @allure.severity(allure.severity_level.MINOR)
     def test_placeholder_passes(self):
         """Placeholder test to keep pytest happy."""
         assert True

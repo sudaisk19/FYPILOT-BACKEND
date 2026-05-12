@@ -365,6 +365,7 @@ async def get_supervisor_details(
                 request_history = [
                     RequestSummaryItem(
                         request_id=r.request_id,
+                        requested_role=r.request_type.value,
                         status=r.status.value,
                         message=r.message,
                         feedback=r.feedback,

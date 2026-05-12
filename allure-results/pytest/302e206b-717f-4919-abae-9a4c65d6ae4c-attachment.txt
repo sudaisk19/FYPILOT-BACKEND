@@ -1,0 +1,1 @@
+WARNING  app.auth.supabase_auth:supabase_auth.py:180 Unauthorized role access attempt: student tried to access ('admin',) protected route

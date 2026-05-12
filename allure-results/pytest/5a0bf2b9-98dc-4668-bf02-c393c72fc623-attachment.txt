@@ -1,0 +1,6 @@
+tests/unit/auth/test_auth_service.py:210: in test_get_current_user_when_decode_raises_returns_401
+    assert exc.value.detail == "Authentication failed"
+E   AssertionError: assert 'Invalid authentication token' == 'Authentication failed'
+E     
+E     - Authentication failed
+E     + Invalid authentication token

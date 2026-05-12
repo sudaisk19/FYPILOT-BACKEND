@@ -258,11 +258,15 @@ async def trigger_jury_assignment(
             jury_matching_service.run_assignment_job,
             batch.batch_id,
             request.fyp_cycles,
+            request.min_groups_per_pair,
+            request.max_groups_per_pair,
         )
 
         logger.info(
             f"Admin {current_user.email} triggered jury assignment "
-            f"batch {batch.batch_id}"
+            f"batch {batch.batch_id} "
+            f"(min_groups_per_pair={request.min_groups_per_pair}, "
+            f"max_groups_per_pair={request.max_groups_per_pair})"
         )
 
         return JuryAssignResponse(

@@ -27,7 +27,8 @@ class SupervisorGroupRow:
     project_name: str
     fyp_cycle: str
     members: List[str]
-    avg_marks: Optional[float]
+    avg_marks: Optional[float]  # Most recent submission supervisor marks
+    eval_avg_marks: Optional[float]  # Supervisor evaluation average for bar chart
 
 
 @dataclass
@@ -60,28 +61,12 @@ class FacultyDashboardRepository:
         return await self._scalar_int(stmt)
 
     async def average_supervisor_marks(self, faculty_id: UUID) -> Optional[float]:
-        # Primary source: milestone supervisor evaluations.
+        # Use only supervisor evaluation records (milestone-based grading).
         eval_stmt = select(func.avg(SupervisorEvaluation.marks)).where(
             SupervisorEvaluation.supervisor_id == faculty_id
         )
         eval_value = await self.db.scalar(eval_stmt)
-        if eval_value is not None:
-            return self._to_float(eval_value)
-
-        # Fallback source: submission-level grading stored on Submission.
-        # This keeps top-cards meaningful for deployments using submissions
-        # grading but not milestone evaluation records.
-        submission_stmt = (
-            select(func.avg(Submission.supervisor_marks))
-            .select_from(Submission)
-            .join(Group, Submission.group_id == Group.group_id)
-            .where(
-                Group.supervisor_id == faculty_id,
-                Submission.supervisor_marks.is_not(None),
-            )
-        )
-        submission_value = await self.db.scalar(submission_stmt)
-        return self._to_float(submission_value)
+        return self._to_float(eval_value)
 
     async def count_jury_assigned_groups(self, faculty_id: UUID) -> int:
         stmt = (
@@ -113,13 +98,26 @@ class FacultyDashboardRepository:
             "member_names"
         )
         sort_ts = func.coalesce(Project.updated_at, Group.updated_at).label("sort_ts")
+
+        # Subquery to get the most recent submission for each group
+        most_recent_submission = (
+            select(
+                Submission.group_id,
+                Submission.submission_id,
+                Submission.supervisor_marks,
+            )
+            .distinct(Submission.group_id)
+            .order_by(Submission.group_id, Submission.submitted_at.desc().nullslast())
+        ).subquery()
+
         stmt = (
             select(
                 Group.group_id,
                 Project.name.label("project_name"),
                 Group.fyp_cycle,
                 member_names,
-                func.avg(SupervisorEvaluation.marks).label("avg_marks"),
+                most_recent_submission.c.supervisor_marks.label("submission_marks"),
+                func.avg(SupervisorEvaluation.marks).label("eval_avg"),
                 sort_ts,
             )
             .select_from(Group)
@@ -128,25 +126,44 @@ class FacultyDashboardRepository:
             .join(User, User.user_id == Student.user_id)
             .outerjoin(Project, Project.group_id == Group.group_id)
             .outerjoin(
+                most_recent_submission,
+                most_recent_submission.c.group_id == Group.group_id,
+            )
+            .outerjoin(
                 SupervisorEvaluation,
                 (SupervisorEvaluation.group_id == Group.group_id)
                 & (SupervisorEvaluation.supervisor_id == faculty_id),
             )
             .where(Group.supervisor_id == faculty_id)
-            .group_by(Group.group_id, Project.name, Group.fyp_cycle, sort_ts)
+            .group_by(
+                Group.group_id,
+                Project.name,
+                Group.fyp_cycle,
+                sort_ts,
+                most_recent_submission.c.supervisor_marks,
+            )
             .order_by(sort_ts.desc().nullslast())
             .limit(limit)
         )
         result = await self.db.execute(stmt)
         rows: List[SupervisorGroupRow] = []
-        for group_id, project_name, fyp_cycle, members, avg_marks, _ in result.all():
+        for (
+            group_id,
+            project_name,
+            fyp_cycle,
+            members,
+            submission_marks,
+            eval_avg,
+            _,
+        ) in result.all():
             rows.append(
                 SupervisorGroupRow(
                     group_id=group_id,
                     project_name=(project_name or "Untitled Project"),
                     fyp_cycle=self._cycle_value(fyp_cycle),
                     members=list(members or []),
-                    avg_marks=self._to_float(avg_marks),
+                    avg_marks=self._to_float(submission_marks),
+                    eval_avg_marks=self._to_float(eval_avg),
                 )
             )
         return rows

@@ -1,21 +1,24 @@
 # tests/conftest.py
 """
-Shared test fixtures for the FYPilot backend test suite.
+Shared test fixtures for the FYPilot backend unit tests (services / config).
 
-Provides:
-  - Async test client via httpx.AsyncClient
-  - Sync test client via FastAPI TestClient
-  - Mock database sessions
-  - Mock Redis cache
-  - Common test data factories
+Provides mock settings and a mock async SQLAlchemy session for service-layer tests.
 """
 
+import os
+from pathlib import Path
+
+# Required before importing ``app.auth.utils`` (import-time JWT guard).
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-unit-tests")
+os.environ.setdefault("ENV", "testing")
+
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
+import allure
 import pytest
-import pytest_asyncio
 
 
 # ─── Event Loop ────────────────────────────────────────────
@@ -51,45 +54,33 @@ def mock_settings(monkeypatch):
         monkeypatch.setenv(key, value)
 
 
-# ─── Sync Test Client ─────────────────────────────────────
-@pytest.fixture
-def client():
-    """
-    Synchronous test client for simple endpoint tests.
-    Uses FastAPI's TestClient (backed by requests).
-    """
-    from fastapi.testclient import TestClient
-
-    from app.main import app
-
-    with TestClient(app) as c:
-        yield c
-
-
-# ─── Async Test Client ────────────────────────────────────
-@pytest_asyncio.fixture
-async def async_client() -> AsyncGenerator:
-    """
-    Async test client for testing async endpoints.
-    Uses httpx.AsyncClient for full async support.
-    """
-    from httpx import ASGITransport, AsyncClient
-
-    from app.main import app
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as ac:
-        yield ac
+@pytest.fixture(scope="session", autouse=True)
+def write_allure_environment_properties():
+    """Write pytest run metadata consumed by Allure report widgets."""
+    results_dir = Path("allure-results/pytest")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    environment_file = results_dir / "environment.properties"
+    environment_file.write_text(
+        "\n".join(
+            [
+                "ENVIRONMENT=test",
+                "FRAMEWORK=pytest",
+                "LANGUAGE=Python",
+                "TEST_TYPE=Unit Tests",
+                "MODULES=Auth,Student,Faculty,Admin,Jury,Schemas",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 # ─── Mock Database Session ─────────────────────────────────
 @pytest.fixture
 def mock_db_session():
     """
-    Mock async database session.
-    Use this to avoid hitting a real database in unit tests.
+    Mock async SQLAlchemy session for unit tests.
+    Supports: execute, commit, refresh, add, rollback, delete, begin (async context manager).
     """
     session = AsyncMock()
     session.commit = AsyncMock()
@@ -97,74 +88,59 @@ def mock_db_session():
     session.close = AsyncMock()
     session.execute = AsyncMock()
     session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+    session.add = MagicMock()
+    session.delete = AsyncMock()
+
+    def _begin_factory():
+        @asynccontextmanager
+        async def _begin() -> AsyncIterator[None]:
+            yield None
+
+        return _begin()
+
+    session.begin = MagicMock(side_effect=_begin_factory)
     return session
 
 
-# ─── Mock Redis Cache ─────────────────────────────────────
-@pytest.fixture
-def mock_cache():
-    """Mock the Redis cache service."""
-    cache_mock = MagicMock()
-    cache_mock.is_available = True
-    cache_mock.get = AsyncMock(return_value=None)
-    cache_mock.set = AsyncMock(return_value=True)
-    cache_mock.delete = AsyncMock(return_value=True)
-    cache_mock.connect = AsyncMock(return_value=True)
-    cache_mock.disconnect = AsyncMock()
-    return cache_mock
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Expose test phase reports so fixtures can inspect failure states."""
+    outcome = yield
+    report = outcome.get_result()
+    setattr(item, f"rep_{report.when}", report)
 
 
-# ─── Test Data Helpers ─────────────────────────────────────
-@pytest.fixture
-def sample_student_data():
-    """Sample student data for testing."""
-    return {
-        "email": "test.student@university.edu",
-        "first_name": "Test",
-        "last_name": "Student",
-        "enrollment_number": "STU-2024-001",
-    }
+@pytest.fixture(autouse=True)
+def attach_failure_diagnostics(request):
+    """Attach mock call traces and error details whenever a test fails."""
+    yield
 
+    report = getattr(request.node, "rep_call", None)
+    if not report or not report.failed:
+        return
 
-@pytest.fixture
-def sample_supervisor_data():
-    """Sample supervisor/faculty data for testing."""
-    return {
-        "email": "test.supervisor@university.edu",
-        "first_name": "Test",
-        "last_name": "Supervisor",
-        "department": "Computer Science",
-    }
+    allure.attach(
+        report.longreprtext,
+        name="Error Detail",
+        attachment_type=allure.attachment_type.TEXT,
+    )
 
+    mock_call_dump = []
+    for fixture_name, value in request.node.funcargs.items():
+        if isinstance(value, (MagicMock, AsyncMock)):
+            mock_call_dump.append(
+                {
+                    "fixture": fixture_name,
+                    "called": value.called,
+                    "call_count": value.call_count,
+                    "calls": [repr(c) for c in value.mock_calls],
+                }
+            )
 
-@pytest.fixture
-def auth_headers():
-    """
-    Generate mock JWT auth headers for protected endpoint tests.
-    Returns headers dict with Bearer token.
-    """
-    import jwt
-
-    payload = {
-        "sub": "test-user-id-123",
-        "email": "test@university.edu",
-        "role": "student",
-        "exp": 9999999999,  # Far future
-    }
-    token = jwt.encode(payload, "test-jwt-secret-key-for-unit-tests", algorithm="HS256")
-    return {"Authorization": f"Bearer {token}"}
-
-
-@pytest.fixture
-def admin_auth_headers():
-    """Generate mock JWT auth headers with admin role."""
-    import jwt
-
-    payload = {
-        "sub": "admin-user-id-456",
-        "email": "admin@university.edu",
-        "role": "admin",
-        "exp": 9999999999,
-    }
-    token = jwt.encode(payload, "test-jwt-secret-key-for-unit-tests", algorithm="HS256")
-    return {"Authorization": f"Bearer {token}"}
+    if mock_call_dump:
+        allure.attach(
+            str(mock_call_dump),
+            name="Mock Calls",
+            attachment_type=allure.attachment_type.JSON,
+        )

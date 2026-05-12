@@ -6,7 +6,8 @@ Connection:
     WS ws://host/ws/chat/{session_id}?token=<jwt>
 
 Client → Server messages (JSON):
-    { "type": "message", "content": "...", "active_document_id": "uuid|null", "model": "gpt-4o" }
+    { "type": "message", "content": "...", "active_document_id": "uuid|null", "model": "gpt-4o",
+      "workspace_action": "chat|suggest|improve|modify" }
     { "type": "ping" }
 
 Server → Client broadcasts (JSON):
@@ -14,7 +15,8 @@ Server → Client broadcasts (JSON):
     { "type": "user_message",  "sender_id": "...", "sender_name": "...", "content": "...", "timestamp": "..." }
     { "type": "llm_status",    "request_id": "...", "phase": "queued|thinking|streaming|complete", "timestamp": "..." }
     { "type": "llm_token",     "request_id": "...", "token": "Hello", "seq": 1 }
-    { "type": "llm_done",      "request_id": "...", "message_id": "...", "full_reply": "..." }
+    { "type": "llm_done",      "request_id": "...", "message_id": "...", "full_reply": "...",
+                               "proposal_id": "...", "proposal_summary": "..." }
     { "type": "llm_error",     "request_id": "...", "detail": "...", "timestamp": "..." }
     { "type": "error",         "detail": "..." }
 """
@@ -31,16 +33,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.websocket.manager import manager
 from app.auth.supabase_auth import get_ws_user
+from app.core.config import settings
 from app.db import get_db
 from app.db.mongo import get_mongo_db
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
+from app.services.chat_llm_errors import format_chat_stream_llm_error
 from app.services.chat_sse_hub import publish as sse_publish
 from app.services.chat_sse_hub import (
     sse_stream_error,
     sse_stream_status,
 )
+from app.services.html_plaintext import html_to_plaintext, tip_tap_html_from_content
 from app.services.llm import stream_llm
+from app.services.prompts import build_document_modify_system_extra
+from app.services.workspace_modify_proposal import (
+    finalize_modify_mode_reply,
+    link_proposal_to_assistant_message,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -85,18 +95,24 @@ async def _mirror_ws_payload_to_sse(session_id: str, payload: dict) -> None:
         elif t == "llm_error":
             rid = payload.get("request_id") or ""
             detail = str(payload.get("detail") or "")
-            await sse_publish(session_id, sse_stream_error(rid, detail))
-        elif t == "llm_done":
-            full = payload.get("full_reply") or ""
+            err_code = payload.get("error_code")
             await sse_publish(
                 session_id,
-                {
-                    "type": "chat.stream.end",
-                    "request_id": payload.get("request_id"),
-                    "assistant_message_id": payload.get("message_id"),
-                    "reply_length": len(full),
-                },
+                sse_stream_error(rid, detail, error_code=err_code),
             )
+        elif t == "llm_done":
+            full = payload.get("full_reply") or ""
+            evt: dict = {
+                "type": "chat.stream.end",
+                "request_id": payload.get("request_id"),
+                "assistant_message_id": payload.get("message_id"),
+                "reply_length": len(full),
+            }
+            if payload.get("proposal_id"):
+                evt["proposal_id"] = payload["proposal_id"]
+            if payload.get("proposal_summary"):
+                evt["proposal_summary"] = payload["proposal_summary"]
+            await sse_publish(session_id, evt)
     except Exception:
         logger.debug("SSE mirror from WebSocket chat failed", exc_info=True)
 
@@ -200,10 +216,16 @@ async def chat_websocket(
                     },
                 )
 
-                # 2. Persist to MongoDB
+                # 2. Load document context + modify flags
                 doc_context = None
-                document_content_str = None
                 doc_type_str = None
+                document_content_str: Optional[str] = None
+                doc_html_raw: Optional[str] = None
+                baseline_lock_version: Optional[int] = None
+                document_loaded = False
+
+                wa = str(data.get("workspace_action") or "chat").strip().lower()
+                is_modify = wa == "modify"
 
                 if active_doc_id:
                     try:
@@ -211,15 +233,26 @@ async def chat_websocket(
                             db, UUID(active_doc_id)
                         )
                         if doc:
+                            document_loaded = True
                             doc_type_str = doc.doc_type.value if doc.doc_type else None
+                            baseline_lock_version = doc.lock_version
                             if doc.content:
                                 document_content_str = json.dumps(doc.content, indent=2)
                                 doc_context = {
                                     "active_document_id": active_doc_id,
                                     "version_number": doc.lock_version,
                                 }
+                                hr = tip_tap_html_from_content(doc.content)
+                                if hr:
+                                    doc_html_raw = hr
                     except Exception as e:
-                        logger.warning(f"Could not load active document: {e}")
+                        logger.warning("Could not load active document: %s", e)
+
+                modify_valid = is_modify and bool(doc_html_raw) and document_loaded
+
+                leading_document_context: Optional[str] = None
+                if doc_html_raw and not modify_valid:
+                    leading_document_context = html_to_plaintext(doc_html_raw)
 
                 await chat_session_repo.save_message(
                     mongo_db,
@@ -228,21 +261,83 @@ async def chat_websocket(
                     sender_type="student",
                     content=content,
                     doc_context=doc_context,
+                    metadata={"workspace_action": wa, "request_id": request_id},
+                    request_id=request_id,
                 )
 
-                # 3. Build LLM history from recent messages
+                # 3. Build LLM history from recent messages (modify: smaller window)
+                _hist_limit = (
+                    settings.chat_modify_context_message_limit if modify_valid else 10
+                )
                 recent = await chat_session_repo.get_recent_messages_for_context(
-                    mongo_db, session_id, n=10
+                    mongo_db, session_id, n=_hist_limit
                 )
                 history = []
                 for msg in recent:
                     role = "assistant" if msg["sender_type"] == "llm" else "user"
                     history.append({"role": role, "content": msg["content"]})
 
+                if is_modify and not modify_valid:
+                    err_text = (
+                        "[Modify] Open a document tab with readable HTML content "
+                        "to use modify mode."
+                    )
+                    mid = await chat_session_repo.save_message(
+                        mongo_db,
+                        chat_session_id=session_id,
+                        sender_id="llm",
+                        sender_type="llm",
+                        content=err_text,
+                        doc_context=doc_context,
+                        metadata={"modify_skipped": True, "model": model_choice},
+                        request_id=request_id,
+                    )
+                    await _broadcast_chat_ws(
+                        room_key,
+                        session_id,
+                        {
+                            "type": "llm_status",
+                            "request_id": request_id,
+                            "phase": "thinking",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    await _broadcast_chat_ws(
+                        room_key,
+                        session_id,
+                        {
+                            "type": "llm_done",
+                            "request_id": request_id,
+                            "message_id": mid,
+                            "full_reply": err_text,
+                        },
+                    )
+                    await _broadcast_chat_ws(
+                        room_key,
+                        session_id,
+                        {
+                            "type": "llm_status",
+                            "request_id": request_id,
+                            "phase": "complete",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    continue
+
                 # 4. Stream LLM tokens → broadcast each token to ALL in session
-                full_reply_parts = []
+                full_reply_parts: list[str] = []
                 token_seq = 0
                 sent_streaming_status = False
+                modify_system_extra = None
+                stream_leading = leading_document_context
+                if modify_valid:
+                    modify_system_extra = build_document_modify_system_extra(
+                        doc_html_raw or "",
+                        max_html_chars=settings.chat_modify_html_max_chars,
+                    )
+                    stream_leading = None
+                    document_content_str = None
+
                 try:
                     await _broadcast_chat_ws(
                         room_key,
@@ -258,8 +353,15 @@ async def chat_websocket(
                     async for token_chunk in stream_llm(
                         history=history,
                         document_content=document_content_str,
+                        system_extra=modify_system_extra,
                         model_choice=model_choice,
                         doc_type=doc_type_str,
+                        leading_document_context=stream_leading,
+                        history_message_max_chars=(
+                            settings.chat_modify_llm_message_max_chars
+                            if modify_valid
+                            else None
+                        ),
                     ):
                         if not sent_streaming_status:
                             sent_streaming_status = True
@@ -287,14 +389,16 @@ async def chat_websocket(
                             },
                         )
                 except Exception as exc:
-                    logger.error(f"LLM streaming error: {exc}")
+                    logger.error("LLM streaming error: %s", exc)
+                    detail, err_code = format_chat_stream_llm_error(exc)
                     await _broadcast_chat_ws(
                         room_key,
                         session_id,
                         {
                             "type": "llm_error",
                             "request_id": request_id,
-                            "detail": str(exc),
+                            "detail": detail,
+                            "error_code": err_code,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
@@ -302,27 +406,48 @@ async def chat_websocket(
 
                 full_reply = "".join(full_reply_parts)
 
-                # 5. Persist LLM reply to MongoDB
+                final_content, assistant_meta, proposal_id = (
+                    await finalize_modify_mode_reply(
+                        mongo_db,
+                        chat_session_id=session_id,
+                        user_id=user_id,
+                        full_reply=full_reply,
+                        is_modify=modify_valid,
+                        active_document_id=active_doc_id,
+                        baseline_lock_version=baseline_lock_version,
+                        doc_context=doc_context,
+                        request_id=request_id,
+                        model_choice=model_choice,
+                    )
+                )
                 message_id = await chat_session_repo.save_message(
                     mongo_db,
                     chat_session_id=session_id,
                     sender_id="llm",
                     sender_type="llm",
-                    content=full_reply,
+                    content=final_content,
                     doc_context=doc_context,
+                    metadata=assistant_meta,
+                    request_id=request_id,
                 )
+                if proposal_id:
+                    await link_proposal_to_assistant_message(
+                        mongo_db, proposal_id, message_id
+                    )
 
-                # 6. Notify all that streaming is complete
-                await _broadcast_chat_ws(
-                    room_key,
-                    session_id,
-                    {
-                        "type": "llm_done",
-                        "request_id": request_id,
-                        "message_id": message_id,
-                        "full_reply": full_reply,
-                    },
-                )
+                done_payload: dict = {
+                    "type": "llm_done",
+                    "request_id": request_id,
+                    "message_id": message_id,
+                    "full_reply": final_content,
+                }
+                if proposal_id:
+                    done_payload["proposal_id"] = proposal_id
+                    if assistant_meta.get("proposal_summary"):
+                        done_payload["proposal_summary"] = assistant_meta[
+                            "proposal_summary"
+                        ]
+                await _broadcast_chat_ws(room_key, session_id, done_payload)
 
                 await _broadcast_chat_ws(
                     room_key,
