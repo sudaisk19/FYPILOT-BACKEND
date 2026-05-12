@@ -93,6 +93,19 @@ class ChatSessionRepository:
             },
         )
 
+    async def set_document_ids(
+        self,
+        db: AsyncIOMotorDatabase,
+        session_id: str,
+        document_ids: List[str],
+    ) -> None:
+        """Replace the workspace document_ids list (e.g. after pruning stale Postgres IDs)."""
+        now = datetime.datetime.utcnow()
+        await db[self.SESSIONS_COL].update_one(
+            {"_id": session_id},
+            {"$set": {"document_ids": document_ids, "updated_at": now}},
+        )
+
     async def rename_session(
         self, db: AsyncIOMotorDatabase, session_id: str, title: str
     ) -> bool:

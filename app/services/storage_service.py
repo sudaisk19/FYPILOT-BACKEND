@@ -14,6 +14,7 @@ from app.core.config import settings
 
 ANNOUNCEMENTS_BUCKET = "announcement_files"
 SUBMISSION_FILES_BUCKET = "submission_files"
+DOCUMENT_FILES_BUCKET = "group_document_files"
 
 
 def get_public_file_url(bucket: str, storage_key: str) -> str:

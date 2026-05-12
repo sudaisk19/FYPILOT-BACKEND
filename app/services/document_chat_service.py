@@ -6,7 +6,7 @@ fetches its live content, and injects it into the LLM system prompt.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -15,6 +15,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
 from app.services.llm import call_llm
+
+
+def _ordered_existing_document_ids(raw: List[str], valid_lower: Set[str]) -> List[str]:
+    """Preserve order from Mongo, drop unknown UUIDs and duplicates."""
+    out: List[str] = []
+    seen_lower: Set[str] = set()
+    for x in raw:
+        try:
+            u = UUID(str(x).strip())
+        except ValueError:
+            continue
+        key = str(u).lower()
+        if key not in valid_lower or key in seen_lower:
+            continue
+        seen_lower.add(key)
+        out.append(str(u))
+    return out
 
 
 class DocumentChatService:
@@ -78,6 +95,35 @@ class DocumentChatService:
 
     async def delete_workspace(self, db: AsyncIOMotorDatabase, session_id: str) -> bool:
         return await chat_session_repo.delete_session(db, session_id)
+
+    async def reconcile_workspace_sessions_document_ids(
+        self,
+        pg_db: AsyncSession,
+        mongo_db: AsyncIOMotorDatabase,
+        sessions: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Drop MongoDB document_ids that no longer exist on active Postgres group_documents
+        (e.g. row deleted in Supabase/Postgres). Writes back pruned arrays when changed.
+        """
+        if not sessions:
+            return sessions
+        collected: List[str] = []
+        for s in sessions:
+            collected.extend(s.get("document_ids") or [])
+        valid_lower = await group_document_repo.get_existing_active_id_strings(
+            pg_db, collected
+        )
+        for s in sessions:
+            sid = s.get("_id")
+            raw = s.get("document_ids") or []
+            cleaned = _ordered_existing_document_ids(raw, valid_lower)
+            if cleaned != raw and sid is not None:
+                await chat_session_repo.set_document_ids(
+                    mongo_db, str(sid), cleaned
+                )
+            s["document_ids"] = cleaned
+        return sessions
 
     # ── Message + LLM ───────────────────────────────────────────────────────
 

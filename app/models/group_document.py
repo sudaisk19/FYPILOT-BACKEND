@@ -1,6 +1,7 @@
 import enum
+import json
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -16,8 +17,43 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.db import Base
+
+
+class ContentJSONB(TypeDecorator):
+    """
+    PostgreSQL jsonb that always maps to a Python dict for live draft content.
+
+    Some imports or legacy writes store a JSON *string* (or double-encoded JSON)
+    inside jsonb; asyncpg then returns a Python str and Pydantic fails or the
+    client sees empty content. Normalize on read to a dict shaped like TipTap JSON.
+    """
+
+    impl = JSONB
+    cache_ok = True
+
+    def process_result_value(self, value: Any, dialect) -> Optional[dict]:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return {}
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, str):
+                return {"type": "doc", "html": parsed}
+            return {}
+        return {}
+
+    def process_bind_param(self, value: Any, dialect) -> Any:
+        return value
+
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -74,7 +110,7 @@ class GroupDocument(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
 
     # JSONB live draft — continuously autosaved by the frontend
-    content: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    content: Mapped[Optional[dict]] = mapped_column(ContentJSONB, nullable=True)
 
     # Optimistic concurrency — incremented on every autosave
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
