@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "path": "/auth/forgot-password",
+  "request": {
+    "email": "ghost-1778518540595@example.com"
+  },
+  "status": 200,
+  "responseBody": "{\"message\":\"If the email exists, a password reset link has been sent\"}"
+}

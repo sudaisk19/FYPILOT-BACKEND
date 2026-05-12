@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "path": "/auth/signup",
+  "request": {
+    "full_name": "Playwright API User",
+    "email": "apitest.1778491438168@example.com",
+    "password": "SecureP@ss123",
+    "role": "student"
+  },
+  "status": 201,
+  "responseBody": "{\"message\":\"Account created successfully\",\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5N2U2Yzc3ZS01MTBlLTQ5ODQtYjQxNC05N2RjMGE2M2VlNjQiLCJyb2xlIjoic3R1ZGVudCIsImV4cCI6MTc3ODQ5NTA0MSwiaWF0IjoxNzc4NDkxNDQxfQ.k04TN5SlGnMv0qCExSNIdx5jVVXCCCinT7FZvMVuBPA\",\"token_type\":\"bearer\",\"role\":\"student\",\"user\":{\"user_id\":\"97e6c77e-510e-4984-b414-97dc0a63ee64\",\"full_name\":\"Playwright API User\",\"email\":\"apitest.1778491438168@example.com\",\"role\":\"student\",\"profile_avatar\":null,\"has_student_profile\":false,\"has_faculty_profile\":false,\"has_admin_profile\":false,\"faculty_info\":{\"is_supervisor\":false,\"is_jury\":false,\"is_active\":false}}}"
+}

@@ -1,0 +1,4 @@
+"BROKEN","CATEGORY","FAILED","PASSED","SKIPPED","UNKNOWN"
+"0","Auth Failures — 401","1","0","0","0"
+"0","Permission Failures — 403","1","0","0","0"
+"0","Skipped — Missing Credentials","0","0","356","0"

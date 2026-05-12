@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "path": "/auth/login",
+  "request": {
+    "password": "SecureP@ss123",
+    "remember_me": false
+  },
+  "status": 500,
+  "responseBody": "{\"success\":false,\"error\":\"An unexpected error occurred. Please try again later.\",\"error_code\":\"SERVER_INTERNAL_ERROR\",\"timestamp\":\"2026-05-11T16:55:22.742861+00:00\"}"
+}

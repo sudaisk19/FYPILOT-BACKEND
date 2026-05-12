@@ -1,0 +1,1 @@
+[{"values":["Playwright"],"name":"framework"},{"values":["TypeScript"],"name":"language"},{"values":["test"],"name":"environment"},{"values":["http://127.0.0.1:8000"],"name":"base_url"}]

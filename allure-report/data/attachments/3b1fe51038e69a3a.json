@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "url": "/auth/signup",
+  "body": {
+    "full_name": "Bad Role Type",
+    "email": "bad-role@example.com",
+    "password": "SecureP@ss123",
+    "role": 123
+  }
+}

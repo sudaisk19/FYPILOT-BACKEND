@@ -1,0 +1,4 @@
+{
+  "status": 200,
+  "body": "{\"user_id\":\"206a7d47-11e1-4e4e-b6b8-66f753ad74c7\",\"full_name\":\"Playwright API User\",\"email\":\"me.1778491452565@example.com\",\"role\":\"student\",\"profile_avatar\":null,\"created_at\":\"2026-05-11T09:24:13.375320Z\",\"updated_at\":\"2026-05-11T09:24:13.375320Z\",\"student_info\":null,\"group_info\":null,\"faculty_info\":null,\"admin_info\":null}"
+}

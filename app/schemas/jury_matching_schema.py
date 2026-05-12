@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class JuryReindexResponse(BaseModel):
@@ -18,30 +18,46 @@ class JuryReindexResponse(BaseModel):
 
 
 class JuryAssignRequest(BaseModel):
-    """Admin input to trigger batch jury assignment."""
+    """
+    Admin input to trigger batch jury assignment.
 
+    A **jury** is always a **pair of two faculty members** (fixed domain rule).
+    Only workload bounds per jury pair are configurable from the client; deeper
+    coverage rules for “how many juries per project” are enforced internally.
+    """
+
+    min_groups_per_pair: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description=(
+            "Minimum number of projects (groups) each jury pair should evaluate"
+        ),
+    )
     max_groups_per_pair: int = Field(
         ...,
         ge=1,
         le=10,
-        description="Maximum number of projects one jury pair can evaluate",
-    )
-    min_jury_per_project: int = Field(
-        default=1,
-        ge=1,
-        le=10,
-        description="Minimum number of jury pairs per project",
+        description=("Maximum number of projects (groups) each jury pair may evaluate"),
     )
     fyp_cycles: List[str] = Field(
         ...,
         description="Which FYP cycles to assign for, e.g. ['fyp1'], ['fyp2'], or ['fyp1','fyp2']",
     )
 
+    @model_validator(mode="after")
+    def min_must_not_exceed_max(self) -> "JuryAssignRequest":
+        if self.min_groups_per_pair > self.max_groups_per_pair:
+            raise ValueError(
+                "min_groups_per_pair must be less than or equal to max_groups_per_pair"
+            )
+        return self
+
     class Config:
         json_schema_extra = {
             "example": {
+                "min_groups_per_pair": 2,
                 "max_groups_per_pair": 5,
-                "min_jury_per_project": 1,
                 "fyp_cycles": ["fyp1"],
             }
         }

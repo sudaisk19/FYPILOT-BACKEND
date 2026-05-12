@@ -1,0 +1,4 @@
+{
+  "status": 401,
+  "body": "{\"success\":false,\"error\":\"Invalid email or password\",\"error_code\":\"AUTH_INVALID_CREDENTIALS\",\"timestamp\":\"2026-05-11T09:19:34.341380+00:00\"}"
+}

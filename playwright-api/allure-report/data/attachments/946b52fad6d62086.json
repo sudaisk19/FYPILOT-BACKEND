@@ -1,0 +1,6 @@
+{
+  "success": false,
+  "error": "Email already registered",
+  "error_code": "UNKNOWN_ERROR",
+  "timestamp": "2026-05-11T09:19:56.214807+00:00"
+}

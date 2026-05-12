@@ -14,7 +14,7 @@ class CollaborativeChatPostRequest(BaseModel):
         description="Optional display name; defaults to the authenticated user's full name.",
     )
     active_document_id: Optional[str] = Field(
-        None,
+        default=None,
         description="Optional open document tab UUID for LLM grounding.",
     )
     model: Optional[str] = Field(

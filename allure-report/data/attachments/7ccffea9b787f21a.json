@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "path": "/auth/me",
+  "request": null,
+  "status": 403,
+  "responseBody": "{\"success\":false,\"error\":\"Not authenticated\",\"error_code\":\"UNKNOWN_ERROR\",\"timestamp\":\"2026-05-11T17:14:10.730227+00:00\"}"
+}

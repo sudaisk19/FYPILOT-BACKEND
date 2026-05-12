@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "url": "/auth/signup",
+  "body": {
+    "full_name": "No Password",
+    "email": "missing-pw@example.com",
+    "role": "student"
+  }
+}

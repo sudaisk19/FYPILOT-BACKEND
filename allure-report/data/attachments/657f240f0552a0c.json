@@ -1,0 +1,4 @@
+{
+  "status": 401,
+  "body": "{\"success\":false,\"error\":\"Authentication failed\",\"error_code\":\"AUTH_INVALID_CREDENTIALS\",\"timestamp\":\"2026-05-11T08:29:16.557581+00:00\"}"
+}

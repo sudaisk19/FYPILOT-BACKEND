@@ -1,0 +1,3 @@
+▶ Starting: should_return_401_when_email_not_registered
+[API] POST /auth/login -> 401
+✅ should_return_401_when_email_not_registered

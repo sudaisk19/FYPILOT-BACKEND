@@ -24,6 +24,7 @@ from app.repositories.chat_llm_turn_repository import chat_llm_turn_repo
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
 from app.services.chat_sse_hub import publish, sse_stream_error, sse_stream_status
+from app.services.html_plaintext import html_to_plaintext, tip_tap_html_from_content
 from app.services.llm import stream_llm
 
 logger = logging.getLogger(__name__)
@@ -95,23 +96,46 @@ async def _run_turn(job: Dict[str, Any]) -> None:
     token_count = 0
 
     doc_context = None
-    document_content_str = None
     doc_type_str = None
+    leading_document_context: Optional[str] = None
 
     if active_document_id:
         try:
-            async with AsyncSessionLocal() as pg:
-                doc = await group_document_repo.get_by_id(pg, UUID(active_document_id))
-                if doc:
-                    doc_type_str = doc.doc_type.value if doc.doc_type else None
-                    if doc.content:
-                        document_content_str = json.dumps(doc.content, indent=2)
+            doc_uuid = UUID(active_document_id.strip())
+        except ValueError:
+            logger.debug(
+                "active_document_id invalid UUID, skipping document context: %s",
+                active_document_id,
+            )
+        else:
+            try:
+                async with AsyncSessionLocal() as pg:
+                    doc = await group_document_repo.get_by_id(pg, doc_uuid)
+                    if not doc:
+                        logger.debug(
+                            "active_document_id provided but document not found: %s",
+                            active_document_id,
+                        )
+                    else:
+                        doc_type_str = doc.doc_type.value if doc.doc_type else None
                         doc_context = {
                             "active_document_id": active_document_id,
                             "version_number": doc.lock_version,
                         }
-        except Exception as e:
-            logger.warning("collab chat: could not load active document: %s", e)
+                        html_raw = tip_tap_html_from_content(doc.content)
+                        if not html_raw:
+                            logger.debug(
+                                "active_document_id provided but content has no "
+                                "usable html: %s",
+                                active_document_id,
+                            )
+                        else:
+                            leading_document_context = html_to_plaintext(html_raw)
+            except Exception as e:
+                logger.warning(
+                    "active_document_id document lookup failed, skipping context: %s",
+                    e,
+                )
 
     await publish(room_id, sse_stream_status(request_id, "thinking"))
 
@@ -132,9 +156,10 @@ async def _run_turn(job: Dict[str, Any]) -> None:
     try:
         async for token_chunk in stream_llm(
             history=history,
-            document_content=document_content_str,
+            document_content=None,
             model_choice=model_choice,
             doc_type=doc_type_str,
+            leading_document_context=leading_document_context,
         ):
             if not streaming_started:
                 streaming_started = True

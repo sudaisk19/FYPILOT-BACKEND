@@ -51,10 +51,12 @@ engine = create_async_engine(
         "command_timeout": 30,
     },
     pool_pre_ping=True,
-    pool_recycle=300,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
+    pool_recycle=180,
+    # Parallel browser tabs + endpoints that stack Depends(get_db) can exhaust small pools.
+    # Supabase session pooler also caps concurrent clients; use Transaction mode if needed.
+    pool_size=15,
+    max_overflow=25,
+    pool_timeout=45,
 )
 
 

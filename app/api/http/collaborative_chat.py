@@ -278,6 +278,7 @@ async def stream_chat_events(
         finally:
             await unregister(room_id, q)
 
+    # CORSMiddleware merges Access-Control-*; these keys do not replace allow_origins.
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

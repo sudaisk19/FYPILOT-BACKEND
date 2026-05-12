@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "url": "/auth/forgot-password",
+  "body": {
+    "email": "ghost-1778518540595@example.com"
+  }
+}

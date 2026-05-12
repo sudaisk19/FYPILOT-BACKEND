@@ -106,6 +106,7 @@ async def stream_llm(
     system_extra: Optional[str] = None,
     model_choice: str = "gpt-4o",
     doc_type: Optional[str] = None,
+    leading_document_context: Optional[str] = None,
 ) -> AsyncIterator[str]:
     """
     Stream tokens from GitHub Models inference via Server-Sent Events.
@@ -116,6 +117,10 @@ async def stream_llm(
     Usage:
         async for token in stream_llm(history, ...):
             await ws.send_json({"type": "llm_token", "token": token})
+
+    When leading_document_context is set, it prepends stripped TipTap HTML
+    before base instructions; pass document_content=None to avoid duplicating
+    the draft.
     """
     messages = [
         {
@@ -124,6 +129,7 @@ async def stream_llm(
                 document_content=document_content,
                 doc_type=doc_type,
                 system_extra=system_extra,
+                leading_document_context=leading_document_context,
             ),
         }
     ]

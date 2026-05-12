@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/auth/login",
+  "request": {
+    "email": "playwright.seed.1778518500862@example.com",
+    "password": "SecureP@ss123",
+    "remember_me": false
+  },
+  "status": 200,
+  "responseBody": "{\"message\":\"Login successful\",\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlZTQzNjI0MS1iZjgxLTQwNDMtODFhMy03MzA1Y2U5OGM2NWQiLCJyb2xlIjoic3R1ZGVudCIsImV4cCI6MTc3ODUyMjExNywiaWF0IjoxNzc4NTE4NTE3fQ.AzCVcnQF68tFFsJ4azQSNAAteyYTCNVVdtx-0se2Ht0\",\"token_type\":\"bearer\",\"role\":\"student\",\"user\":{\"user_id\":\"ee436241-bf81-4043-81a3-7305ce98c65d\",\"full_name\":\"Playwright API User\",\"email\":\"playwright.seed.1778518500862@example.com\",\"role\":\"student\",\"profile_avatar\":null,\"has_student_profile\":false,\"has_faculty_profile\":false,\"has_admin_profile\":false,\"faculty_info\":{\"is_supervisor\":false,\"is_jury\":false,\"is_active\":false}}}"
+}

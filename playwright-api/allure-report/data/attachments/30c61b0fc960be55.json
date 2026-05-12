@@ -1,0 +1,9 @@
+{
+  "method": "POST",
+  "url": "/auth/login",
+  "body": {
+    "email": "playwright.seed.1778491434945@example.com",
+    "password": "SecureP@ss123",
+    "remember_me": false
+  }
+}

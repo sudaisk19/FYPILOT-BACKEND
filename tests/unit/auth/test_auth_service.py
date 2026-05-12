@@ -207,7 +207,7 @@ class TestSupabaseAuthGetCurrentUser:
         with pytest.raises(HTTPException) as exc:
             await supabase_auth.get_current_user(request=request, token=creds, db=db)
         assert exc.value.status_code == 401
-        assert exc.value.detail == "Authentication failed"
+        assert exc.value.detail == "Invalid authentication token"
 
 
 @allure.epic("FYPilot Unit Tests")

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Auth Failures — 401",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*401.*"
+  },
+  {
+    "name": "Permission Failures — 403",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*403.*"
+  },
+  {
+    "name": "Validation Failures — 422",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*422.*"
+  },
+  {
+    "name": "Not Found — 404",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*404.*"
+  },
+  {
+    "name": "Skipped — Missing Credentials",
+    "matchedStatuses": ["skipped"]
+  }
+]

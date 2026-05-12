@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "url": "/auth/signup",
+  "body": {
+    "full_name": "Playwright API User",
+    "email": "me.1778519643761@example.com",
+    "password": "SecureP@ss123",
+    "role": "student"
+  }
+}

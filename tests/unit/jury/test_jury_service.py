@@ -75,6 +75,7 @@ class TestJuryMatchingServiceGetBatchMatches:
         svc._circuit.record_success.assert_called_once()
         svc._client.batch_match.assert_awaited_once_with(
             fyp_cycles=["fyp1"],
+            min_groups_per_pair=None,
             max_groups_per_pair=None,
             min_jury_per_project=None,
         )

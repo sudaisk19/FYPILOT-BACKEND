@@ -1,0 +1,4 @@
+▶ Starting: should_return_400_when_email_already_registered
+[API] POST /auth/signup -> 201
+[API] POST /auth/signup -> 400
+✅ should_return_400_when_email_already_registered

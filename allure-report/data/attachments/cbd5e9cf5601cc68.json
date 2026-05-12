@@ -1,0 +1,6 @@
+{
+  "success": false,
+  "error": "Invalid email or password",
+  "error_code": "AUTH_INVALID_CREDENTIALS",
+  "timestamp": "2026-05-11T08:29:09.456436+00:00"
+}

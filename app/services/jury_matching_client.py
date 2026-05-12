@@ -78,6 +78,7 @@ class JuryMatchingClient:
     async def batch_match(
         self,
         fyp_cycles: Optional[List[str]] = None,
+        min_groups_per_pair: Optional[int] = None,
         max_groups_per_pair: Optional[int] = None,
         min_jury_per_project: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
@@ -96,9 +97,13 @@ class JuryMatchingClient:
         logger.info("Requesting batch jury matching from AI service")
 
         try:
+            # Optional keys mirror the AI recommender contract; assignment flow
+            # always sends min/max groups per jury pair plus internal min pairs/project.
             payload = {}
             if fyp_cycles:
                 payload["fyp_cycles"] = fyp_cycles
+            if min_groups_per_pair is not None:
+                payload["min_groups_per_pair"] = min_groups_per_pair
             if max_groups_per_pair is not None:
                 payload["max_groups_per_pair"] = max_groups_per_pair
             if min_jury_per_project is not None:

@@ -29,7 +29,7 @@ from fastapi import status  # HTTP status codes
 
 # Database imports
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError  # For database error handling
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession  # For async database operations
 from sqlalchemy.orm import selectinload  # For database queries
 
@@ -54,6 +54,21 @@ oauth2_scheme = HTTPBearer(
 )
 
 
+def _is_db_capacity_error(exc: BaseException) -> bool:
+    """Pool exhaustion / Supabase session limits — must not be reported as 401."""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        "emaxconn",
+        "max clients",
+        "too many connections",
+        "could not obtain",
+        "pool_timeout",
+        "connection timed out",
+        "timeout waiting",
+    )
+    return any(m in text for m in markers)
+
+
 async def get_current_user(
     request: Request,
     token: Annotated[HTTPBearer, Depends(oauth2_scheme)],
@@ -72,67 +87,76 @@ async def get_current_user(
 
     Raises:
         HTTPException(401): Invalid token or user not found
-        HTTPException(500): Database error
+        HTTPException(503): Database pool / capacity (retry)
+        HTTPException(500): Other database error
     """
+    token_str = token.credentials
+
     try:
-        # Decode and validate JWT token
-        token_str = token.credentials  # HTTPBearer returns an object with .credentials
         claims = decode_access_token(token_str)
+    except HTTPException:
+        raise
 
-        # Extract and validate user_id and role
-        try:
-            user_id = UUID(claims["sub"])
-            role = claims.get("role")
-        except (ValueError, KeyError) as e:
-            logger.error(f"Invalid token payload: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token format",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Query user from database with role validation and all profile relationships
-        try:
-            result = await db.execute(
-                select(User)
-                .options(
-                    selectinload(User.student_profile),
-                    selectinload(User.faculty_profile),
-                    selectinload(User.admin_profile),
-                )
-                .where(User.user_id == user_id)
-                .where(User.role == role)
-            )
-            user = result.scalars().first()
-        except SQLAlchemyError as e:
-            logger.error(f"Database error in get_current_user: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database error occurred",
-            )
-
-        if not user:
-            logger.warning(f"User not found or role mismatch: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or role mismatch",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Store user info in request state for logging/tracking
-        request.state.user = user
-        request.state.user_id = str(user_id)
-        request.state.role = role
-
-        return user
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_current_user: {e}")
+    try:
+        user_id = UUID(claims["sub"])
+        role = claims.get("role")
+    except (ValueError, KeyError) as e:
+        logger.error("Invalid token payload: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
+            detail="Invalid token format",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    try:
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.student_profile),
+                selectinload(User.faculty_profile),
+                selectinload(User.admin_profile),
+            )
+            .where(User.user_id == user_id)
+            .where(User.role == role)
+        )
+        user = result.scalars().first()
+    except SQLAlchemyError as e:
+        logger.error("Database error in get_current_user: %s", e)
+        if _is_db_capacity_error(e):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database temporarily unavailable; please retry shortly.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred",
+        )
+    except Exception as e:
+        if _is_db_capacity_error(e):
+            logger.error("DB capacity error in get_current_user: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database temporarily unavailable; please retry shortly.",
+            )
+        logger.exception("Unexpected error in get_current_user")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service error",
+        )
+
+    if not user:
+        logger.warning("User not found or role mismatch: %s", user_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or role mismatch",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    request.state.user = user
+    request.state.user_id = str(user_id)
+    request.state.role = role
+
+    return user
 
 
 async def get_current_active_user(

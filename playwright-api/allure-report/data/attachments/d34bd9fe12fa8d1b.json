@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "path": "/auth/me",
+  "request": null,
+  "status": 401,
+  "responseBody": "{\"success\":false,\"error\":\"Not authenticated\",\"error_code\":\"AUTH_INVALID_CREDENTIALS\",\"timestamp\":\"2026-05-11T09:24:17.963788+00:00\"}"
+}

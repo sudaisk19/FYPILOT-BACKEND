@@ -1,0 +1,2 @@
+▶ Starting: should_fail_when_authorization_header_missing
+✅ should_fail_when_authorization_header_missing

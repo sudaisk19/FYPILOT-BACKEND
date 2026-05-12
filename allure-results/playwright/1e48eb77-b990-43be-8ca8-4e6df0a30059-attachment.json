@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/auth/signup",
+  "request": {
+    "full_name": "No Email",
+    "password": "SecureP@ss123",
+    "role": "student"
+  },
+  "status": 500,
+  "responseBody": "{\"success\":false,\"error\":\"An unexpected error occurred. Please try again later.\",\"error_code\":\"SERVER_INTERNAL_ERROR\",\"timestamp\":\"2026-05-11T16:55:13.316016+00:00\"}"
+}

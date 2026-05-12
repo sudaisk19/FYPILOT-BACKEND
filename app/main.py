@@ -59,10 +59,13 @@ Instrumentator().instrument(app).expose(app)
 # Initialize Scheduler
 scheduler = create_scheduler()
 
-# CORS origins
+# CORS origins — include both hostname styles for dev (localhost vs 127.0.0.1).
+# Browser Origin must match exactly (e.g. page on localhost:3000 vs API on 127.0.0.1:8000).
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://fypilot-frontend.vercel.app",
     # Add your new production domains below:
     "http://fypilot.tech",
@@ -76,7 +79,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["*"],  # includes GET (required for GET /api/chat/stream SSE)
     allow_headers=["*"],
 )
 

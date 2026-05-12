@@ -1,0 +1,4 @@
+[API] POST /auth/signup -> 201
+▶ Starting: should_return_201_and_safe_user_payload_when_signup_valid
+[API] POST /auth/signup -> 201
+✅ should_return_201_and_safe_user_payload_when_signup_valid

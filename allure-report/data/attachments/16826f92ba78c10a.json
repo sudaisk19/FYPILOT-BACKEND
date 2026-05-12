@@ -1,0 +1,4 @@
+{
+  "status": 201,
+  "body": "{\"message\":\"Account created successfully\",\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YTFkNmVmZS1iMzk5LTRmNmUtOWI0YS1iYzZkZDFjZmNhZGIiLCJyb2xlIjoic3R1ZGVudCIsImV4cCI6MTc3ODUyMzI0NywiaWF0IjoxNzc4NTE5NjQ3fQ.GvgFBvem13WkcoHPbgqifLeGYUtQXzgfRkyrXVStKN8\",\"token_type\":\"bearer\",\"role\":\"student\",\"user\":{\"user_id\":\"9a1d6efe-b399-4f6e-9b4a-bc6dd1cfcadb\",\"full_name\":\"Playwright API User\",\"email\":\"me.1778519643761@example.com\",\"role\":\"student\",\"profile_avatar\":null,\"has_student_profile\":false,\"has_faculty_profile\":false,\"has_admin_profile\":false,\"faculty_info\":{\"is_supervisor\":false,\"is_jury\":false,\"is_active\":false}}}"
+}

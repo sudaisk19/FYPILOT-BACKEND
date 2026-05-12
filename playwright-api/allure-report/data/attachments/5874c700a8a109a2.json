@@ -1,0 +1,4 @@
+{
+  "status": 200,
+  "body": "{\"message\":\"If the email exists, a password reset link has been sent\"}"
+}

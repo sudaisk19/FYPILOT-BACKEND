@@ -1,0 +1,2 @@
+▶ Starting: should_return_401_when_bearer_token_malformed
+✅ should_return_401_when_bearer_token_malformed

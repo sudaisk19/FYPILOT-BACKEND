@@ -1,0 +1,4 @@
+{
+  "status": 422,
+  "body": "{\"success\":false,\"error\":\"Input should be 'student', 'faculty' or 'admin'\",\"error_code\":\"VALIDATION_ERROR\",\"details\":[{\"field\":\"role\",\"message\":\"Input should be 'student', 'faculty' or 'admin'\",\"code\":\"literal_error\"}],\"timestamp\":\"2026-05-11T09:24:06.057162+00:00\"}"
+}

@@ -1,0 +1,4 @@
+▶ Starting: should_return_200_profile_when_bearer_token_valid
+[API] POST /auth/signup -> 201
+[API] GET /auth/me -> 200
+✅ should_return_200_profile_when_bearer_token_valid
