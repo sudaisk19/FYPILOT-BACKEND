@@ -192,6 +192,12 @@ def _build_response(
     )
 
 
+def _is_submission_late(submission: Submission) -> bool:
+    due_at = submission.linked_announcement.due_at if submission.linked_announcement else None
+    submitted_at = submission.submitted_at
+    return bool(due_at and submitted_at and submitted_at > due_at)
+
+
 async def _get_managed_groups(user_id: UUID, db: AsyncSession) -> List[Group]:
     """Fetch all groups managed by the supervisor."""
     return await group_repository.get_groups_by_supervisor(db, user_id)
@@ -983,6 +989,8 @@ async def get_submission_evaluation(
     return SupervisorSubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
+        status=submission.status,
+        isLate=_is_submission_late(submission),
         totalMarks=total_marks,
         note=submission.note,
         supervisorMarks=(
@@ -1082,6 +1090,8 @@ async def update_supervisor_grading(
     return SupervisorSubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
+        status=submission.status,
+        isLate=_is_submission_late(submission),
         totalMarks=total_marks,
         note=submission.note,
         supervisorMarks=(

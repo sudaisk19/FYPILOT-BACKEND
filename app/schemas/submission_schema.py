@@ -132,6 +132,8 @@ class SubmissionFileInfo(BaseModel):
 class SubmissionEvaluationResponse(BaseModel):
     submissionId: UUID
     title: str
+    status: SubmissionStatusEnum
+    isLate: bool = False
     totalMarks: Optional[float] = None
     note: Optional[str] = None
     # Admin grading (read-only for supervisor, editable for admin)
@@ -153,6 +155,8 @@ class SupervisorSubmissionEvaluationResponse(BaseModel):
 
     submissionId: UUID
     title: str
+    status: SubmissionStatusEnum
+    isLate: bool = False
     totalMarks: Optional[float] = None
     note: Optional[str] = None
     supervisorMarks: Optional[float] = None
@@ -251,6 +255,7 @@ class StudentOfficialSubmissionDetail(BaseModel):
     title: str
     note: Optional[str] = None
     status: SubmissionStatusEnum
+    isLate: bool = False
     submitted_at: Optional[datetime] = None
     updated_at: datetime
 
