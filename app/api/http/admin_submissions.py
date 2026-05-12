@@ -207,6 +207,12 @@ def _build_response(announcement: Announcement) -> SubmissionAnnouncementRespons
     )
 
 
+def _is_submission_late(submission: Submission) -> bool:
+    due_at = submission.linked_announcement.due_at if submission.linked_announcement else None
+    submitted_at = submission.submitted_at
+    return bool(due_at and submitted_at and submitted_at > due_at)
+
+
 def _build_targets(assign_to: str, announcement_id: UUID) -> List[AnnouncementTarget]:
     """Create AnnouncementTarget rows from an assignTo label."""
     if assign_to not in SUBMISSION_ALLOWED_ASSIGNMENTS:
@@ -1077,6 +1083,8 @@ async def get_submission_evaluation(
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
+        status=submission.status,
+        isLate=_is_submission_late(submission),
         totalMarks=total_marks,
         note=submission.note,
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,
@@ -1160,6 +1168,8 @@ async def update_admin_grading(
     return SubmissionEvaluationResponse(
         submissionId=submission.submission_id,
         title=submission.title,
+        status=submission.status,
+        isLate=_is_submission_late(submission),
         totalMarks=total_marks,
         note=submission.note,
         adminMarks=float(submission.admin_marks) if submission.admin_marks else None,

@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.supabase_auth import get_current_user
+from app.core.departments import COMMON_UNIVERSITY_DEPARTMENTS
 from app.db import get_db
 from app.models.bulk_import import (
     BulkJobStatus,
@@ -43,6 +44,7 @@ from app.schemas.bulk_import_schema import (
     BulkImportUploadResponse,
     CreateStudentRequest,
     CreateSupervisorRequest,
+    DepartmentListResponse,
     ProcessorResponse,
     RetryResponse,
     SingleUserResponse,

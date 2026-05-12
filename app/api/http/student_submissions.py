@@ -43,7 +43,9 @@ from app.schemas.submission_schema import (
     StudentUnofficialSubmissionDetail,
 )
 from app.services.storage_service import (
+    ANNOUNCEMENTS_BUCKET,
     delete_file_from_supabase,
+    get_public_file_url,
     upload_file_to_supabase,
 )
 
@@ -164,6 +166,7 @@ async def get_official_submission(
             StudentAnnouncementTemplateFile(
                 file_id=f.file_id,
                 file_name=f.file_name,
+                url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
                 storage_key=f.storage_key,
                 mime_type=f.mime_type,
                 size_bytes=f.size_bytes,
@@ -215,6 +218,7 @@ async def get_official_submission(
                 StudentAnnouncementFileResponse(
                     file_id=f.file_id,
                     file_name=f.file_name,
+                    url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
                     storage_key=f.storage_key,
                     file_type=f.file_type,
                     mime_type=f.mime_type,
@@ -229,6 +233,12 @@ async def get_official_submission(
         title=submission.title,
         note=submission.note,
         status=submission.status,
+        isLate=bool(
+            announcement
+            and announcement.due_at
+            and submission.submitted_at
+            and submission.submitted_at > announcement.due_at
+        ),
         submitted_at=submission.submitted_at,
         updated_at=submission.updated_at,
         due_date=announcement.due_at if announcement else None,
@@ -361,6 +371,7 @@ async def submit_official_submission(
         StudentAnnouncementTemplateFile(
             file_id=f.file_id,
             file_name=f.file_name,
+            url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
             storage_key=f.storage_key,
             mime_type=f.mime_type,
             size_bytes=f.size_bytes,
@@ -397,6 +408,12 @@ async def submit_official_submission(
         title=submission.title,
         note=submission.note,
         status=submission.status,
+        isLate=bool(
+            announcement
+            and announcement.due_at
+            and submission.submitted_at
+            and submission.submitted_at > announcement.due_at
+        ),
         submitted_at=submission.submitted_at,
         updated_at=submission.updated_at,
         due_date=announcement.due_at if announcement else None,
@@ -543,6 +560,7 @@ async def get_unofficial_submission(
                 StudentAnnouncementFileResponse(
                     file_id=f.file_id,
                     file_name=f.file_name,
+                    url=get_public_file_url(ANNOUNCEMENTS_BUCKET, f.storage_key),
                     storage_key=f.storage_key,
                     file_type=f.file_type,
                     mime_type=f.mime_type,
@@ -712,6 +730,12 @@ async def edit_unofficial_submission(
         submission.title = title.strip()
     if note is not None:
         submission.note = note.strip() or None
+
+    # Unofficial submissions are always user-submitted work, so any edit/resubmit
+    # should keep the record in submitted state.
+    submission.status = SubmissionStatusEnum.submitted
+    if submission.submitted_at is None:
+        submission.submitted_at = datetime.now(timezone.utc)
 
     # Sync existing files
     if keep_file_ids is not None:
