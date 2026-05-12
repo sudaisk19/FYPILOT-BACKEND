@@ -40,7 +40,17 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")  # REDIS_URL
 
     # ─── Mailer Settings ────────────────────────────────────
-    mailer_provider: str = "mailtrap"
+    # Active default: Mailtrap (dev / capture). Switch with MAILER_PROVIDER:
+    #   mailtrap | ethereal | sendgrid
+    mailer_provider: str = Field(default="mailtrap", validation_alias="MAILER_PROVIDER")
+
+    # --- Resend (HTTPS API) — commented out for later; see mailer.py ResendMailer block ---
+    # resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
+    # resend_from_email: str | None = Field(
+    #     default=None,
+    #     validation_alias="RESEND_FROM_EMAIL",
+    #     description='Verified sender, e.g. "FYPilot <onboarding@resend.dev>"',
+    # )
 
     # # Ethereal settings (optional - for backward compatibility)
     # ethereal_smtp_host: str | None = None  # ETHEREAL_SMTP_HOST
@@ -48,11 +58,17 @@ class Settings(BaseSettings):
     # ethereal_smtp_user: str | None = None  # ETHEREAL_SMTP_USER
     # ethereal_smtp_pass: str | None = None  # ETHEREAL_SMTP_PASS
 
-    # Mailtrap settings
-    mailtrap_smtp_host: str = "sandbox.smtp.mailtrap.io"  # MAILTRAP_SMTP_HOST
-    mailtrap_smtp_port: int = 2525  # MAILTRAP_SMTP_PORT
-    mailtrap_smtp_user: str  # MAILTRAP_SMTP_USER
-    mailtrap_smtp_pass: str  # MAILTRAP_SMTP_PASS
+    # ─── Mailtrap (default dev / inbox capture) ─────────────────────────────
+    mailtrap_smtp_host: str = Field(
+        default="sandbox.smtp.mailtrap.io", validation_alias="MAILTRAP_SMTP_HOST"
+    )
+    mailtrap_smtp_port: int = Field(default=2525, validation_alias="MAILTRAP_SMTP_PORT")
+    mailtrap_smtp_user: str | None = Field(
+        default=None, validation_alias="MAILTRAP_SMTP_USER"
+    )
+    mailtrap_smtp_pass: str | None = Field(
+        default=None, validation_alias="MAILTRAP_SMTP_PASS"
+    )
 
     # ─── Frontend / OAuth Settings ──────────────────────────
     frontend_app_url: AnyHttpUrl = "http://localhost:3000"  # Frontend app URL
@@ -68,6 +84,11 @@ class Settings(BaseSettings):
     email_company_name: str = Field(
         default="FYPilot", description="Company/Project name to display in emails"
     )  # EMAIL_COMPANY_NAME
+    email_support_contact: str | None = Field(
+        default="support@fypilot.tech",
+        validation_alias="EMAIL_SUPPORT_CONTACT",
+        description="Shown in transactional email footers",
+    )
 
     # Required by SessionMiddleware (for OAuth state cookies)
     session_secret: str  # SESSION_SECRET

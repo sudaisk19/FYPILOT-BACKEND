@@ -1,7 +1,9 @@
 # app/services/mailer.py
 
 import logging
+from datetime import datetime
 from email.message import EmailMessage
+from html import escape
 from typing import Awaitable, Optional
 
 import aiosmtplib
@@ -24,7 +26,7 @@ MAILTRAP_RATE_LIMIT_DOC = "https://mailtrap.io/billing/plans/testing"
 async def _send_with_rate_limit_guard(
     send_operation: Awaitable[None], *, context: str
 ) -> None:
-    """Await a mailer send and swallow Mailtrap's per-second throttle errors."""
+    """Await a mailer send and swallow Mailtrap's per-second throttle errors (SMTP only)."""
 
     try:
         await send_operation
@@ -54,104 +56,130 @@ def get_email_template(
     button_link: Optional[str] = None,
     footer_text: Optional[str] = None,
     logo_url: Optional[str] = None,
+    hero_title: Optional[str] = None,
+    hero_subtitle: Optional[str] = None,
+    secondary_button_text: Optional[str] = None,
+    secondary_button_link: Optional[str] = None,
 ) -> str:
     """
-    Generate a professional HTML email template.
+    Shared HTML shell for all transactional emails (password reset, invites, etc.).
 
-    Args:
-        title: Email title/heading
-        content: Main email content (HTML)
-        button_text: Optional button text
-        button_link: Optional button link URL
-        footer_text: Optional custom footer text
-        logo_url: Optional logo image URL (defaults to settings.email_logo_url)
-
-    Returns:
-        Complete HTML email template
+    Dark FYPilot-branded layout. ``title`` is the card headline; ``hero_title`` overrides
+    the large hero line (defaults to ``title``).
     """
-    logo = logo_url or settings.email_logo_url
     company_name = settings.email_company_name
+    safe_company = escape(company_name)
+    safe_title = escape(title)
+    hero_h2 = escape(hero_title) if hero_title else safe_title
+    default_sub = (
+        "Build smarter, faster, and better with tools designed for your "
+        "Final Year Project workflow."
+    )
+    hero_p = escape(hero_subtitle) if hero_subtitle else default_sub
 
-    # Logo HTML (either image or text fallback)
-    logo_html = ""
+    logo = logo_url or settings.email_logo_url
+    logo_block = ""
     if logo:
-        logo_html = f'<img src="{logo}" alt="{company_name}" style="max-width: 200px; height: auto; margin-bottom: 20px;" />'
-    else:
-        logo_html = f'<div style="font-size: 28px; font-weight: bold; color: #7c3aed; margin-bottom: 20px;">{company_name}</div>'
+        logo_block = f'<img src="{escape(logo)}" alt="{safe_company}" style="max-height:40px;margin-bottom:12px;" />'
 
-    button_html = ""
+    primary_btn = ""
     if button_text and button_link:
-        button_html = f"""
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{button_link}" style="display: inline-block; background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                {button_text}
-            </a>
-        </div>
-        """
+        safe_btn = escape(button_text)
+        primary_btn = f"""
+<table cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 12px;">
+<tr>
+<td align="center" style="background:#6D28D9;border-radius:999px;">
+<a href="{escape(button_link, quote=True)}"
+   style="display:inline-block;padding:14px 28px;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;">
+{safe_btn}
+</a>
+</td>
+</tr>
+</table>"""
 
-    footer = footer_text or f"© 2024 {company_name}. All rights reserved."
+    secondary_btn = ""
+    if secondary_button_text and secondary_button_link:
+        sbt = escape(secondary_button_text)
+        secondary_btn = f"""
+<table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
+<tr>
+<td align="center" style="background:#1E293B;border-radius:999px;border:1px solid #334155;">
+<a href="{escape(secondary_button_link, quote=True)}"
+   style="display:inline-block;padding:12px 26px;color:#E6EAF0;text-decoration:none;font-weight:600;font-size:14px;">
+{sbt}
+</a>
+</td>
+</tr>
+</table>"""
 
-    return f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <title>{title} - {company_name}</title>
-        <!--[if mso]>
-        <style type="text/css">
-            body, table, td {{font-family: Arial, sans-serif !important;}}
-        </style>
-        <![endif]-->
-    </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-        <table role="presentation" style="width: 100%; border-collapse: collapse; border-spacing: 0; background-color: #f5f7fa; padding: 20px 0;">
-            <tr>
-                <td align="center" style="padding: 20px 0;">
-                    <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        <!-- Header -->
-                        <tr>
-                            <td style="padding: 40px 40px 20px; text-align: center;">
-                                {logo_html}
-                            </td>
-                        </tr>
-                        
-                        <!-- Title -->
-                        <tr>
-                            <td style="padding: 30px 40px 20px; text-align: center;">
-                                <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #1f2937; line-height: 1.4;">
-                                    {title}
-                                </h1>
-                            </td>
-                        </tr>
-                        
-                        <!-- Content -->
-                        <tr>
-                            <td style="padding: 0 40px 30px; color: #4b5563; font-size: 16px; line-height: 1.6;">
-                                {content}
-                                {button_html}
-                            </td>
-                        </tr>
-                        
-                        <!-- Footer -->
-                        <tr>
-                            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px; text-align: center; font-size: 14px; color: #6b7280; line-height: 1.5;">
-                                <p style="margin: 0 0 10px;">
-                                    {footer}
-                                </p>
-                                <p style="margin: 0; font-size: 12px; color: #9ca3af;">
-                                    This email was sent from {company_name}. If you have any questions, please contact our support team.
-                                </p>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </body>
-    </html>
-    """
+    support = settings.email_support_contact or ""
+    support_line = (
+        f"<br><br>Need help? {escape(support)}"
+        if support
+        else "<br><br>Need help? Contact your course administrator."
+    )
+    footer_main = escape(
+        footer_text
+        or f"© {datetime.utcnow().year} {company_name}. All rights reserved."
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{safe_title} · {safe_company}</title>
+<!--[if mso]><style type="text/css">body,table,td{{font-family:Arial,sans-serif!important;}}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#0B0F13;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#E6EAF0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+<tr>
+<td align="center" style="padding:40px 20px;">
+<table width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;background:#0F141A;border-radius:24px;overflow:hidden;border:1px solid #1F2937;">
+<tr>
+<td align="center" style="padding:28px 32px;background:linear-gradient(135deg,#6D28D9 0%,#8B5CF6 100%);">
+{logo_block}
+<h1 style="margin:0;font-size:30px;font-weight:700;color:#FFFFFF;letter-spacing:-0.5px;">{safe_company}</h1>
+<p style="margin:10px 0 0;color:#EDE9FE;font-size:15px;">Your AI-Powered Project Assistant</p>
+</td>
+</tr>
+<tr>
+<td style="padding:36px 36px 16px;">
+<h2 style="margin:0 0 14px;font-size:26px;line-height:1.25;color:#FFFFFF;">{hero_h2}</h2>
+<p style="margin:0;color:#A7B0BB;font-size:16px;line-height:1.75;">{hero_p}</p>
+</td>
+</tr>
+<tr>
+<td style="padding:8px 36px 36px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#141A22;border-radius:20px;border:1px solid #1E293B;">
+<tr>
+<td style="padding:28px 28px 32px;">
+<h3 style="margin:0 0 14px;color:#FFFFFF;font-size:20px;line-height:1.3;">{safe_title}</h3>
+<div style="color:#A7B0BB;font-size:15px;line-height:1.75;">
+{content}
+</div>
+{primary_btn}
+{secondary_btn}
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:28px 32px;border-top:1px solid #1F2937;">
+<p style="color:#6B7280;font-size:13px;line-height:1.7;margin:0;">
+{footer_main}
+{support_line}
+</p>
+<p style="margin:16px 0 0;font-size:12px;color:#4B5563;">This email was sent by {safe_company}.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>"""
 
 
 class DevMailer:
@@ -192,8 +220,9 @@ class DevMailer:
 
 class MailtrapMailer:
     """
-    Development mailer using Mailtrap (SMTP test service).
-    Captures emails in the Mailtrap dashboard instead of sending to real inboxes.
+    Default dev mailer — Mailtrap SMTP (inbox capture at mailtrap.io).
+
+    Set ``MAILER_PROVIDER=mailtrap`` and ``MAILTRAP_SMTP_USER`` / ``MAILTRAP_SMTP_PASS``.
     """
 
     def __init__(self):
@@ -226,6 +255,46 @@ class MailtrapMailer:
         )
 
 
+# ---------------------------------------------------------------------------
+# Resend HTTP mailer — commented for later; use MAILER_PROVIDER=mailtrap now.
+# Uncomment class + get_mailer() branch and restore RESEND_* in config when ready.
+# ---------------------------------------------------------------------------
+# class ResendMailer:
+#     """Transactional email via Resend HTTP API (https://resend.com)."""
+#     _API = "https://api.resend.com/emails"
+#
+#     def __init__(self) -> None:
+#         if not settings.resend_api_key or not settings.resend_from_email:
+#             raise ValueError(
+#                 "Resend requires RESEND_API_KEY and RESEND_FROM_EMAIL in environment"
+#             )
+#
+#     async def send(self, to: str, subject: str, html_body: str) -> None:
+#         import httpx
+#
+#         async with httpx.AsyncClient(timeout=30.0) as client:
+#             response = await client.post(
+#                 self._API,
+#                 headers={
+#                     "Authorization": f"Bearer {settings.resend_api_key}",
+#                     "Content-Type": "application/json",
+#                 },
+#                 json={
+#                     "from": settings.resend_from_email,
+#                     "to": [to],
+#                     "subject": subject,
+#                     "html": html_body,
+#                 },
+#             )
+#             if response.status_code >= 400:
+#                 logger.error(
+#                     "Resend API error %s: %s",
+#                     response.status_code,
+#                     response.text[:500],
+#                 )
+#                 response.raise_for_status()
+
+
 class ProdMailer:
     """
     Production mailer using SendGrid.
@@ -256,10 +325,14 @@ class ProdMailer:
 
 def get_mailer():
     """
-    Factory to choose the correct mailer based on configuration.
-    In .env, set MAILER_PROVIDER to either 'ethereal', 'mailtrap', or 'sendgrid'.
+    Factory to choose the correct mailer based on ``MAILER_PROVIDER``.
+
+    Active: ``mailtrap`` (default), ``ethereal``, ``sendgrid``.
+    Resend: see commented ``ResendMailer`` above + add ``elif provider == "resend"``.
     """
     provider = settings.mailer_provider.lower()
+    # if provider == "resend":
+    #     return ResendMailer()
     if provider == "ethereal":
         return DevMailer()
     elif provider == "mailtrap":
@@ -281,35 +354,41 @@ async def send_password_reset_email(to_email: str, user_name: str, reset_link: s
     """
     subject = f"Password Reset Request - {settings.email_company_name}"
 
+    safe_name = escape(user_name)
+    safe_link = escape(reset_link, quote=True)
+    safe_link_text = escape(reset_link)
+
     content = f"""
-    <p style="margin: 0 0 16px;">Hello <strong>{user_name}</strong>,</p>
-    
+    <p style="margin: 0 0 16px;">Hello <strong>{safe_name}</strong>,</p>
+
     <p style="margin: 0 0 16px;">
-        We received a request to reset your password for your {settings.email_company_name} account. 
-        If you made this request, click the button below to reset your password.
+        We received a request to reset your password for your {escape(settings.email_company_name)} account.
+        If you made this request, use the button below.
     </p>
-    
-    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 24px 0; border-radius: 4px;">
-        <p style="margin: 0 0 8px; font-weight: 600; color: #92400e;">Important Security Information:</p>
-        <ul style="margin: 0; padding-left: 20px; color: #92400e;">
-            <li style="margin-bottom: 8px;">This link will expire in <strong>1 hour</strong> for security reasons</li>
-            <li style="margin-bottom: 8px;">If you didn't request this password reset, please ignore this email</li>
-            <li style="margin-bottom: 0;">Your password will remain unchanged until you click the link above</li>
+
+    <div style="background:rgba(245,158,11,0.12);border-left:4px solid #F59E0B;padding:16px;margin:20px 0;border-radius:10px;">
+        <p style="margin:0 0 8px;font-weight:600;color:#FCD34D;">Security</p>
+        <ul style="margin:0;padding-left:20px;color:#CBD5E1;font-size:14px;line-height:1.65;">
+            <li style="margin-bottom:8px;">This link expires in <strong>1 hour</strong>.</li>
+            <li style="margin-bottom:8px;">If you did not request a reset, ignore this email.</li>
+            <li>Your password stays the same until you complete the reset.</li>
         </ul>
     </div>
-    
-    <p style="margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #9ca3af;">
-        If the button doesn't work, copy and paste this link into your browser:<br>
-        <a href="{reset_link}" style="color: #2563eb; word-break: break-all;">{reset_link}</a>
+
+    <p style="margin:20px 0 0;font-size:13px;color:#94A3B8;line-height:1.6;">
+        If the button does not work, copy this link:<br>
+        <a href="{safe_link}" style="color:#A78BFA;word-break:break-all;">{safe_link_text}</a>
     </p>
     """
 
     html_body = get_email_template(
-        title="Password Reset Request",
+        title="Password Reset",
         content=content,
-        button_text="Reset My Password",
+        button_text="Reset my password",
         button_link=reset_link,
         footer_text="If you didn't request this password reset, you can safely ignore this email.",
+        hero_title="Reset your password",
+        hero_subtitle="We will get you back into your account in just a few clicks.",
     )
 
     mailer = get_mailer()
@@ -338,43 +417,49 @@ async def send_group_invitation_email(
     """
     subject = f"You're Invited to Join a FYP Group - {settings.email_company_name}"
 
+    safe_invitee = escape(invitee_name)
+    safe_inviter = escape(inviter_name)
+    a_link = escape(accept_link, quote=True)
+    r_link = escape(reject_link, quote=True)
+    a_text = escape(accept_link)
+    r_text = escape(reject_link)
+
     content = f"""
-    <p style="margin: 0 0 16px;">Hello <strong>{invitee_name}</strong>,</p>
-    
+    <p style="margin: 0 0 16px;">Hello <strong>{safe_invitee}</strong>,</p>
+
     <p style="margin: 0 0 16px;">
-        <strong>{inviter_name}</strong> has invited you to join their Final Year Project (FYP) group. 
-        This is a great opportunity to collaborate on an exciting project!
+        <strong>{safe_inviter}</strong> invited you to join their <strong>Final Year Project</strong> group on {escape(settings.email_company_name)}.
     </p>
-    
-    <div style="background-color: #dbeafe; border-left: 4px solid #0284c7; padding: 16px; margin: 24px 0; border-radius: 4px;">
-        <p style="margin: 0 0 8px; font-weight: 600; color: #0c4a6e;">About This Invitation:</p>
-        <ul style="margin: 0; padding-left: 20px; color: #0c4a6e;">
-            <li style="margin-bottom: 8px;">This invitation will expire in <strong>7 days</strong></li>
-            <li style="margin-bottom: 8px;">You can accept or decline the invitation below</li>
-            <li style="margin-bottom: 0;">Your group membership status will only change if you accept</li>
+
+    <div style="background:rgba(56,189,248,0.1);border-left:4px solid #38BDF8;padding:16px;margin:20px 0;border-radius:10px;">
+        <p style="margin:0 0 8px;font-weight:600;color:#7DD3FC;">Invitation details</p>
+        <ul style="margin:0;padding-left:20px;color:#CBD5E1;font-size:14px;line-height:1.65;">
+            <li style="margin-bottom:8px;">Expires in <strong>7 days</strong>.</li>
+            <li style="margin-bottom:8px;">Accept or decline using the buttons below.</li>
+            <li>Your membership only changes if you accept.</li>
         </ul>
     </div>
-    
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{accept_link}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin-right: 10px;">
-            Accept Invitation
-        </a>
-        <a href="{reject_link}" style="display: inline-block; background-color: #6b7280; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-            Decline Invitation
-        </a>
-    </div>
-    
-    <p style="margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #9ca3af;">
-        If the buttons don't work, copy and paste these links into your browser:<br>
-        <strong>Accept:</strong> <a href="{accept_link}" style="color: #2563eb; word-break: break-all;">{accept_link}</a><br>
-        <strong>Decline:</strong> <a href="{reject_link}" style="color: #2563eb; word-break: break-all;">{reject_link}</a>
+
+    <p style="margin:16px 0 0;font-size:13px;color:#94A3B8;line-height:1.65;">
+        <strong style="color:#E6EAF0;">Accept:</strong><br>
+        <a href="{a_link}" style="color:#A78BFA;word-break:break-all;">{a_text}</a>
+    </p>
+    <p style="margin:12px 0 0;font-size:13px;color:#94A3B8;line-height:1.65;">
+        <strong style="color:#E6EAF0;">Decline:</strong><br>
+        <a href="{r_link}" style="color:#A78BFA;word-break:break-all;">{r_text}</a>
     </p>
     """
 
     html_body = get_email_template(
-        title="FYP Group Invitation",
+        title="Group invitation",
         content=content,
+        button_text="Accept invitation",
+        button_link=accept_link,
+        secondary_button_text="Decline invitation",
+        secondary_button_link=reject_link,
         footer_text="If you didn't expect this invitation, you can safely ignore this email.",
+        hero_title="You are invited",
+        hero_subtitle="Join your teammates and start collaborating on your FYP.",
     )
 
     mailer = get_mailer()
@@ -398,33 +483,34 @@ async def send_supervisor_accepted_email(
     """
     subject = f"Supervisor Request Accepted - {settings.email_company_name}"
     role_text = "Primary Supervisor" if role == "supervisor" else "Co-Supervisor"
+    safe_proj = escape(project_name)
+    safe_sup = escape(supervisor_name)
 
     content = f"""
     <p style="margin: 0 0 16px;">Hi there,</p>
-    
+
     <p style="margin: 0 0 16px;">
-        Great news! <strong>{supervisor_name}</strong> has accepted your group's request to be the <strong>{role_text}</strong> 
-        for your FYP project.
+        <strong>{safe_sup}</strong> accepted your group's request to be the <strong>{role_text}</strong> for <strong>{safe_proj}</strong>.
     </p>
-    
-    <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 16px; margin: 24px 0; border-radius: 4px;">
-        <p style="margin: 0 0 8px; font-weight: 600; color: #065f46;">Request Status: Accepted ✓</p>
-        <ul style="margin: 0; padding-left: 20px; color: #065f46;">
-            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
-            <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
-            <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
+
+    <div style="background:rgba(16,185,129,0.12);border-left:4px solid #10B981;padding:16px;margin:20px 0;border-radius:10px;">
+        <p style="margin:0 0 8px;font-weight:600;color:#6EE7B7;">Status: Accepted</p>
+        <ul style="margin:0;padding-left:20px;color:#CBD5E1;font-size:14px;line-height:1.65;">
+            <li style="margin-bottom:8px;"><strong style="color:#E6EAF0;">Project:</strong> {safe_proj}</li>
+            <li style="margin-bottom:8px;"><strong style="color:#E6EAF0;">Supervisor:</strong> {safe_sup}</li>
+            <li><strong style="color:#E6EAF0;">Role:</strong> {role_text}</li>
         </ul>
     </div>
-    
-    <p style="margin: 0 0 16px;">
-        Your supervisor is now part of your team. You can start collaborating on your project right away!
-    </p>
+
+    <p style="margin: 0 0 16px;">You can start collaborating with your supervisor right away.</p>
     """
 
     html_body = get_email_template(
-        title="Supervisor Request Accepted",
+        title="Supervisor accepted",
         content=content,
         footer_text="Congratulations on forming your complete team!",
+        hero_title="Great news",
+        hero_subtitle="Your supervisor request was accepted.",
     )
 
     mailer = get_mailer()
@@ -448,33 +534,34 @@ async def send_supervisor_rejected_email(
     """
     subject = f"Supervisor Request Declined - {settings.email_company_name}"
     role_text = "Primary Supervisor" if role == "supervisor" else "Co-Supervisor"
+    safe_proj = escape(project_name)
+    safe_sup = escape(supervisor_name)
 
     content = f"""
     <p style="margin: 0 0 16px;">Hi there,</p>
-    
+
     <p style="margin: 0 0 16px;">
-        Unfortunately, <strong>{supervisor_name}</strong> has declined your group's request to be the <strong>{role_text}</strong> 
-        for your FYP project.
+        <strong>{safe_sup}</strong> declined your group's request to be the <strong>{role_text}</strong> for <strong>{safe_proj}</strong>.
     </p>
-    
-    <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 4px;">
-        <p style="margin: 0 0 8px; font-weight: 600; color: #7f1d1d;">Request Status: Declined</p>
-        <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
-            <li style="margin-bottom: 8px;"><strong>Project:</strong> {project_name}</li>
-            <li style="margin-bottom: 8px;"><strong>Supervisor:</strong> {supervisor_name}</li>
-            <li style="margin-bottom: 0;"><strong>Role:</strong> {role_text}</li>
+
+    <div style="background:rgba(239,68,68,0.12);border-left:4px solid #F87171;padding:16px;margin:20px 0;border-radius:10px;">
+        <p style="margin:0 0 8px;font-weight:600;color:#FCA5A5;">Status: Declined</p>
+        <ul style="margin:0;padding-left:20px;color:#CBD5E1;font-size:14px;line-height:1.65;">
+            <li style="margin-bottom:8px;"><strong style="color:#E6EAF0;">Project:</strong> {safe_proj}</li>
+            <li style="margin-bottom:8px;"><strong style="color:#E6EAF0;">Supervisor:</strong> {safe_sup}</li>
+            <li><strong style="color:#E6EAF0;">Role:</strong> {role_text}</li>
         </ul>
     </div>
-    
-    <p style="margin: 0 0 16px;">
-        Don't worry! You can send requests to other supervisors or try again with a different approach.
-    </p>
+
+    <p style="margin: 0 0 16px;">You can explore other supervisors from the platform.</p>
     """
 
     html_body = get_email_template(
-        title="Supervisor Request Declined",
+        title="Supervisor declined",
         content=content,
         footer_text="Keep exploring other supervisor options for your project.",
+        hero_title="Update on your request",
+        hero_subtitle="Your supervisor request was not accepted this time.",
     )
 
     mailer = get_mailer()
