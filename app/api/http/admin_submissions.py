@@ -59,6 +59,7 @@ from app.schemas.submission_schema import (
 from app.services.storage_service import (
     ANNOUNCEMENTS_BUCKET,
     delete_file_from_supabase,
+    get_public_file_url,
     upload_file_to_supabase,
 )
 
@@ -855,7 +856,7 @@ async def get_submission_responses(
     announcement_id: UUID,
     search: Optional[str] = Query(None, description="Search by project name or FYP ID"),
     status_filter: Optional[str] = Query(
-        None, description="Filter by status: submitted, missing, graded, returned"
+        None, description="Filter by status: submitted, missing, graded, pending"
     ),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
@@ -969,7 +970,6 @@ async def get_submission_responses(
             status_map = {
                 SubmissionStatusEnum.submitted: "Submitted",
                 SubmissionStatusEnum.graded: "Graded",
-                SubmissionStatusEnum.returned: "Returned",
                 SubmissionStatusEnum.pending: "Pending",
                 SubmissionStatusEnum.missing: "Missing",
             }
@@ -1067,14 +1067,15 @@ async def get_submission_evaluation(
             else None
         )
 
-    # Build file list
+    # Build file list (public URLs — aligned with supervisor evaluation)
     files = [
         SubmissionFileInfo(
             fileId=f.file_id,
             fileName=f.file_name,
-            storageKey=f.storage_key,
+            url=get_public_file_url(SUBMISSION_FILES_BUCKET, f.storage_key),
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
+            supervisorComment=f.supervisor_comment,
             uploadedAt=f.uploaded_at,
         )
         for f in submission.files
@@ -1152,14 +1153,15 @@ async def update_admin_grading(
             else None
         )
 
-    # Build file list
+    # Build file list (public URLs — aligned with supervisor evaluation)
     files = [
         SubmissionFileInfo(
             fileId=f.file_id,
             fileName=f.file_name,
-            storageKey=f.storage_key,
+            url=get_public_file_url(SUBMISSION_FILES_BUCKET, f.storage_key),
             mimeType=f.mime_type,
             sizeBytes=f.size_bytes,
+            supervisorComment=f.supervisor_comment,
             uploadedAt=f.uploaded_at,
         )
         for f in submission.files
