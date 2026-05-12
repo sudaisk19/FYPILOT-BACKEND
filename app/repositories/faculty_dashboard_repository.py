@@ -98,7 +98,7 @@ class FacultyDashboardRepository:
             "member_names"
         )
         sort_ts = func.coalesce(Project.updated_at, Group.updated_at).label("sort_ts")
-        
+
         # Subquery to get the most recent submission for each group
         most_recent_submission = (
             select(
@@ -109,7 +109,7 @@ class FacultyDashboardRepository:
             .distinct(Submission.group_id)
             .order_by(Submission.group_id, Submission.submitted_at.desc().nullslast())
         ).subquery()
-        
+
         stmt = (
             select(
                 Group.group_id,
@@ -147,7 +147,15 @@ class FacultyDashboardRepository:
         )
         result = await self.db.execute(stmt)
         rows: List[SupervisorGroupRow] = []
-        for group_id, project_name, fyp_cycle, members, submission_marks, eval_avg, _ in result.all():
+        for (
+            group_id,
+            project_name,
+            fyp_cycle,
+            members,
+            submission_marks,
+            eval_avg,
+            _,
+        ) in result.all():
             rows.append(
                 SupervisorGroupRow(
                     group_id=group_id,

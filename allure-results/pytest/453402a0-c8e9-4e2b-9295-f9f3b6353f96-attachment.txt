@@ -1,0 +1,1 @@
+ERROR    app.services.supervisor_recommendation_service:supervisor_recommendation_service.py:185 AI Recommender service error for group ab7cbf77-ab06-4d76-9df6-a5fe5f839a3f: boom

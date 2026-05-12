@@ -193,7 +193,11 @@ def _build_response(
 
 
 def _is_submission_late(submission: Submission) -> bool:
-    due_at = submission.linked_announcement.due_at if submission.linked_announcement else None
+    due_at = (
+        submission.linked_announcement.due_at
+        if submission.linked_announcement
+        else None
+    )
     submitted_at = submission.submitted_at
     return bool(due_at and submitted_at and submitted_at > due_at)
 

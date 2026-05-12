@@ -31,15 +31,23 @@ def sse_stream_status(request_id: str, phase: str) -> Dict[str, Any]:
     }
 
 
-def sse_stream_error(request_id: str, detail: str) -> Dict[str, Any]:
+def sse_stream_error(
+    request_id: str,
+    detail: str,
+    *,
+    error_code: Optional[str] = None,
+) -> Dict[str, Any]:
     """Unified chat.stream.error payload; `error` mirrors `detail`."""
-    return {
+    payload: Dict[str, Any] = {
         "type": "chat.stream.error",
         "request_id": request_id,
         "detail": detail,
         "error": detail,
         "timestamp": time.time(),
     }
+    if error_code:
+        payload["error_code"] = error_code
+    return payload
 
 
 REDIS_CHANNEL_PREFIX = "fyp:chat:sse:"

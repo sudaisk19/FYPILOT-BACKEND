@@ -454,9 +454,7 @@ async def update_student_profile(
                 temp_student.normalize_skills_levels_for_save()
                 student_updates["skills_levels"] = temp_student.skills_levels
 
-            await student_repository.update(
-                db, current_user.user_id, student_updates
-            )
+            await student_repository.update(db, current_user.user_id, student_updates)
 
         # Commit transaction
         await db.commit()

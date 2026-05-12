@@ -18,8 +18,9 @@ from typing import Dict, Literal, Optional
 
 import jwt
 from fastapi import HTTPException, status
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 # Environment and JWT Configuration
 ENV = str(os.getenv("ENV", "production")).lower()
@@ -154,19 +155,19 @@ def decode_access_token(token: str) -> Dict:
 
         return validated_payload.model_dump()
 
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.JWTError:
+    except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
+            detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except ValueError as e:
+    except (ValueError, ValidationError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),

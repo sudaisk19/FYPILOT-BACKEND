@@ -186,6 +186,26 @@ class Settings(BaseSettings):
         validation_alias="CHAT_WORKER_TASKS",
         description="Number of asyncio workers consuming chat LLM jobs",
     )
+    chat_llm_message_max_chars: int = Field(
+        default=10_000,
+        validation_alias="CHAT_LLM_MESSAGE_MAX_CHARS",
+        description="Max characters per chat message sent to the LLM (truncation tail)",
+    )
+    chat_modify_html_max_chars: int = Field(
+        default=22_000,
+        validation_alias="CHAT_MODIFY_HTML_MAX_CHARS",
+        description="Max HTML characters embedded in modify-mode system prompt",
+    )
+    chat_modify_context_message_limit: int = Field(
+        default=4,
+        validation_alias="CHAT_MODIFY_CONTEXT_MESSAGE_LIMIT",
+        description="Max prior messages in LLM context when workspace_action=modify",
+    )
+    chat_modify_llm_message_max_chars: int = Field(
+        default=3_000,
+        validation_alias="CHAT_MODIFY_LLM_MESSAGE_MAX_CHARS",
+        description="Max characters per history message when workspace_action=modify",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

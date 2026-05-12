@@ -218,7 +218,9 @@ class SupervisorGroupOverviewEntry(BaseModel):
     fyp_cycle: str
     members: List[str]
     avg_marks: Optional[float] = None  # Most recent submission supervisor marks
-    eval_avg_marks: Optional[float] = None  # Supervisor evaluation average for bar chart
+    eval_avg_marks: Optional[float] = (
+        None  # Supervisor evaluation average for bar chart
+    )
 
 
 class SupervisorPerformancePoint(BaseModel):

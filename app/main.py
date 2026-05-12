@@ -161,6 +161,12 @@ async def on_startup():
         try:
             await chat_session_repo.ensure_indexes(mongo_db)
             logger.info("MongoDB chat message indexes ensured.")
+            from app.repositories.document_edit_proposal_repository import (
+                document_edit_proposal_repo,
+            )
+
+            await document_edit_proposal_repo.ensure_indexes(mongo_db)
+            logger.info("MongoDB document_edit_proposals indexes ensured.")
         except Exception as e:
             logger.warning("MongoDB chat index ensure failed (non-fatal): %s", e)
 

@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.workspace_chat import WorkspaceAction
+
 
 class CollaborativeChatPostRequest(BaseModel):
     content: str = Field(..., min_length=1)
@@ -20,6 +22,13 @@ class CollaborativeChatPostRequest(BaseModel):
     model: Optional[str] = Field(
         default="gpt-4o",
         description="Model key: gpt-4o, gpt-4o-mini, deepseek, llama",
+    )
+    workspace_action: Optional[WorkspaceAction] = Field(
+        default=None,
+        description=(
+            "Workspace chat mode: modify = structured HTML proposal + accept/reject; "
+            "suggest, improve, or chat (default) = plain assistant reply."
+        ),
     )
 
 

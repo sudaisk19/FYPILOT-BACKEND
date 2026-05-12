@@ -12,6 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.group_document import DocTypeEnum, FilePurposeEnum, SaveTriggerEnum
+from app.schemas.workspace_chat import WorkspaceAction
 
 # ── Shared ──────────────────────────────────────────────────────────────────
 
@@ -205,11 +206,21 @@ class SendMessageRequest(BaseModel):
         default="gpt-4o",
         description="The LLM model to use: gpt-4o, gpt-4o-mini, deepseek, llama",
     )
+    workspace_action: Optional[WorkspaceAction] = Field(
+        default=None,
+        description=(
+            "modify = JSON html_fragment proposal + pending row; "
+            "suggest, improve, or omitted = standard chat reply."
+        ),
+    )
 
 
 class ChatMessageResponse(BaseModel):
     message_id: Optional[str] = None
     reply: str
+    assistant_message_id: Optional[str] = None
+    proposal_id: Optional[str] = None
+    proposal_summary: Optional[str] = None
 
 
 class MessageListResponse(BaseModel):

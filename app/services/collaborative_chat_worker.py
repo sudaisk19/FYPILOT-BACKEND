@@ -23,9 +23,15 @@ from app.db.mongo import mongo_db
 from app.repositories.chat_llm_turn_repository import chat_llm_turn_repo
 from app.repositories.chat_session_repository import chat_session_repo
 from app.repositories.group_document_repository import group_document_repo
+from app.services.chat_llm_errors import format_chat_stream_llm_error
 from app.services.chat_sse_hub import publish, sse_stream_error, sse_stream_status
 from app.services.html_plaintext import html_to_plaintext, tip_tap_html_from_content
 from app.services.llm import stream_llm
+from app.services.prompts import build_document_modify_system_extra
+from app.services.workspace_modify_proposal import (
+    finalize_modify_mode_reply,
+    link_proposal_to_assistant_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,12 +98,17 @@ async def _run_turn(job: Dict[str, Any]) -> None:
     user_message_id = job.get("user_message_id")
     model_choice = job.get("model") or "gpt-4o"
     active_document_id: Optional[str] = job.get("active_document_id")
+    workspace_action = str(job.get("workspace_action") or "chat").strip().lower()
+    is_modify = workspace_action == "modify"
     t0 = time.perf_counter()
     token_count = 0
 
     doc_context = None
     doc_type_str = None
     leading_document_context: Optional[str] = None
+    doc_html_raw: Optional[str] = None
+    baseline_lock_version: Optional[int] = None
+    document_loaded = False
 
     if active_document_id:
         try:
@@ -117,32 +128,89 @@ async def _run_turn(job: Dict[str, Any]) -> None:
                             active_document_id,
                         )
                     else:
+                        document_loaded = True
                         doc_type_str = doc.doc_type.value if doc.doc_type else None
+                        baseline_lock_version = doc.lock_version
                         doc_context = {
                             "active_document_id": active_document_id,
                             "version_number": doc.lock_version,
                         }
                         html_raw = tip_tap_html_from_content(doc.content)
-                        if not html_raw:
+                        if html_raw:
+                            doc_html_raw = html_raw
+                            leading_document_context = html_to_plaintext(html_raw)
+                        else:
                             logger.debug(
                                 "active_document_id provided but content has no "
                                 "usable html: %s",
                                 active_document_id,
                             )
-                        else:
-                            leading_document_context = html_to_plaintext(html_raw)
             except Exception as e:
                 logger.warning(
                     "active_document_id document lookup failed, skipping context: %s",
                     e,
                 )
 
+    modify_valid = is_modify and bool(doc_html_raw) and document_loaded
+    if is_modify and not modify_valid:
+        await publish(room_id, sse_stream_status(request_id, "thinking"))
+        err_text = (
+            "[Modify] Open a document tab with readable HTML content "
+            "to use modify mode."
+        )
+        assistant_mid = await chat_session_repo.save_message(
+            mongo_db,
+            chat_session_id=room_id,
+            sender_id="llm",
+            sender_type="llm",
+            content=err_text,
+            doc_context=doc_context,
+            sender_name="Assistant",
+            request_id=request_id,
+            metadata={
+                "model": model_choice,
+                "request_id": request_id,
+                "modify_skipped": True,
+            },
+        )
+        await publish(
+            room_id,
+            {
+                "type": "chat.stream.end",
+                "request_id": request_id,
+                "assistant_message_id": assistant_mid,
+                "reply_length": len(err_text),
+                "proposal_id": None,
+            },
+        )
+        await publish(room_id, sse_stream_status(request_id, "complete"))
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        async with AsyncSessionLocal() as pg:
+            await chat_llm_turn_repo.record_turn(
+                pg,
+                room_id=room_id,
+                request_id=request_id,
+                user_id=UUID(user_id) if user_id else None,
+                user_message_id=user_message_id,
+                model=model_choice,
+                latency_ms=latency_ms,
+                token_count_estimate=0,
+                status="done",
+            )
+            await pg.commit()
+        return
+
     await publish(room_id, sse_stream_status(request_id, "thinking"))
 
+    context_limit = (
+        settings.chat_modify_context_message_limit
+        if modify_valid
+        else settings.chat_context_message_limit
+    )
     recent = await chat_session_repo.get_recent_messages_for_context(
         mongo_db,
         room_id,
-        n=settings.chat_context_message_limit,
+        n=context_limit,
     )
     history = []
     for msg in recent:
@@ -153,13 +221,26 @@ async def _run_turn(job: Dict[str, Any]) -> None:
     seq = 0
     streaming_started = False
 
+    modify_system_extra: Optional[str] = None
+    stream_leading = leading_document_context
+    if modify_valid:
+        modify_system_extra = build_document_modify_system_extra(
+            doc_html_raw or "",
+            max_html_chars=settings.chat_modify_html_max_chars,
+        )
+        stream_leading = None
+
     try:
         async for token_chunk in stream_llm(
             history=history,
             document_content=None,
+            system_extra=modify_system_extra,
             model_choice=model_choice,
             doc_type=doc_type_str,
-            leading_document_context=leading_document_context,
+            leading_document_context=stream_leading,
+            history_message_max_chars=(
+                settings.chat_modify_llm_message_max_chars if modify_valid else None
+            ),
         ):
             if not streaming_started:
                 streaming_started = True
@@ -178,29 +259,47 @@ async def _run_turn(job: Dict[str, Any]) -> None:
             )
 
         full_reply = "".join(full_parts)
+        final_content, assistant_meta, proposal_id = await finalize_modify_mode_reply(
+            mongo_db,
+            chat_session_id=room_id,
+            user_id=user_id or "",
+            full_reply=full_reply,
+            is_modify=modify_valid,
+            active_document_id=active_document_id,
+            baseline_lock_version=baseline_lock_version,
+            doc_context=doc_context,
+            request_id=request_id,
+            model_choice=model_choice,
+        )
         assistant_mid = await chat_session_repo.save_message(
             mongo_db,
             chat_session_id=room_id,
             sender_id="llm",
             sender_type="llm",
-            content=full_reply,
+            content=final_content,
             doc_context=doc_context,
             sender_name="Assistant",
             request_id=request_id,
-            metadata={"model": model_choice, "request_id": request_id},
+            metadata=assistant_meta,
         )
+        if proposal_id:
+            await link_proposal_to_assistant_message(
+                mongo_db, proposal_id, assistant_mid
+            )
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
 
-        await publish(
-            room_id,
-            {
-                "type": "chat.stream.end",
-                "request_id": request_id,
-                "assistant_message_id": assistant_mid,
-                "reply_length": len(full_reply),
-            },
-        )
+        end_payload: Dict[str, Any] = {
+            "type": "chat.stream.end",
+            "request_id": request_id,
+            "assistant_message_id": assistant_mid,
+            "reply_length": len(final_content),
+        }
+        if proposal_id:
+            end_payload["proposal_id"] = proposal_id
+            if assistant_meta.get("proposal_summary"):
+                end_payload["proposal_summary"] = assistant_meta["proposal_summary"]
+        await publish(room_id, end_payload)
         await publish(room_id, sse_stream_status(request_id, "complete"))
 
         async with AsyncSessionLocal() as pg:
@@ -232,7 +331,11 @@ async def _run_turn(job: Dict[str, Any]) -> None:
         logger.exception(
             "chat_llm_turn_error room_id=%s request_id=%s", room_id, request_id
         )
-        await publish(room_id, sse_stream_error(request_id, str(exc)))
+        detail, err_code = format_chat_stream_llm_error(exc)
+        await publish(
+            room_id,
+            sse_stream_error(request_id, detail, error_code=err_code),
+        )
         await publish(room_id, sse_stream_status(request_id, "error"))
         try:
             async with AsyncSessionLocal() as pg:

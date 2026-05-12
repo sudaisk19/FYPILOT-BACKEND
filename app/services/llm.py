@@ -15,9 +15,56 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 
 from app.core.config import settings
-from app.services.prompts import build_chat_system_prompt
+from app.services.prompts import BASE_SYSTEM_PROMPT, build_chat_system_prompt
 
 TIMEOUT = 60.0
+
+_TRUNC_TAIL = "\n\n[... truncated for model context ...]"
+
+
+def _is_modify_mode(system_extra: Optional[str]) -> bool:
+    return bool(system_extra and "MODIFY MODE" in system_extra)
+
+
+def _truncate_llm_history(
+    history: List[Dict[str, Any]],
+    *,
+    max_chars: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Cap each message body so provider JSON payloads stay within limits."""
+    cap = (
+        max_chars if max_chars is not None else int(settings.chat_llm_message_max_chars)
+    )
+    cap = max(512, cap)
+    out: List[Dict[str, Any]] = []
+    for m in history:
+        role = m.get("role")
+        content = m.get("content")
+        if isinstance(content, str) and len(content) > cap:
+            content = content[:cap] + _TRUNC_TAIL
+        out.append({"role": role, "content": content})
+    return out
+
+
+def _build_system_message(
+    *,
+    document_content: Optional[str],
+    doc_type: Optional[str],
+    system_extra: Optional[str],
+    leading_document_context: Optional[str],
+) -> str:
+    """
+    Document workspace modify mode embeds full instructions in ``system_extra``;
+    skip long per-doc-type guidance to avoid provider 413 Payload Too Large.
+    """
+    if _is_modify_mode(system_extra):
+        return f"{BASE_SYSTEM_PROMPT}\n\n{(system_extra or '').strip()}"
+    return build_chat_system_prompt(
+        document_content=document_content,
+        doc_type=doc_type,
+        system_extra=system_extra,
+        leading_document_context=leading_document_context,
+    )
 
 
 def get_model_config(model_choice: str) -> tuple[str, str]:
@@ -46,6 +93,8 @@ async def call_llm(
     system_extra: Optional[str] = None,
     model_choice: str = "gpt-4o",
     doc_type: Optional[str] = None,
+    leading_document_context: Optional[str] = None,
+    history_message_max_chars: Optional[int] = None,
 ) -> str:
     """
     Call GitHub Models inference with optional document context grounding.
@@ -57,6 +106,9 @@ async def call_llm(
         system_extra:     Any additional system-level instruction.
         model_choice:     Key representing the model to use (e.g. gpt-4o, deepseek, llama, gpt-4o-mini)
         doc_type:         Optional document type (e.g. 'proposal', 'literature_review')
+        leading_document_context: Optional stripped plaintext from TipTap HTML; when set,
+                          the legacy ``document_content`` block is omitted (same as streaming path).
+        history_message_max_chars: Optional override for per-message truncation (modify mode).
 
     Returns:
         The LLM's reply as a plain string.
@@ -67,14 +119,15 @@ async def call_llm(
     messages = [
         {
             "role": "system",
-            "content": build_chat_system_prompt(
+            "content": _build_system_message(
                 document_content=document_content,
                 doc_type=doc_type,
                 system_extra=system_extra,
+                leading_document_context=leading_document_context,
             ),
         }
     ]
-    messages.extend(history)
+    messages.extend(_truncate_llm_history(history, max_chars=history_message_max_chars))
 
     model_id, token = get_model_config(model_choice)
 
@@ -82,11 +135,13 @@ async def call_llm(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+    _modify = _is_modify_mode(system_extra)
+    max_tokens = 4096 if _modify else 2048
     body = {
         "model": model_id,
         "messages": messages,
         "temperature": 0.7,
-        "max_tokens": 2048,
+        "max_tokens": max_tokens,
     }
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -107,6 +162,7 @@ async def stream_llm(
     model_choice: str = "gpt-4o",
     doc_type: Optional[str] = None,
     leading_document_context: Optional[str] = None,
+    history_message_max_chars: Optional[int] = None,
 ) -> AsyncIterator[str]:
     """
     Stream tokens from GitHub Models inference via Server-Sent Events.
@@ -125,7 +181,7 @@ async def stream_llm(
     messages = [
         {
             "role": "system",
-            "content": build_chat_system_prompt(
+            "content": _build_system_message(
                 document_content=document_content,
                 doc_type=doc_type,
                 system_extra=system_extra,
@@ -133,7 +189,7 @@ async def stream_llm(
             ),
         }
     ]
-    messages.extend(history)
+    messages.extend(_truncate_llm_history(history, max_chars=history_message_max_chars))
 
     model_id, token = get_model_config(model_choice)
 
@@ -141,11 +197,13 @@ async def stream_llm(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+    _modify = _is_modify_mode(system_extra)
+    max_tokens = 4096 if _modify else 2048
     body = {
         "model": model_id,
         "messages": messages,
         "temperature": 0.7,
-        "max_tokens": 2048,
+        "max_tokens": max_tokens,
         "stream": True,  # ← SSE streaming
     }
 

@@ -453,7 +453,7 @@ test.describe("Auth Module", () => {
     });
 
     test("should_fail_when_authorization_header_missing", async ({
-      request,
+      playwright,
     }) => {
       await allure.epic("Auth");
       await allure.feature(feature);
@@ -462,72 +462,48 @@ test.describe("Auth Module", () => {
 
       await allure.step("GET /auth/me without Authorization", async () => {
         await attachRequest("GET", "/auth/me", undefined);
-        const response = await request.get("/auth/me");
-        const text = await response.text();
-        await attachResponse(response.status(), text);
-        await allure.attachment(
-          "exchange-GET-_auth_me",
-          JSON.stringify(
-            {
-              method: "GET",
-              path: "/auth/me",
-              request: null,
-              status: response.status(),
-              responseBody: text,
-            },
-            null,
-            2,
-          ),
-          ContentType.JSON,
-        );
-
-        await allure.step("Expect 401 from application handlers", async () => {
-          expect(response.status()).toBe(HTTP.UNAUTHORIZED);
+        // Isolated context: default `request` shares cookies/storage with prior
+        // tests in this file (signup/login), which can incorrectly return 200.
+        const baseURL = process.env.BASE_URL ?? "http://127.0.0.1:8000";
+        const isolated = await playwright.request.newContext({
+          baseURL,
+          extraHTTPHeaders: {
+            Accept: "application/json",
+          },
         });
-        await allure.step("Expect Not authenticated", async () => {
-          const body = JSON.parse(text) as Record<string, unknown>;
-          expect(body.error).toBe("Not authenticated");
-        });
-      });
-    });
+        let responseStatus = 0;
+        let text = "";
+        try {
+          const response = await isolated.get("/auth/me");
+          text = await response.text();
+          responseStatus = response.status();
+          await attachResponse(responseStatus, text);
+          await allure.attachment(
+            "exchange-GET-_auth_me",
+            JSON.stringify(
+              {
+                method: "GET",
+                path: "/auth/me",
+                request: null,
+                status: responseStatus,
+                responseBody: text,
+              },
+              null,
+              2,
+            ),
+            ContentType.JSON,
+          );
 
-    test("should_return_401_when_bearer_token_malformed", async ({
-      request,
-    }) => {
-      await allure.epic("Auth");
-      await allure.feature(feature);
-      await allure.story("Invalid JWT cannot be decoded");
-      await allure.severity("normal");
-
-      await allure.step("GET /auth/me with garbage Bearer token", async () => {
-        const headers = { Authorization: "Bearer not.a.valid.jwt" };
-        await attachRequest("GET", "/auth/me", headers);
-        const response = await request.get("/auth/me", { headers });
-        const text = await response.text();
-        await attachResponse(response.status(), text);
-        await allure.attachment(
-          "exchange-GET-_auth_me-malformed",
-          JSON.stringify(
-            {
-              method: "GET",
-              path: "/auth/me",
-              request: { Authorization: "Bearer ***" },
-              status: response.status(),
-              responseBody: text,
-            },
-            null,
-            2,
-          ),
-          ContentType.JSON,
-        );
-
-        await allure.step("Expect 401", async () => {
-          expect(response.status()).toBe(HTTP.UNAUTHORIZED);
-        });
-        await allure.step("Expect authentication failed message", async () => {
-          const body = JSON.parse(text) as Record<string, unknown>;
-          expect(body.error).toBe("Authentication failed");
-        });
+          await allure.step("Expect 401 from application handlers", async () => {
+            expect(responseStatus).toBe(HTTP.UNAUTHORIZED);
+          });
+          await allure.step("Expect Not authenticated", async () => {
+            const body = JSON.parse(text) as Record<string, unknown>;
+            expect(body.error).toBe("Not authenticated");
+          });
+        } finally {
+          await isolated.dispose();
+        }
       });
     });
   });

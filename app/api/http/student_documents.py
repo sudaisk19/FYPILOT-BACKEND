@@ -1032,8 +1032,14 @@ async def send_message(
         content=body.content,
         active_document_id=body.active_document_id,
         model_choice=body.model or "gpt-4o",
+        workspace_action=body.workspace_action.value if body.workspace_action else None,
     )
-    return ChatMessageResponse(reply=reply)
+    return ChatMessageResponse(
+        reply=reply["reply"],
+        proposal_id=reply.get("proposal_id"),
+        proposal_summary=reply.get("proposal_summary"),
+        assistant_message_id=reply.get("assistant_message_id"),
+    )
 
 
 @router.get(

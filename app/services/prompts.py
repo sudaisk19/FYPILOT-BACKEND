@@ -144,3 +144,42 @@ def build_chat_system_prompt(
         body = f"{body}\n{system_extra}"
 
     return body
+
+
+# Max HTML injected into modify-mode system prompt when caller does not override
+# (GitHub Models and similar APIs reject oversized JSON bodies with 413).
+DOCUMENT_MODIFY_HTML_MAX_CHARS = 120_000
+
+
+def build_document_modify_system_extra(
+    document_html: str,
+    *,
+    max_html_chars: Optional[int] = None,
+) -> str:
+    """
+    Instructions for ``workspace_action=modify``: model must emit a single JSON object.
+    ``document_html`` should be the current TipTap ``content.html`` (may be truncated).
+    """
+    cap = (
+        max_html_chars if max_html_chars is not None else DOCUMENT_MODIFY_HTML_MAX_CHARS
+    )
+    html = (document_html or "").strip()
+    if len(html) > cap:
+        html = html[:cap] + "\n<!-- truncated -->"
+
+    return (
+        "\n## MODIFY MODE (document edit proposal)\n"
+        "The user chose **Modify**: you must output **only** a single JSON object "
+        "(no markdown fences, no text before or after the JSON).\n"
+        "Schema:\n"
+        '- "kind": must be exactly "document_edit_proposal"\n'
+        '- "summary_markdown": short markdown summary of the change for the UI\n'
+        '- "html_fragment": non-empty HTML fragment to merge into the open TipTap document '
+        "(same conventions as TipTap export; no full document wrapper required)\n"
+        '- "warnings": JSON array of strings (empty array if none)\n'
+        "Rules:\n"
+        "- Base the fragment on the user's request and the current document HTML below.\n"
+        "- Do not invent citations, data, or requirements not implied by the document.\n"
+        "- Prefer minimal, surgical edits over rewriting unrelated sections.\n"
+        f"\n### Current document HTML\n```html\n{html}\n```\n"
+    )

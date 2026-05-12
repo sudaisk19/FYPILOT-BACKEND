@@ -19,11 +19,11 @@ DOCUMENT_FILES_BUCKET = "group_document_files"
 
 def get_public_file_url(bucket: str, storage_key: str) -> str:
     """Build a public Supabase Storage URL for a file.
-    
+
     Args:
         bucket: The Supabase bucket name
         storage_key: The file path within the bucket
-        
+
     Returns:
         Full public URL to access the file
     """

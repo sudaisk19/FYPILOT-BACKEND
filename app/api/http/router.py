@@ -14,12 +14,12 @@ from app.api.http.admin_supervisors import router as admin_faculty_router
 # Import bulk import router
 from app.api.http.bulk_import import router as bulk_import_router
 from app.api.http.departments import router as departments_router
-from app.api.http.industries import router as industries_router
 from app.api.http.faculty_dashboard import router as faculty_dashboard_router
 from app.api.http.group import router as group_router
 
 # Import each feature's router
 from app.api.http.health import router as health_router
+from app.api.http.industries import router as industries_router
 
 # Import profile status router
 from app.api.http.profile_status import router as profile_status_router
@@ -166,10 +166,15 @@ from app.api.http.jury_matching import router as jury_matching_router
 
 router.include_router(jury_matching_router)
 
+from app.api.http.document_edit_proposals import (
+    router as document_edit_proposals_router,
+)
+
 # Mount unified group documentation workspace router
 from app.api.http.student_documents import router as student_documents_router
 
 router.include_router(student_documents_router, tags=["student-documents"])
+router.include_router(document_edit_proposals_router, tags=["student-documents"])
 
 from app.api.http.collaborative_chat import router as collaborative_chat_router
 from app.api.http.student_whiteboards import router as student_whiteboards_router

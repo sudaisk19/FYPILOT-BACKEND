@@ -194,7 +194,7 @@ class TestSupabaseAuthGetCurrentUser:
     async def test_get_current_user_when_decode_raises_returns_401(self, monkeypatch):
         # ARRANGE
         def _boom(_token: str):
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
+            raise HTTPException(status_code=401, detail="Authentication failed")
 
         monkeypatch.setattr(supabase_auth, "decode_access_token", _boom)
 
@@ -207,7 +207,7 @@ class TestSupabaseAuthGetCurrentUser:
         with pytest.raises(HTTPException) as exc:
             await supabase_auth.get_current_user(request=request, token=creds, db=db)
         assert exc.value.status_code == 401
-        assert exc.value.detail == "Invalid authentication token"
+        assert exc.value.detail == "Authentication failed"
 
 
 @allure.epic("FYPilot Unit Tests")
