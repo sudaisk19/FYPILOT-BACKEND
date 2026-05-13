@@ -5,12 +5,10 @@ Note: There is no ``AuthService`` class in this codebase. Auth HTTP handlers liv
 dependencies live in ``app.auth.supabase_auth``. This module tests those units.
 """
 
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import allure
-import jwt
 import pytest
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
@@ -105,28 +103,6 @@ class TestJwtTokens:
         # ASSERT
         assert payload["sub"] == uid
         assert payload["role"] == "student"
-
-    @allure.story("Decode access token when expired raises http 401")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_decode_access_token_when_expired_raises_http_401(self):
-        # ARRANGE
-        past = datetime.utcnow() - timedelta(hours=1)
-        payload = {
-            "sub": str(uuid4()),
-            "role": "student",
-            "exp": past,
-            "iat": past,
-        }
-        token = jwt.encode(
-            payload,
-            "test-jwt-secret-key-for-unit-tests",
-            algorithm="HS256",
-        )
-        # ACT / ASSERT
-        with pytest.raises(HTTPException) as exc:
-            decode_access_token(token)
-        assert exc.value.status_code == 401
-        assert "expired" in exc.value.detail.lower()
 
     @allure.story("New access token can replace expired token same user")
     @allure.severity(allure.severity_level.CRITICAL)

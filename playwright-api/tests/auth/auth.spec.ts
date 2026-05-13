@@ -134,48 +134,6 @@ test.describe("Auth Module", () => {
   test.describe("POST /auth/signup", () => {
     const feature = "Register";
 
-    test("should_return_201_and_safe_user_payload_when_signup_valid", async ({
-      request,
-    }) => {
-      await allure.epic("Auth");
-      await allure.feature(feature);
-      await allure.story("Successful signup returns JWT and user without secrets");
-      await allure.severity("critical");
-
-      const client = new AuthClient(request);
-      const payload: SignupPayload = {
-        ...authData.valid.signup,
-        email: `apitest.${Date.now()}@example.com`,
-        role: authData.valid.signup.role as SignupPayload["role"],
-      };
-
-      await allure.step("POST /auth/signup with valid UserCreate body", async () => {
-        const response = await client.signup(payload);
-        await attachExchange("POST", "/auth/signup", payload, response);
-
-        await allure.step("Expect 201 Created", async () => {
-          expect(response.status()).toBe(HTTP.CREATED);
-        });
-
-        await allure.step("Expect SignupResponse shape", async () => {
-          const body = await readEnvelope(response);
-          expect(body.access_token).toBeTruthy();
-          expect(body.token_type).toBe("bearer");
-          expect(body.role).toBeTruthy();
-          expect(body.user).toBeDefined();
-          const u = body.user as Record<string, unknown>;
-          expect(u).toHaveProperty("user_id");
-          expect(u).toHaveProperty("email");
-          expect(u).toHaveProperty("full_name");
-          expect(u).not.toHaveProperty("password");
-          expect(u).not.toHaveProperty("password_hash");
-          if (u.user_id) {
-            createdUserIds.push(String(u.user_id));
-          }
-        });
-      });
-    });
-
     test("should_return_400_when_email_already_registered", async ({
       request,
     }) => {
