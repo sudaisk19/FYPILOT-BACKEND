@@ -134,6 +134,46 @@ test.describe("Auth Module", () => {
   test.describe("POST /auth/signup", () => {
     const feature = "Register";
 
+    test("should_return_201_and_safe_user_payload_when_signup_valid", async ({
+      request,
+    }) => {
+      await allure.epic("Auth");
+      await allure.feature(feature);
+      await allure.story("Valid signup — 201, token, user without password");
+      await allure.severity("critical");
+
+      const client = new AuthClient(request);
+      const signupPayload: SignupPayload = {
+        ...authData.valid.signup,
+        email: `valid.${Date.now()}@example.com`,
+        role: authData.valid.signup.role as SignupPayload["role"],
+      };
+
+      await allure.step("POST /auth/signup with valid body", async () => {
+        const response = await client.signup(signupPayload);
+        await attachExchange("POST", "/auth/signup", signupPayload, response);
+
+        await allure.step("Expect 201", async () => {
+          expect(response.status()).toBe(HTTP.CREATED);
+        });
+
+        await allure.step("Expect safe envelope (no password, has token)", async () => {
+          const body = await readEnvelope(response);
+          expect(body.access_token).toBeTruthy();
+          expect(body.token_type).toBeTruthy();
+          const user = body.user as Record<string, unknown> | undefined;
+          expect(user).toBeTruthy();
+          expect(user?.email).toBe(signupPayload.email);
+          expect(user?.full_name).toBe(signupPayload.full_name);
+          expect(user?.password).toBeUndefined();
+          expect(user?.hashed_password).toBeUndefined();
+          if (user?.user_id) {
+            createdUserIds.push(String(user.user_id));
+          }
+        });
+      });
+    });
+
     test("should_return_400_when_email_already_registered", async ({
       request,
     }) => {
@@ -458,6 +498,59 @@ test.describe("Auth Module", () => {
           await allure.step("Expect Not authenticated", async () => {
             const body = JSON.parse(text) as Record<string, unknown>;
             expect(body.error).toBe("Not authenticated");
+          });
+        } finally {
+          await isolated.dispose();
+        }
+      });
+    });
+
+    test("should_return_401_when_bearer_token_malformed", async ({
+      playwright,
+    }) => {
+      await allure.epic("Auth");
+      await allure.feature(feature);
+      await allure.story("Malformed Bearer JWT — 401 Authentication failed");
+      await allure.severity("normal");
+
+      await allure.step("GET /auth/me with invalid Bearer token", async () => {
+        const baseURL = process.env.BASE_URL ?? "http://127.0.0.1:8000";
+        const isolated = await playwright.request.newContext({
+          baseURL,
+          extraHTTPHeaders: {
+            Accept: "application/json",
+            Authorization: "Bearer not.a.valid.jwt",
+          },
+        });
+        let responseStatus = 0;
+        let text = "";
+        try {
+          const response = await isolated.get("/auth/me");
+          text = await response.text();
+          responseStatus = response.status();
+          await attachResponse(responseStatus, text);
+          await allure.attachment(
+            "exchange-GET-_auth_me-malformed",
+            JSON.stringify(
+              {
+                method: "GET",
+                path: "/auth/me",
+                request: { Authorization: "Bearer ***" },
+                status: responseStatus,
+                responseBody: text,
+              },
+              null,
+              2,
+            ),
+            ContentType.JSON,
+          );
+
+          await allure.step("Expect 401", async () => {
+            expect(responseStatus).toBe(HTTP.UNAUTHORIZED);
+          });
+          await allure.step("Expect Authentication failed envelope", async () => {
+            const body = JSON.parse(text) as Record<string, unknown>;
+            expect(body.error).toBe("Authentication failed");
           });
         } finally {
           await isolated.dispose();
