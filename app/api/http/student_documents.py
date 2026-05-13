@@ -51,7 +51,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -88,7 +97,6 @@ from app.schemas.document_schema import (
     RestoreVersionRequest,
     RestoreVersionResponse,
     SendMessageRequest,
-    UploadDocumentRequest,
     WorkspaceResponse,
 )
 from app.services.document_access import require_group_document_for_user
@@ -256,7 +264,9 @@ async def list_document_types(
     tags=["student-documents"],
 )
 async def upload_document(
-    file: UploadFile = File(..., description="Document file to upload (PDF, DOCX, TXT, etc.)"),
+    file: UploadFile = File(
+        ..., description="Document file to upload (PDF, DOCX, TXT, etc.)"
+    ),
     session_id: str = Form(
         ...,
         min_length=1,
@@ -268,7 +278,9 @@ async def upload_document(
         None,
         description="Optional safety check: if provided, must equal the workspace's group_id.",
     ),
-    clean: bool = Query(True, description="Use AI to clean PDF formatting (takes 3-5s)"),
+    clean: bool = Query(
+        True, description="Use AI to clean PDF formatting (takes 3-5s)"
+    ),
     db: AsyncSession = Depends(get_db),
     mongo_db: AsyncIOMotorDatabase = Depends(get_mongo_db),
     current_user: User = Depends(get_current_user),
@@ -286,22 +298,21 @@ async def upload_document(
     # 1. Validate file is present and not empty
     if not file or not file.filename:
         raise HTTPException(
-            status_code=400,
-            detail="No file was uploaded or file is empty"
+            status_code=400, detail="No file was uploaded or file is empty"
         )
-    
+
     # 2. Validate file type
     ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"File type not allowed. Supported formats: PDF, DOCX, DOC, TXT. Got: {file_ext or 'unknown'}"
+            detail=f"File type not allowed. Supported formats: PDF, DOCX, DOC, TXT. Got: {file_ext or 'unknown'}",
         )
-    
+
     # 3. Max size enforced after reading body (UploadFile.size is often unset)
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
-    
+
     # 4. Resolve group from workspace (session_id is required)
     sid = session_id.strip()
     session = await document_chat_service.get_workspace(mongo_db, sid)
@@ -325,16 +336,17 @@ async def upload_document(
                 status_code=400,
                 detail="group_id does not match the workspace's group.",
             )
-    
+
     # 5. Verify user is a member of the group
     if not await _user_is_group_member(db, current_user.user_id, target_group_id):
         raise HTTPException(
-            status_code=403,
-            detail="You are not a member of this group"
+            status_code=403, detail="You are not a member of this group"
         )
-    
+
     # 6. Generate document title from filename if not provided
-    document_title = title if title and title.strip() else file.filename or "Untitled Document"
+    document_title = (
+        title if title and title.strip() else file.filename or "Untitled Document"
+    )
     document_title = document_title.strip()[:255]  # Truncate to max length
 
     # 7. Read upload into memory and extract HTML (no object storage)
@@ -391,10 +403,9 @@ async def upload_document(
     except Exception as e:
         logger.error(f"Error creating document: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="Failed to create document in database"
+            status_code=500, detail="Failed to create document in database"
         )
-    
+
     # 9. Append document id to Mongo workspace (same session as Postgres chat_session_id)
     try:
         await document_chat_service.link_document_to_session(
@@ -615,7 +626,9 @@ async def create_document_in_workspace(
 
     if implicit_empty and not body.blank_tab:
         try:
-            existing_docs = await document_service.get_workspace_documents(db, session_id)
+            existing_docs = await document_service.get_workspace_documents(
+                db, session_id
+            )
         except (TimeoutError, asyncio.TimeoutError, SQLAlchemyError):
             existing_docs = []
 
@@ -625,7 +638,9 @@ async def create_document_in_workspace(
             if doc_row.title.strip() != title_norm:
                 continue
             if _document_has_editor_body(doc_row):
-                payload = jsonable_encoder(GroupDocumentResponse.model_validate(doc_row))
+                payload = jsonable_encoder(
+                    GroupDocumentResponse.model_validate(doc_row)
+                )
                 return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
 
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
@@ -640,7 +655,9 @@ async def create_document_in_workspace(
             if ca < cutoff:
                 continue
             if _document_has_editor_body(doc_row):
-                payload = jsonable_encoder(GroupDocumentResponse.model_validate(doc_row))
+                payload = jsonable_encoder(
+                    GroupDocumentResponse.model_validate(doc_row)
+                )
                 return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
 
         raise HTTPException(

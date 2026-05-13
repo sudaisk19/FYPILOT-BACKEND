@@ -127,9 +127,7 @@ class DocumentChatService:
             raw = s.get("document_ids") or []
             cleaned = _ordered_existing_document_ids(raw, valid_lower)
             if cleaned != raw and sid is not None:
-                await chat_session_repo.set_document_ids(
-                    mongo_db, str(sid), cleaned
-                )
+                await chat_session_repo.set_document_ids(mongo_db, str(sid), cleaned)
             s["document_ids"] = cleaned
         return sessions
 
