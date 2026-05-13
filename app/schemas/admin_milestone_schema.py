@@ -113,7 +113,7 @@ class StudentMilestoneResponse(AdminMilestoneBase):
 
 
 class AdminEvaluationResponse(BaseModel):
-    """Enriched evaluation row returned to admin, including supervisor name and project info."""
+    """Enriched evaluation row returned to admin, including evaluator name and project info."""
 
     evaluation_id: UUID
     milestone_id: UUID
@@ -127,6 +127,10 @@ class AdminEvaluationResponse(BaseModel):
     wbs_achieved: Optional[bool] = None
     created_at: datetime
     updated_at: datetime
+    is_jury_evaluation: bool = Field(
+        default=False,
+        description="True when this row comes from jury/proposal evaluation tables",
+    )
 
     class Config:
         from_attributes = True
