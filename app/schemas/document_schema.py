@@ -43,10 +43,11 @@ class CreateDocumentRequest(BaseModel):
 
 class UploadDocumentRequest(BaseModel):
     """Schema for document file upload.
-    
+
     Note: file is passed as multipart/form-data (not in this schema),
     but doc_type, title, and group_id/session_id are form fields.
     """
+
     doc_type: DocTypeEnum = Field(default=DocTypeEnum.other)
     title: Optional[str] = Field(None, min_length=1, max_length=255)
 
