@@ -105,6 +105,11 @@ class JuryEvaluation(Base):
 
     group = relationship("Group")
     milestone = relationship("AdminMilestone")
+    jury_member = relationship(
+        "Faculty",
+        foreign_keys=[jury_id],
+        viewonly=True,
+    )
 
 
 class ProposalEvaluation(Base):
@@ -171,6 +176,11 @@ class ProposalEvaluation(Base):
 
     group = relationship("Group")
     milestone = relationship("AdminMilestone")
+    jury_member = relationship(
+        "Faculty",
+        foreign_keys=[jury_id],
+        viewonly=True,
+    )
 
 
 class ProposalEvaluationConfig(Base):
