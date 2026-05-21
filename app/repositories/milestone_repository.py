@@ -1,7 +1,7 @@
 # app/repositories/milestone_repository.py
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -22,7 +22,38 @@ from app.schemas.admin_milestone_schema import (
 logger = logging.getLogger(__name__)
 
 
-async def list_evaluations_for_milestone(
+def _faculty_display_name(faculty: Optional[Faculty]) -> Optional[str]:
+    if faculty and getattr(faculty, "user", None):
+        return faculty.user.full_name
+    return None
+
+
+def _project_labels(group: Optional[Group]) -> Tuple[Optional[str], Optional[str]]:
+    if group and group.project:
+        return group.project.name, group.project.fyp_id
+    return None, None
+
+
+def _numeric_optional(value) -> Optional[float]:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _proposal_feedback_text(ev: ProposalEvaluation) -> Optional[str]:
+    parts: List[str] = []
+    if ev.deliverables:
+        parts.append(ev.deliverables.strip())
+    if ev.recommended_changes:
+        parts.append(f"Recommended changes: {ev.recommended_changes.strip()}")
+    if ev.project_status is not None:
+        parts.append(f"Status: {ev.project_status.value}")
+    if not parts:
+        return None
+    return "\n\n".join(parts)
+
+
+async def _list_supervisor_evaluations(
     db: AsyncSession,
     milestone_id: UUID,
 ) -> List[AdminEvaluationResponse]:
@@ -161,6 +192,7 @@ async def list_evaluations_for_milestone(
                 )
             )
 
+    rows.sort(key=lambda r: r.updated_at, reverse=True)
     return rows
 
 
