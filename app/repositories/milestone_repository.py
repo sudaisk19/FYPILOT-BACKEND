@@ -10,7 +10,8 @@ from sqlalchemy.orm import joinedload
 
 from app.models.faculty import Faculty
 from app.models.group import FYPCycleEnum, Group
-from app.models.milestone import AdminMilestone
+from app.models.jury_evaluation import JuryEvaluation, ProposalEvaluation
+from app.models.milestone import AdminMilestone, JuryFormTypeEnum
 from app.models.supervisor_evaluation import SupervisorEvaluation
 from app.schemas.admin_milestone_schema import (
     AdminEvaluationResponse,
@@ -25,46 +26,140 @@ async def list_evaluations_for_milestone(
     db: AsyncSession,
     milestone_id: UUID,
 ) -> List[AdminEvaluationResponse]:
-    """Fetch all supervisor evaluations for a milestone, enriched with supervisor name and project info."""
-    result = await db.execute(
-        select(SupervisorEvaluation)
-        .options(
-            joinedload(SupervisorEvaluation.supervisor).joinedload(Faculty.user),
-            joinedload(SupervisorEvaluation.group).joinedload(Group.project),
-        )
-        .where(SupervisorEvaluation.milestone_id == milestone_id)
-        .order_by(SupervisorEvaluation.updated_at.desc())
+    """Fetch all evaluations for a milestone, enriched with evaluator name and project info.
+    
+    Selects the appropriate evaluation table based on milestone's evaluator:
+    - "jury" with jury_form_type="normal" -> JuryEvaluation
+    - "jury" with jury_form_type="proposal" -> ProposalEvaluation
+    - Other evaluators -> SupervisorEvaluation
+    """
+    # First, get the milestone to determine which evaluator type is configured
+    milestone_result = await db.execute(
+        select(AdminMilestone).where(AdminMilestone.milestone_id == milestone_id)
     )
-    evaluations = result.scalars().unique().all()
-
+    milestone = milestone_result.scalar_one_or_none()
+    if not milestone:
+        return []
+    
     rows: List[AdminEvaluationResponse] = []
-    for ev in evaluations:
-        supervisor_name: Optional[str] = None
-        if ev.supervisor and hasattr(ev.supervisor, "user") and ev.supervisor.user:
-            supervisor_name = ev.supervisor.user.full_name
-
-        project_name: Optional[str] = None
-        fyp_id: Optional[str] = None
-        if ev.group and ev.group.project:
-            project_name = ev.group.project.name
-            fyp_id = ev.group.project.fyp_id
-
-        rows.append(
-            AdminEvaluationResponse(
-                evaluation_id=ev.evaluation_id,
-                milestone_id=ev.milestone_id,
-                group_id=ev.group_id,
-                supervisor_id=ev.supervisor_id,
-                supervisor_name=supervisor_name,
-                project_name=project_name,
-                fyp_id=fyp_id,
-                marks=ev.marks,
-                feedback=ev.feedback,
-                wbs_achieved=ev.wbs_achieved,
-                created_at=ev.created_at,
-                updated_at=ev.updated_at,
+    
+    # Determine which table to query based on evaluator and jury_form_type
+    evaluator = (milestone.evaluator or "").strip().lower()
+    
+    if evaluator == "jury":
+        # Query jury evaluations based on form type
+        if milestone.jury_form_type == JuryFormTypeEnum.proposal:
+            # Query ProposalEvaluation table
+            result = await db.execute(
+                select(ProposalEvaluation)
+                .options(
+                    joinedload(ProposalEvaluation.group).joinedload(Group.project),
+                )
+                .where(ProposalEvaluation.milestone_id == milestone_id)
+                .order_by(ProposalEvaluation.updated_at.desc())
             )
+            evaluations = result.scalars().unique().all()
+            
+            for ev in evaluations:
+                project_name: Optional[str] = None
+                fyp_id: Optional[str] = None
+                if ev.group and ev.group.project:
+                    project_name = ev.group.project.name
+                    fyp_id = ev.group.project.fyp_id
+                
+                # For proposal evaluations, map total_marks to marks and recommended_changes to feedback
+                rows.append(
+                    AdminEvaluationResponse(
+                        evaluation_id=ev.evaluation_id,
+                        milestone_id=ev.milestone_id,
+                        group_id=ev.group_id,
+                        supervisor_id=ev.jury_id,  # Use jury_id as supervisor_id
+                        supervisor_name=None,  # Will be populated via joinedload if needed
+                        project_name=project_name,
+                        fyp_id=fyp_id,
+                        marks=float(ev.total_marks) if ev.total_marks else None,
+                        feedback=ev.recommended_changes,
+                        wbs_achieved=None,
+                        created_at=ev.created_at,
+                        updated_at=ev.updated_at,
+                    )
+                )
+        else:
+            # Query JuryEvaluation table (normal form type)
+            result = await db.execute(
+                select(JuryEvaluation)
+                .options(
+                    joinedload(JuryEvaluation.group).joinedload(Group.project),
+                )
+                .where(JuryEvaluation.milestone_id == milestone_id)
+                .order_by(JuryEvaluation.updated_at.desc())
+            )
+            evaluations = result.scalars().unique().all()
+            
+            for ev in evaluations:
+                project_name: Optional[str] = None
+                fyp_id: Optional[str] = None
+                if ev.group and ev.group.project:
+                    project_name = ev.group.project.name
+                    fyp_id = ev.group.project.fyp_id
+                
+                # For jury evaluations, map numeric_marks to marks and comments to feedback
+                rows.append(
+                    AdminEvaluationResponse(
+                        evaluation_id=ev.evaluation_id,
+                        milestone_id=ev.milestone_id,
+                        group_id=ev.group_id,
+                        supervisor_id=ev.jury_id,  # Use jury_id as supervisor_id
+                        supervisor_name=None,  # Will be populated via joinedload if needed
+                        project_name=project_name,
+                        fyp_id=fyp_id,
+                        marks=float(ev.numeric_marks) if ev.numeric_marks else None,
+                        feedback=ev.comments,
+                        wbs_achieved=None,
+                        created_at=ev.created_at,
+                        updated_at=ev.updated_at,
+                    )
+                )
+    else:
+        # Query SupervisorEvaluation for other evaluators (default)
+        result = await db.execute(
+            select(SupervisorEvaluation)
+            .options(
+                joinedload(SupervisorEvaluation.supervisor).joinedload(Faculty.user),
+                joinedload(SupervisorEvaluation.group).joinedload(Group.project),
+            )
+            .where(SupervisorEvaluation.milestone_id == milestone_id)
+            .order_by(SupervisorEvaluation.updated_at.desc())
         )
+        evaluations = result.scalars().unique().all()
+        
+        for ev in evaluations:
+            supervisor_name: Optional[str] = None
+            if ev.supervisor and hasattr(ev.supervisor, "user") and ev.supervisor.user:
+                supervisor_name = ev.supervisor.user.full_name
+
+            project_name: Optional[str] = None
+            fyp_id: Optional[str] = None
+            if ev.group and ev.group.project:
+                project_name = ev.group.project.name
+                fyp_id = ev.group.project.fyp_id
+
+            rows.append(
+                AdminEvaluationResponse(
+                    evaluation_id=ev.evaluation_id,
+                    milestone_id=ev.milestone_id,
+                    group_id=ev.group_id,
+                    supervisor_id=ev.supervisor_id,
+                    supervisor_name=supervisor_name,
+                    project_name=project_name,
+                    fyp_id=fyp_id,
+                    marks=ev.marks,
+                    feedback=ev.feedback,
+                    wbs_achieved=ev.wbs_achieved,
+                    created_at=ev.created_at,
+                    updated_at=ev.updated_at,
+                )
+            )
 
     return rows
 
